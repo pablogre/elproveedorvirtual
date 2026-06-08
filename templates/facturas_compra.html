@@ -1,0 +1,940 @@
+{% extends 'base.html' %}
+{% block title %}Facturas de Compra{% endblock %}
+
+{% block content %}
+<style>
+    .factura-vencida   { background: #ffe5e5; }
+    .factura-porvencer { background: #fff9e5; }
+    .factura-anulada   { opacity: 0.55; text-decoration: line-through; }
+    .clase-nc          { background: #e7f5ff; }
+    .clase-nd          { background: #fff4e5; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mt-3 mb-4 flex-wrap gap-2">
+    <h2><i class="fas fa-file-invoice-dollar me-2"></i>Facturas de Compra</h2>
+    <div>
+        <a href="/proveedores" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-truck me-1"></i> Proveedores
+        </a>
+        <a href="/pagar_proveedor" class="btn btn-outline-success me-2">
+            <i class="fas fa-hand-holding-dollar me-1"></i> Pagar Proveedor
+        </a>
+        <button class="btn btn-outline-info me-2" onclick="abrirAyuda()">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+        <button class="btn btn-primary" onclick="abrirModalNueva()">
+            <i class="fas fa-plus me-1"></i> Nueva Factura
+        </button>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Proveedor</label>
+                <select id="filtroProveedor" class="form-select form-select-sm" onchange="cargarFacturas()">
+                    <option value="">Todos los proveedores</option>
+                    {% for p in proveedores %}
+                    <option value="{{ p.id }}">{{ p.razon_social }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Desde</label>
+                <input type="date" id="filtroDes" class="form-control form-control-sm" onchange="cargarFacturas()">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Hasta</label>
+                <input type="date" id="filtroHas" class="form-control form-control-sm" onchange="cargarFacturas()">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Estado</label>
+                <select id="filtroEstado" class="form-select form-select-sm" onchange="cargarFacturas()">
+                    <option value="">Todos</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="parcial">Parcial</option>
+                    <option value="pagada">Pagada</option>
+                    <option value="registrada">Registrada (NC)</option>
+                    <option value="anulada">Anulada</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Solo con saldo</label>
+                <div class="form-check form-switch pt-1">
+                    <input type="checkbox" id="filtroSoloSaldo" class="form-check-input" onchange="cargarFacturas()">
+                    <label class="form-check-label small" for="filtroSoloSaldo">Con saldo &gt; 0</label>
+                </div>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="limpiarFiltros()" title="Limpiar filtros">
+                    <i class="fas fa-eraser"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Totales -->
+<div class="row g-2 mb-3" id="panelTotales" style="display:none">
+    <div class="col-md-3">
+        <div class="card border-0 bg-light text-center py-2">
+            <div class="small text-muted">Cantidad</div>
+            <div class="fw-bold fs-5" id="totCant">0</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 bg-dark text-white text-center py-2">
+            <div class="small">Total facturado</div>
+            <div class="fw-bold fs-5" id="totGeneral">$0,00</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 bg-danger text-white text-center py-2">
+            <div class="small">Saldo pendiente total</div>
+            <div class="fw-bold fs-5" id="totSaldo">$0,00</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 bg-success text-white text-center py-2">
+            <div class="small">Ya pagado</div>
+            <div class="fw-bold fs-5" id="totPagado">$0,00</div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 table-sm align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Proveedor</th>
+                        <th>Comprobante</th>
+                        <th>Vto.</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-end">Saldo</th>
+                        <th class="text-center">Estado</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="bodyFacturas">
+                    <tr><td colspan="8" class="text-center py-4 text-muted">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════ -->
+<!-- Modal Nueva / Editar Factura                              -->
+<!-- ═════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalFactura" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalFcTitulo"><i class="fas fa-file-invoice-dollar me-2"></i>Nueva Factura de Compra</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="fc_id">
+                <div class="row g-3">
+                    <!-- Proveedor -->
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold">Proveedor <span class="text-danger">*</span></label>
+                        <select id="fc_proveedor" class="form-select">
+                            <option value="">Seleccionar...</option>
+                            {% for p in proveedores %}
+                            <option value="{{ p.id }}">{{ p.razon_social }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold">Clase <span class="text-danger">*</span></label>
+                        <select id="fc_clase" class="form-select" onchange="actualizarTituloModal()">
+                            <option value="factura">Factura</option>
+                            <option value="nota_credito">Nota de Crédito</option>
+                            <option value="nota_debito">Nota de Débito</option>
+                            <option value="interno">Comprobante Interno</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold">Tipo</label>
+                        <select id="fc_tipo" class="form-select">
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="M">M</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Fecha <span class="text-danger">*</span></label>
+                        <input type="date" id="fc_fecha" class="form-control">
+                    </div>
+
+                    <!-- Número de comprobante + Vto -->
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Punto de Venta</label>
+                        <input type="text" id="fc_pv" class="form-control" placeholder="00001" maxlength="5">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Número</label>
+                        <input type="text" id="fc_numero" class="form-control" placeholder="00000001" maxlength="10">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold">Fecha de Vencimiento</label>
+                        <input type="date" id="fc_fecha_vto" class="form-control" title="Opcional — para pagos a plazo">
+                    </div>
+
+                    <!-- CAE -->
+                    <div class="col-md-7">
+                        <label class="form-label fw-bold">CAE <small class="text-muted">(opcional)</small></label>
+                        <input type="text" id="fc_cae" class="form-control" placeholder="14 dígitos" maxlength="20">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold">Vto. CAE</label>
+                        <input type="date" id="fc_fecha_vto_cae" class="form-control">
+                    </div>
+
+                    <div class="col-12"><hr class="my-1"></div>
+
+                    <!-- Importes -->
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Neto Gravado 21%</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="fc_neto21" class="form-control text-end" value="0" step="0.01" min="0" oninput="calcularIVA21(); recalcularTotal()">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">IVA 21%</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="fc_iva21" class="form-control text-end" value="0" step="0.01" min="0" oninput="recalcularTotal()">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="pt-4 mt-2">
+                            <button class="btn btn-outline-secondary btn-sm w-100" onclick="calcularIVA21()">
+                                <i class="fas fa-calculator me-1"></i> Calcular IVA 21%
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Neto Gravado 10,5%</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="fc_neto105" class="form-control text-end" value="0" step="0.01" min="0" oninput="calcularIVA105(); recalcularTotal()">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">IVA 10,5%</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="fc_iva105" class="form-control text-end" value="0" step="0.01" min="0" oninput="recalcularTotal()">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="pt-4 mt-2">
+                            <button class="btn btn-outline-secondary btn-sm w-100" onclick="calcularIVA105()">
+                                <i class="fas fa-calculator me-1"></i> Calcular IVA 10,5%
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">No Gravado</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="fc_nograv" class="form-control text-end" value="0" step="0.01" min="0" oninput="recalcularTotal()">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Otros Impuestos</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="fc_otros" class="form-control text-end" value="0" step="0.01" min="0" oninput="recalcularTotal()">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">TOTAL</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="fc_total" class="form-control text-end fw-bold bg-light" value="0" step="0.01" readonly>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label fw-bold">Observaciones</label>
+                        <textarea id="fc_obs" class="form-control" rows="2" placeholder="Opcional..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardarFactura()">
+                    <i class="fas fa-save me-1"></i> Guardar Factura
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════ -->
+<!-- Modal AYUDA                                               -->
+<!-- ═════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Ayuda — Facturas de Compra</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- ═══════════ INTRO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-book me-2"></i>¿Qué es esta pantalla?</h4>
+                <p>
+                    Acá gestionás <strong>todas las facturas de compra</strong> que recibís de tus
+                    proveedores: cargar nuevas, consultar las existentes, ver cuánto debés de cada una,
+                    y eliminar las que cargaste mal.
+                </p>
+                <p>
+                    Las facturas cargadas acá:
+                </p>
+                <ul>
+                    <li>Se registran en el <strong>libro de IVA Compras</strong> para la DDJJ mensual.</li>
+                    <li>Aumentan la <strong>deuda del proveedor</strong> (van a su cta cte).</li>
+                    <li>Quedan disponibles para pagar desde la pantalla de <a href="/pagar_proveedor">Pagar Proveedor</a>.</li>
+                </ul>
+                <div class="alert alert-primary small">
+                    <strong><i class="fas fa-lightbulb me-1"></i> Analogía simple:</strong> es como
+                    archivar las facturas en un cajón — pero digital, y que además lleva la cuenta de
+                    cuánto le debés a cada proveedor y te avisa cuándo vencen.
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ESTRUCTURA ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-th-large me-2"></i>Estructura de la pantalla</h4>
+
+                <h6 class="fw-bold mt-3">1) Header</h6>
+                <ul>
+                    <li><strong>Proveedores</strong>: link al listado de proveedores.</li>
+                    <li><strong>Pagar Proveedor</strong>: atajo para emitir una OP (vas a ir al proveedor y elegir facturas pendientes).</li>
+                    <li><strong>Ayuda</strong>: este modal.</li>
+                    <li><strong>Nueva Factura</strong>: abre el modal de alta.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">2) Filtros</h6>
+                <ul>
+                    <li><strong>Proveedor</strong>: filtrá por uno específico.</li>
+                    <li><strong>Desde / Hasta</strong>: rango de <u>fecha de la factura</u> (no del vencimiento).</li>
+                    <li><strong>Estado</strong>: pendiente / parcial / pagada / anulada.</li>
+                    <li><strong>Solo con saldo</strong>: switch para mostrar solo las que todavía tienen saldo pendiente.</li>
+                    <li><strong>Escoba</strong>: resetea todos los filtros.</li>
+                </ul>
+                <p class="small text-muted">Los filtros se aplican automáticamente al cambiarlos (no hace falta un botón "Filtrar").</p>
+
+                <h6 class="fw-bold mt-3">3) Tarjetas de resumen</h6>
+                <ul>
+                    <li><strong>Cantidad</strong>: cuántas facturas cumplen los filtros.</li>
+                    <li><strong>Total facturado</strong>: suma de todos los importes totales.</li>
+                    <li><strong>Saldo pendiente total</strong> (rojo): cuánto queda sin pagar en total.</li>
+                    <li><strong>Ya pagado</strong> (verde): total - saldo pendiente.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">4) Tabla</h6>
+                <p>Columnas: <code>Fecha</code> · <code>Proveedor</code> · <code>Comprobante</code> ·
+                    <code>Vto.</code> · <code>Total</code> · <code>Saldo</code> · <code>Estado</code> ·
+                    <code>Acciones</code>.</p>
+                <p>Código de colores:</p>
+                <ul>
+                    <li><strong style="color:#842029; background:#ffe5e5; padding:1px 4px">Fondo rojo</strong>: factura con saldo pendiente y ya vencida.</li>
+                    <li><strong style="color:#664d03; background:#fff9e5; padding:1px 4px">Fondo amarillo</strong>: con saldo y vencimiento en ≤ 7 días.</li>
+                    <li><strong style="opacity:.55; text-decoration:line-through">Tachado gris</strong>: factura anulada.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ESTADOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-list me-2"></i>Los 4 estados de una factura</h4>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr><th style="width:130px">Estado</th><th>Qué significa</th><th>Cómo cambia</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge bg-warning text-dark">Pendiente</span></td>
+                                <td>Factura nueva, no se imputó ningún pago todavía.
+                                    <code>saldo_pendiente = total</code>.</td>
+                                <td>Se crea así al dar de alta.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-info text-dark">Parcial</span></td>
+                                <td>Ya se imputó un pago, pero todavía queda saldo.
+                                    <code>0 &lt; saldo_pendiente &lt; total</code>.</td>
+                                <td>Automáticamente al pagar una parte.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-success">Pagada</span></td>
+                                <td>Se saldó completamente. <code>saldo_pendiente = 0</code>.</td>
+                                <td>Automáticamente al imputar todo el saldo.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-danger">Anulada</span></td>
+                                <td>Factura que no debería contabilizarse (ej. se cargó mal y ya no se puede borrar).</td>
+                                <td>Se marca manualmente (hoy solo por SQL — botón futuro).</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="small text-muted">Los cambios de estado son automáticos cuando emitís o anulás un pago
+                    desde Pagar Proveedor / Pagos Emitidos. No se cambian a mano desde esta pantalla.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ALTA ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-plus-circle me-2"></i>Cargar una factura nueva</h4>
+                <p>Botón <strong>+ Nueva Factura</strong>. Campos:</p>
+
+                <h6 class="fw-bold">Datos del comprobante</h6>
+                <ul>
+                    <li><strong>Proveedor</strong> (obligatorio): elegir de la lista. Si no existe, creálo primero en <a href="/proveedores">Proveedores</a>.</li>
+                    <li><strong>Tipo</strong>: A / B / C / M.</li>
+                    <li><strong>Fecha</strong> (obligatoria): la que figura en la factura.</li>
+                    <li><strong>Punto de Venta</strong>: el que trae el comprobante (ej. 0006).</li>
+                    <li><strong>Número</strong>: el número de factura.</li>
+                    <li><strong>Fecha de Vencimiento</strong> (opcional): importante si el proveedor te da plazo.
+                        Si lo completás, el sistema te avisa cuando se va a vencer (rojo/amarillo en el listado).
+                        Si lo dejás vacío, se considera "a la vista".</li>
+                    <li><strong>CAE</strong> (opcional): el código que imprime ARCA/AFIP en la factura.
+                        Útil si después querés hacer validaciones contra AFIP. Si usás el OCR, lo completa solo.</li>
+                    <li><strong>Vto. CAE</strong> (opcional): fecha que viene al lado del CAE.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">Importes</h6>
+                <ul>
+                    <li><strong>Neto Gravado 21%</strong>: monto sin IVA de la parte al 21%.</li>
+                    <li><strong>IVA 21%</strong>: el IVA. Botón <em>"Calcular IVA 21%"</em> lo calcula solo (neto × 0.21).</li>
+                    <li><strong>Neto Gravado 10,5%</strong> + <strong>IVA 10,5%</strong>: idem, para tasa reducida.</li>
+                    <li><strong>No Gravado</strong>: exento de IVA o no gravado (percepciones, conceptos no gravados).</li>
+                    <li><strong>Otros Impuestos</strong>: percepciones IIBB, IVA adicional, etc.</li>
+                    <li><strong>TOTAL</strong>: se calcula automáticamente. <u>No se edita</u>.</li>
+                </ul>
+                <div class="alert alert-warning small">
+                    <strong>Verificar que el TOTAL del sistema coincida con el TOTAL impreso en el comprobante.</strong>
+                    Si no coincide, hay algún importe mal cargado.
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ CASOS DE USO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-tasks me-2"></i>Casos de uso típicos</h4>
+
+                <h6 class="fw-bold">Caso 1 — Cargar una factura A del 21% sin vencimiento</h6>
+                <ol>
+                    <li>Botón <strong>+ Nueva Factura</strong>.</li>
+                    <li>Seleccionar proveedor, tipo = A, fecha.</li>
+                    <li>Cargar punto de venta y número.</li>
+                    <li>Dejar <strong>Vto.</strong> vacío (contado).</li>
+                    <li>Cargar <strong>Neto Gravado 21%</strong>. Click "Calcular IVA 21%" (se llena solo).</li>
+                    <li>Verificar que el TOTAL coincida con la factura.</li>
+                    <li>Guardar. La factura aparece en el listado con estado "pendiente".</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 2 — Cargar una factura con pago a 30 días</h6>
+                <ol>
+                    <li>Mismo procedimiento que el caso 1.</li>
+                    <li>En <strong>Fecha de Vencimiento</strong>, poner 30 días después de la fecha.</li>
+                    <li>Guardar. En la fecha de vencimiento, la fila aparecerá en amarillo (7 días antes) y en rojo cuando se pase.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 3 — Ver qué facturas tengo que pagar esta semana</h6>
+                <ol>
+                    <li>Filtro: <strong>Solo con saldo</strong> activado.</li>
+                    <li>Mirar en el listado cuáles están con fondo <span class="text-danger">rojo</span> (ya vencidas) o <span class="text-warning">amarillo</span> (vencen en 7 días).</li>
+                    <li>Click "Pagar Proveedor" arriba para ir a emitir la OP.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 4 — Ver qué le debo a un proveedor específico</h6>
+                <ol>
+                    <li>Filtro: <strong>Proveedor</strong> = X.</li>
+                    <li>Filtro: <strong>Solo con saldo</strong> = SÍ.</li>
+                    <li>La tarjeta "Saldo pendiente total" te dice cuánto le debés.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 5 — Reporte de IVA del mes</h6>
+                <p>Para la DDJJ de IVA se usa la pantalla específica <strong>IVA Compras</strong>, pero desde acá:</p>
+                <ol>
+                    <li>Filtro: <strong>Desde</strong> = 1/mes, <strong>Hasta</strong> = último día.</li>
+                    <li>Filtrá por estado si querés (por defecto ve todas).</li>
+                    <li>Exportá el listado (hoy solo desde IVA Compras).</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 6 — Eliminar una factura cargada mal</h6>
+                <ol>
+                    <li>Botón de basurero <i class="fas fa-trash text-danger"></i> en la fila.</li>
+                    <li>Confirmás en el Swal.</li>
+                    <li><strong>El sistema bloquea la eliminación si la factura tiene pagos imputados.</strong>
+                        En ese caso, primero hay que anular los pagos en <a href="/pagos_proveedores">Pagos Emitidos</a>.</li>
+                    <li>Si no tenía pagos: se elimina, se revierte el saldo del proveedor y se genera un
+                        movimiento inverso (ajuste) en la cta cte.</li>
+                </ol>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ FAQ ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-question-circle me-2"></i>Preguntas frecuentes</h4>
+                <div class="accordion" id="faqAccFC">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqFC1">
+                                Cargué una factura y ahora quiero pagarla. ¿Cómo la encuentro?
+                            </button>
+                        </h2>
+                        <div id="faqFC1" class="accordion-collapse collapse" data-bs-parent="#faqAccFC">
+                            <div class="accordion-body">
+                                Andá a <a href="/pagar_proveedor">Pagar Proveedor</a> (botón verde arriba o en el sidebar),
+                                seleccioná el proveedor, y la factura va a aparecer en la lista de facturas pendientes
+                                con su saldo disponible.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqFC2">
+                                Cargué el monto mal. ¿Puedo corregirlo?
+                            </button>
+                        </h2>
+                        <div id="faqFC2" class="accordion-collapse collapse" data-bs-parent="#faqAccFC">
+                            <div class="accordion-body">
+                                Hoy la edición de factura <u>no está implementada</u> desde esta pantalla. Alternativas:
+                                <ul class="mb-0">
+                                    <li>Si todavía no tiene pagos imputados → eliminarla (botón basurero) y cargarla de nuevo.</li>
+                                    <li>Si tiene pagos imputados → primero anulá los pagos desde Pagos Emitidos,
+                                        después eliminá la factura, y cargala bien de nuevo.</li>
+                                </ul>
+                                La edición está en la lista de mejoras futuras.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqFC3">
+                                ¿Por qué una factura aparece con estado "pagada" pero no le hice ningún pago?
+                            </button>
+                        </h2>
+                        <div id="faqFC3" class="accordion-collapse collapse" data-bs-parent="#faqAccFC">
+                            <div class="accordion-body">
+                                Si es una factura anterior al módulo de pagos (cargada antes que activáramos el
+                                ciclo de compras), la migración la dejó como "pagada" con saldo_pendiente = 0,
+                                porque la deuda pre-existente ya está reflejada en el "saldo inicial migrado" del
+                                proveedor en la cta cte. Si no hacemos eso, estaríamos duplicando la deuda.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqFC4">
+                                El TOTAL no me coincide con la factura impresa. ¿Qué hago?
+                            </button>
+                        </h2>
+                        <div id="faqFC4" class="accordion-collapse collapse" data-bs-parent="#faqAccFC">
+                            <div class="accordion-body">
+                                Revisá:
+                                <ul class="mb-0">
+                                    <li>Que los netos y los IVA estén en los campos correctos (no mezclar 21% con 10,5%).</li>
+                                    <li>Que no hayas olvidado agregar las percepciones o "Otros impuestos".</li>
+                                    <li>Que el monto "No Gravado" esté correctamente separado (si corresponde).</li>
+                                </ul>
+                                El TOTAL se calcula como: Neto21 + IVA21 + Neto10,5 + IVA10,5 + NoGravado + OtrosImpuestos.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqFC5">
+                                ¿Qué pasa si cargo la misma factura dos veces?
+                            </button>
+                        </h2>
+                        <div id="faqFC5" class="accordion-collapse collapse" data-bs-parent="#faqAccFC">
+                            <div class="accordion-body">
+                                El sistema no lo permite. Valida que la combinación
+                                <strong>proveedor + tipo + punto de venta + número</strong> sea única. Te va a tirar
+                                error "Ya existe esa factura para ese proveedor".
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqFC6">
+                                ¿Los campos CAE y Vto. CAE son obligatorios?
+                            </button>
+                        </h2>
+                        <div id="faqFC6" class="accordion-collapse collapse" data-bs-parent="#faqAccFC">
+                            <div class="accordion-body">
+                                No, son opcionales. Si usás el OCR para cargar facturas, los completa automáticamente.
+                                Son útiles para validaciones futuras contra AFIP/ARCA (para chequear que la factura
+                                es genuina). Por ahora solo quedan guardados como información.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqFC7">
+                                ¿Se puede cargar una nota de crédito acá?
+                            </button>
+                        </h2>
+                        <div id="faqFC7" class="accordion-collapse collapse" data-bs-parent="#faqAccFC">
+                            <div class="accordion-body">
+                                Hoy se puede cargar como una factura con montos negativos (pero no es lo más prolijo).
+                                Está en el roadmap un módulo de Notas de Crédito propio que va a manejar mejor las
+                                imputaciones y el impacto en la cta cte. Mientras tanto, coordiná con Pablo si surge
+                                una NC.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqFC8">
+                                ¿Puedo filtrar por rango de vencimiento?
+                            </button>
+                        </h2>
+                        <div id="faqFC8" class="accordion-collapse collapse" data-bs-parent="#faqAccFC">
+                            <div class="accordion-body">
+                                Hoy los filtros de fecha son sobre la <strong>fecha de factura</strong>, no sobre vencimiento.
+                                Para ver qué vence pronto, usá el switch "Solo con saldo" y los colores del listado
+                                (rojo = vencidas, amarillo = vencen en 7 días).
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ERRORES COMUNES ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-exclamation-triangle me-2"></i>Errores comunes</h4>
+                <ul>
+                    <li><strong>"Ya existe esa factura para ese proveedor"</strong>: revisá el número + punto de venta, capaz la cargaste antes.</li>
+                    <li><strong>"Seleccione un proveedor"</strong>: campo obligatorio — no dejar en blanco.</li>
+                    <li><strong>"Ingrese la fecha"</strong>: campo obligatorio.</li>
+                    <li><strong>"No se puede eliminar: la factura tiene pagos imputados"</strong>: primero anulá los pagos en Pagos Emitidos.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ RELACIÓN CON OTROS MÓDULOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-link me-2"></i>Relación con otros módulos</h4>
+                <ul>
+                    <li><strong>Proveedores</strong>: cada factura pertenece a un proveedor y suma deuda en su cta cte.</li>
+                    <li><strong>Cta Cte Proveedor</strong>: al crear una factura, se genera un movimiento tipo "factura" en el libro mayor.</li>
+                    <li><strong>Pagar Proveedor</strong>: las facturas con saldo > 0 aparecen acá como pendientes de pago.</li>
+                    <li><strong>IVA Compras</strong>: usa los mismos datos para generar el reporte mensual de IVA.</li>
+                    <li><strong>OCR de facturas</strong>: (si está habilitado) alimenta automáticamente los campos del modal.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ NOTAS TÉCNICAS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-cog me-2"></i>Notas técnicas</h4>
+                <ul class="small text-muted">
+                    <li>Tabla: <code>factura_compra</code>. Unicidad: <code>(proveedor_id, tipo_comprobante, punto_venta, numero)</code>.</li>
+                    <li>Campos clave del ciclo de compras: <code>fecha_vencimiento</code>, <code>saldo_pendiente</code>, <code>estado</code>, <code>cae</code>, <code>fecha_vto_cae</code>.</li>
+                    <li>Al crear una factura: se setea <code>saldo_pendiente = total</code>, <code>estado = 'pendiente'</code>, y se inserta un movimiento en <code>proveedor_movimiento</code>.</li>
+                    <li>Al eliminar: se bloquea si hay registros en <code>pago_proveedor_detalle</code> asociados. Si no, se genera un movimiento inverso tipo 'ajuste'.</li>
+                    <li>El estado cambia solo automáticamente al imputar/anular pagos.</li>
+                </ul>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const modalFc    = new bootstrap.Modal(document.getElementById('modalFactura'));
+const modalAyuda = new bootstrap.Modal(document.getElementById('modalAyuda'));
+
+function fmt(v) {
+    return '$' + parseFloat(v || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function abrirAyuda() { modalAyuda.show(); }
+
+function badgeEstado(est) {
+    const map = {
+        'pendiente':  'bg-warning text-dark',
+        'parcial':    'bg-info text-dark',
+        'pagada':     'bg-success',
+        'anulada':    'bg-danger',
+        'registrada': 'bg-primary',
+    };
+    const labels = {
+        'pendiente':  'Pendiente',
+        'parcial':    'Parcial',
+        'pagada':     'Pagada',
+        'anulada':    'Anulada',
+        'registrada': 'Registrada',
+    };
+    return `<span class="badge ${map[est] || 'bg-secondary'}">${labels[est] || est}</span>`;
+}
+
+function actualizarTituloModal() {
+    const clase = document.getElementById('fc_clase').value;
+    const titulos = {
+        'factura':      '<i class="fas fa-file-invoice-dollar me-2"></i>Nueva Factura de Compra',
+        'nota_credito': '<i class="fas fa-file-invoice me-2"></i>Nueva Nota de Crédito de Proveedor',
+        'nota_debito':  '<i class="fas fa-file-invoice me-2"></i>Nueva Nota de Débito de Proveedor',
+        'interno':      '<i class="fas fa-file-alt me-2"></i>Nuevo Comprobante Interno de Proveedor',
+    };
+    // Solo cambiar si es un alta (no edicion)
+    if (!document.getElementById('fc_id').value) {
+        document.getElementById('modalFcTitulo').innerHTML = titulos[clase] || titulos['factura'];
+    }
+    // Ocultar Tipo y CAE para internos (no tienen A/B/C ni CAE)
+    const esInterno = clase === 'interno';
+    document.getElementById('fc_tipo').closest('.col-md-2').style.display = esInterno ? 'none' : '';
+    document.getElementById('fc_cae').closest('.col-md-7').style.display  = esInterno ? 'none' : '';
+    document.getElementById('fc_fecha_vto_cae').closest('.col-md-5').style.display = esInterno ? 'none' : '';
+    if (esInterno) document.getElementById('fc_tipo').value = 'X';
+}
+
+function calcularIVA21() {
+    const neto = parseFloat(document.getElementById('fc_neto21').value) || 0;
+    document.getElementById('fc_iva21').value = (neto * 0.21).toFixed(2);
+    recalcularTotal();
+}
+
+function calcularIVA105() {
+    const neto = parseFloat(document.getElementById('fc_neto105').value) || 0;
+    document.getElementById('fc_iva105').value = (neto * 0.105).toFixed(2);
+    recalcularTotal();
+}
+
+function recalcularTotal() {
+    const neto21  = parseFloat(document.getElementById('fc_neto21').value)  || 0;
+    const iva21   = parseFloat(document.getElementById('fc_iva21').value)    || 0;
+    const neto105 = parseFloat(document.getElementById('fc_neto105').value)  || 0;
+    const iva105  = parseFloat(document.getElementById('fc_iva105').value)   || 0;
+    const nograv  = parseFloat(document.getElementById('fc_nograv').value)   || 0;
+    const otros   = parseFloat(document.getElementById('fc_otros').value)    || 0;
+    document.getElementById('fc_total').value = (neto21 + iva21 + neto105 + iva105 + nograv + otros).toFixed(2);
+}
+
+function abrirModalNueva() {
+    document.getElementById('modalFcTitulo').innerHTML = '<i class="fas fa-file-invoice-dollar me-2"></i>Nueva Factura de Compra';
+    document.getElementById('fc_id').value = '';
+    document.getElementById('fc_fecha').value = new Date().toISOString().split('T')[0];
+    document.getElementById('fc_proveedor').value = '';
+    document.getElementById('fc_clase').value = 'factura';
+    document.getElementById('fc_tipo').value = 'A';
+    document.getElementById('fc_pv').value = '';
+    document.getElementById('fc_numero').value = '';
+    document.getElementById('fc_fecha_vto').value = '';
+    document.getElementById('fc_cae').value = '';
+    document.getElementById('fc_fecha_vto_cae').value = '';
+    ['fc_neto21','fc_iva21','fc_neto105','fc_iva105','fc_nograv','fc_otros','fc_total'].forEach(id => {
+        document.getElementById(id).value = '0';
+    });
+    document.getElementById('fc_obs').value = '';
+    modalFc.show();
+    setTimeout(() => document.getElementById('fc_proveedor').focus(), 300);
+}
+
+async function guardarFactura() {
+    const proveedor_id = document.getElementById('fc_proveedor').value;
+    const fecha        = document.getElementById('fc_fecha').value;
+    const pv           = document.getElementById('fc_pv').value.trim();
+    const numero       = document.getElementById('fc_numero').value.trim();
+
+    if (!proveedor_id) { Swal.fire('Error', 'Seleccioná un proveedor', 'warning'); return; }
+    if (!fecha)        { Swal.fire('Error', 'Ingresá la fecha', 'warning'); return; }
+    if (!pv || !numero){ Swal.fire('Error', 'Ingresá punto de venta y número', 'warning'); return; }
+
+    const payload = {
+        proveedor_id,
+        fecha,
+        fecha_vencimiento: document.getElementById('fc_fecha_vto').value || null,
+        cae:               document.getElementById('fc_cae').value.trim() || null,
+        fecha_vto_cae:     document.getElementById('fc_fecha_vto_cae').value || null,
+        clase_comprobante: document.getElementById('fc_clase').value,
+        tipo_comprobante:  document.getElementById('fc_tipo').value,
+        punto_venta:       pv,
+        numero:            numero,
+        neto_gravado_21:   document.getElementById('fc_neto21').value  || 0,
+        iva_21:            document.getElementById('fc_iva21').value    || 0,
+        neto_gravado_105:  document.getElementById('fc_neto105').value  || 0,
+        iva_105:           document.getElementById('fc_iva105').value   || 0,
+        neto_no_gravado:   document.getElementById('fc_nograv').value   || 0,
+        otros_impuestos:   document.getElementById('fc_otros').value    || 0,
+        observaciones:     document.getElementById('fc_obs').value,
+    };
+
+    const res  = await fetch('/api/factura_compra/nueva', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.success) {
+        modalFc.hide();
+        Swal.fire({ icon:'success', title:'Guardada', timer:1200, timerProgressBar:true, showConfirmButton:false });
+        cargarFacturas();
+    } else {
+        Swal.fire('Error', data.error || 'No se pudo guardar', 'error');
+    }
+}
+
+async function eliminarFactura(id, nro) {
+    const conf = await Swal.fire({
+        title: '¿Eliminar factura?',
+        html: `<strong>${nro}</strong><br><small class="text-muted">Se revertirá el saldo del proveedor y se generará un ajuste en su cta cte.</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'No',
+        confirmButtonColor: '#dc3545',
+    });
+    if (!conf.isConfirmed) return;
+
+    const res  = await fetch(`/api/factura_compra/${id}/eliminar`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+        Swal.fire({ icon:'success', title:'Eliminada', timer:1200, timerProgressBar:true, showConfirmButton:false });
+        cargarFacturas();
+    } else {
+        Swal.fire('No se pudo eliminar', data.error || 'Error', 'error');
+    }
+}
+
+function limpiarFiltros() {
+    document.getElementById('filtroProveedor').value = '';
+    document.getElementById('filtroDes').value = '';
+    document.getElementById('filtroHas').value = '';
+    document.getElementById('filtroEstado').value = '';
+    document.getElementById('filtroSoloSaldo').checked = false;
+    cargarFacturas();
+}
+
+async function cargarFacturas() {
+    const prov     = document.getElementById('filtroProveedor').value;
+    const desde    = document.getElementById('filtroDes').value;
+    const hasta    = document.getElementById('filtroHas').value;
+    const estado   = document.getElementById('filtroEstado').value;
+    const conSaldo = document.getElementById('filtroSoloSaldo').checked;
+
+    let url = '/api/factura_compra/listar?';
+    if (prov)   url += `proveedor_id=${prov}&`;
+    if (desde)  url += `desde=${desde}&`;
+    if (hasta)  url += `hasta=${hasta}&`;
+
+    const res  = await fetch(url);
+    const data = await res.json();
+    let lista = data.facturas || [];
+
+    // Filtrar localmente por estado y por saldo
+    if (estado)   lista = lista.filter(f => f.estado === estado);
+    if (conSaldo) lista = lista.filter(f => parseFloat(f.saldo_pendiente || 0) > 0);
+
+    const tbody = document.getElementById('bodyFacturas');
+
+    if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Sin resultados</td></tr>';
+        document.getElementById('panelTotales').style.display = 'none';
+        return;
+    }
+
+    // Totales
+    let totGeneral = 0, totSaldo = 0;
+    lista.forEach(f => {
+        totGeneral += parseFloat(f.total || 0);
+        if (f.estado !== 'anulada') {
+            totSaldo += parseFloat(f.saldo_pendiente || 0);
+        }
+    });
+    document.getElementById('totCant').textContent     = lista.length;
+    document.getElementById('totGeneral').textContent  = fmt(totGeneral);
+    document.getElementById('totSaldo').textContent    = fmt(totSaldo);
+    document.getElementById('totPagado').textContent   = fmt(totGeneral - totSaldo);
+    document.getElementById('panelTotales').style.display = '';
+
+    // Render
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+
+    tbody.innerHTML = lista.map(f => {
+        let rowClass = '';
+        if (f.estado === 'anulada') {
+            rowClass = 'factura-anulada';
+        } else if (f.clase_comprobante === 'nota_credito') {
+            rowClass = 'clase-nc';
+        } else if (f.clase_comprobante === 'nota_debito') {
+            rowClass = 'clase-nd';
+        } else if (parseFloat(f.saldo_pendiente || 0) > 0 && f.fecha_vencimiento) {
+            // Calcular días para vencer (f.fecha_vencimiento viene en formato 'DD/MM/YYYY')
+            const partes = f.fecha_vencimiento.split('/');
+            if (partes.length === 3) {
+                const fv = new Date(parseInt(partes[2]), parseInt(partes[1])-1, parseInt(partes[0]));
+                const diff = Math.round((fv - hoy) / (1000*60*60*24));
+                if (diff < 0)       rowClass = 'factura-vencida';
+                else if (diff <= 7) rowClass = 'factura-porvencer';
+            }
+        }
+        const saldo = parseFloat(f.saldo_pendiente || 0);
+        const saldoHtml = saldo > 0
+            ? `<span class="text-danger fw-bold">${fmt(saldo)}</span>`
+            : `<span class="text-muted">-</span>`;
+
+        // Botón "Pagar" solo si hay saldo y no está anulada (NCs no se pagan)
+        const btnPagar = (saldo > 0 && f.estado !== 'anulada' && f.clase_comprobante !== 'nota_credito')
+            ? `<a href="/pagar_proveedor?proveedor_id=${f.proveedor_id}&factura_id=${f.id}" class="btn btn-sm btn-outline-success me-1" title="Pagar este comprobante">
+                   <i class="fas fa-hand-holding-dollar"></i>
+               </a>`
+            : '';
+
+        // Badge del tipo de comprobante usando codigo_afip
+        const codigo = f.codigo_afip || f.tipo_comprobante;
+        let badgeColor = 'bg-dark';
+        if (f.clase_comprobante === 'nota_credito') badgeColor = 'bg-info text-dark';
+        else if (f.clase_comprobante === 'nota_debito') badgeColor = 'bg-warning text-dark';
+
+        return `
+        <tr class="${rowClass}">
+            <td>${f.fecha}</td>
+            <td><small>${f.proveedor}</small></td>
+            <td><span class="badge ${badgeColor}">${codigo}</span> <small>${f.punto_venta}-${f.numero}</small></td>
+            <td>${f.fecha_vencimiento || '<small class="text-muted">-</small>'}</td>
+            <td class="text-end fw-bold">${fmt(f.total)}</td>
+            <td class="text-end">${saldoHtml}</td>
+            <td class="text-center">${badgeEstado(f.estado)}</td>
+            <td class="text-center">
+                ${btnPagar}
+                <button class="btn btn-sm btn-outline-danger" onclick="eliminarFactura(${f.id}, '${f.numero_completo}')" title="Eliminar">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// Setear fechas del mes actual por defecto
+(function init() {
+    const hoy   = new Date();
+    const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    document.getElementById('filtroDes').value = desde.toISOString().split('T')[0];
+    document.getElementById('filtroHas').value = hoy.toISOString().split('T')[0];
+    cargarFacturas();
+})();
+</script>
+{% endblock %}

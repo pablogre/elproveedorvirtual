@@ -1,0 +1,328 @@
+{% extends 'base.html' %}
+{% block title %}Registrar Recepción{% endblock %}
+
+{% block content %}
+<style>
+    .sticky-footer {
+        position: sticky; bottom: 0; background: white;
+        border-top: 2px solid #0dcaf0; padding: 12px; z-index: 10;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3 flex-wrap gap-2">
+    <h2>
+        <i class="fas fa-truck-ramp-box me-2"></i>Registrar Recepción
+        <small class="text-muted" id="ocHeader"></small>
+    </h2>
+    <div>
+        <a href="/orden_compra/{{ oc_id }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Volver a la OC
+        </a>
+        <button class="btn btn-outline-info" onclick="abrirAyuda()">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Fecha de recepción</label>
+                <input type="date" id="rec_fecha" class="form-control">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Nº de remito del proveedor</label>
+                <input type="text" id="rec_nro_remito" class="form-control"
+                       placeholder="Ej: R 0001-00012345">
+            </div>
+            <div class="col-md-5">
+                <label class="form-label fw-bold">Observaciones</label>
+                <input type="text" id="rec_observaciones" class="form-control"
+                       placeholder="Opcional: notas sobre esta entrega">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i>
+    <strong>Al guardar esta recepción:</strong> se va a sumar al stock de cada producto
+    la cantidad que indiques en "A recibir ahora". Asegurate de contar bien antes de guardar.
+</div>
+
+<div class="card mb-3">
+    <div class="card-header bg-primary text-white">
+        <strong><i class="fas fa-boxes-stacked me-2"></i>Ítems pendientes de recibir</strong>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 100px">Código</th>
+                        <th>Producto</th>
+                        <th class="text-center" style="width: 110px">Pedido</th>
+                        <th class="text-center" style="width: 110px">Ya recibido</th>
+                        <th class="text-center" style="width: 110px">Pendiente</th>
+                        <th class="text-center" style="width: 160px">A recibir ahora</th>
+                        <th class="text-center" style="width: 80px">Completo</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyItems">
+                    <tr><td colspan="7" class="text-center py-4 text-muted">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="sticky-footer">
+    <div class="row align-items-center">
+        <div class="col-md-6">
+            <span class="text-muted">Ítems a recibir: <strong id="totItems">0</strong></span>
+        </div>
+        <div class="col-md-6 text-end">
+            <button class="btn btn-outline-secondary me-2" onclick="window.location.href='/orden_compra/{{ oc_id }}'">
+                Cancelar
+            </button>
+            <button class="btn btn-outline-primary me-2" onclick="recibirTodo()">
+                <i class="fas fa-check-double me-1"></i> Marcar todo completo
+            </button>
+            <button class="btn btn-info" onclick="guardarRecepcion()">
+                <i class="fas fa-save me-1"></i> Guardar recepción
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Ayuda — Registrar Recepción</h5>
+                <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <h4 class="text-primary">¿Qué es esta pantalla?</h4>
+                <p>Acá registrás la llegada de mercadería de una OC. Podés recibir <strong>todo junto</strong>
+                    o registrar recepciones <strong>parciales</strong> (varias tandas).</p>
+
+                <hr>
+
+                <h4 class="text-primary">¿Qué pasa al guardar?</h4>
+                <ol>
+                    <li>Se crea una recepción vinculada a la OC con fecha + nº de remito.</li>
+                    <li>Para cada producto: la cantidad que pusiste en "A recibir ahora" se suma al stock
+                        del producto en el sistema.</li>
+                    <li>Si recibiste todo lo pedido → la OC pasa a estado <strong>recibida</strong>.</li>
+                    <li>Si falta algo → la OC queda en estado <strong>parcial</strong> y podés registrar
+                        otra recepción más adelante.</li>
+                </ol>
+
+                <hr>
+
+                <h4 class="text-primary">Reglas importantes</h4>
+                <ul>
+                    <li><strong>No podés recibir más que lo pendiente.</strong> El sistema te frena.
+                        Si te trajeron de más, te conviene hacer una OC nueva por la diferencia.</li>
+                    <li>Si pusiste 0 en todos los ítems, no se guarda nada.</li>
+                    <li>Podés dejar un producto en 0 si no llegó, y otros con cantidad — eso genera una
+                        <strong>recepción parcial</strong>.</li>
+                    <li>El <strong>Nº de remito</strong> del proveedor es opcional pero muy recomendado.</li>
+                </ul>
+
+                <hr>
+
+                <h4 class="text-primary">Atajos</h4>
+                <ul>
+                    <li><strong>Marcar todo completo</strong>: pone en cada fila la cantidad pendiente
+                        (útil cuando llega todo de una vez).</li>
+                    <li><strong>Completo (tilde verde)</strong>: por fila, marca esa cantidad como completa.</li>
+                </ul>
+
+                <hr>
+
+                <h4 class="text-primary">Si me equivoqué</h4>
+                <p>Podés <strong>eliminar una recepción</strong> desde la pantalla de detalle de la OC
+                    (botón 🗑️ en la lista de recepciones). Al eliminarla:</p>
+                <ul>
+                    <li>Se <strong>resta</strong> del stock lo que había sumado.</li>
+                    <li>La OC vuelve a un estado anterior (confirmada o parcial según corresponda).</li>
+                </ul>
+                <p>Esto no se permite si la OC ya fue facturada o cerrada.</p>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const OC_ID = {{ oc_id|tojson }};
+const modalAyuda = new bootstrap.Modal(document.getElementById('modalAyuda'));
+function abrirAyuda() { modalAyuda.show(); }
+
+function fmt(v) {
+    return parseFloat(v || 0).toLocaleString('es-AR', {maximumFractionDigits: 3});
+}
+
+let items = [];
+
+async function cargar() {
+    try {
+        const res  = await fetch(`/api/ordenes_compra/${OC_ID}/pendiente`);
+        const data = await res.json();
+        if (!data.success) {
+            Swal.fire({
+                icon: 'error', title: 'No se puede recibir', text: data.error,
+            }).then(() => window.location.href = `/orden_compra/${OC_ID}`);
+            return;
+        }
+
+        items = (data.items || []).map(it => ({ ...it, a_recibir: 0, observaciones: '' }));
+        document.getElementById('ocHeader').textContent = ' - ' + (data.oc.numero_completo || '');
+        renderItems();
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+function renderItems() {
+    const tbody = document.getElementById('tbodyItems');
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No hay ítems pendientes de recibir.</td></tr>';
+        document.getElementById('totItems').textContent = '0';
+        return;
+    }
+
+    tbody.innerHTML = items.map((it, idx) => `
+        <tr>
+            <td><small class="text-muted">${it.codigo}</small></td>
+            <td>${it.nombre}</td>
+            <td class="text-center">${fmt(it.cantidad_pedida)}</td>
+            <td class="text-center">${fmt(it.cantidad_recibida)}</td>
+            <td class="text-center"><span class="badge bg-warning text-dark">${fmt(it.cantidad_pendiente)}</span></td>
+            <td class="text-center">
+                <input type="number" class="form-control form-control-sm text-center"
+                       value="${it.a_recibir}" step="0.001" min="0" max="${it.cantidad_pendiente}"
+                       onchange="setARecibir(${idx}, this.value)">
+            </td>
+            <td class="text-center">
+                <button class="btn btn-sm btn-outline-success" onclick="marcarCompleto(${idx})" title="Marcar completo">
+                    <i class="fas fa-check"></i>
+                </button>
+            </td>
+        </tr>`).join('');
+
+    actualizarTotalItems();
+}
+
+function setARecibir(idx, v) {
+    let val = parseFloat(v) || 0;
+    if (val < 0) val = 0;
+    if (val > items[idx].cantidad_pendiente) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Cantidad mayor a la pendiente',
+            text: `Máximo que podés recibir: ${fmt(items[idx].cantidad_pendiente)}`,
+        });
+        val = items[idx].cantidad_pendiente;
+    }
+    items[idx].a_recibir = val;
+    renderItems();
+}
+
+function marcarCompleto(idx) {
+    items[idx].a_recibir = items[idx].cantidad_pendiente;
+    renderItems();
+}
+
+function recibirTodo() {
+    items.forEach(it => { it.a_recibir = it.cantidad_pendiente; });
+    renderItems();
+}
+
+function actualizarTotalItems() {
+    const count = items.filter(it => it.a_recibir > 0).length;
+    document.getElementById('totItems').textContent = count;
+}
+
+async function guardarRecepcion() {
+    const itemsConCant = items.filter(it => it.a_recibir > 0);
+    if (!itemsConCant.length) {
+        Swal.fire('Sin cantidades', 'Ingresá al menos un ítem con cantidad a recibir > 0.', 'warning');
+        return;
+    }
+
+    const fecha     = document.getElementById('rec_fecha').value;
+    const nroRemito = document.getElementById('rec_nro_remito').value.trim();
+    const obs       = document.getElementById('rec_observaciones').value.trim();
+
+    if (!fecha) {
+        Swal.fire('Falta fecha', 'Ingresá la fecha de la recepción.', 'warning');
+        return;
+    }
+
+    const resumen = itemsConCant.map(it =>
+        `<div class="d-flex justify-content-between"><span>${it.nombre}</span><strong>${fmt(it.a_recibir)}</strong></div>`
+    ).join('');
+
+    const conf = await Swal.fire({
+        title: '¿Confirmar recepción?',
+        html: `<div class="text-start small">${resumen}</div>
+               <hr>
+               <div class="small text-muted">Al confirmar, se suma al stock lo recibido.</div>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, confirmar',
+        cancelButtonText: 'No',
+        confirmButtonColor: '#0dcaf0',
+    });
+    if (!conf.isConfirmed) return;
+
+    const payload = {
+        fecha:         fecha,
+        nro_remito:    nroRemito,
+        observaciones: obs,
+        items: itemsConCant.map(it => ({
+            detalle_id:        it.detalle_id,
+            cantidad_recibida: it.a_recibir,
+            observaciones:     it.observaciones || '',
+        })),
+    };
+
+    try {
+        const res = await fetch(`/api/ordenes_compra/${OC_ID}/recibir`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!data.success) return Swal.fire('Error', data.error || 'No se pudo', 'error');
+
+        await Swal.fire({
+            icon: 'success',
+            title: '¡Recepción guardada!',
+            html: `Estado de la OC: <strong>${data.estado_nuevo}</strong><br>
+                   <small class="text-muted">El stock de los productos se actualizó.</small>`,
+            timer: 2500, timerProgressBar: true, showConfirmButton: false,
+        });
+        window.location.href = `/orden_compra/${OC_ID}`;
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+(function init() {
+    document.getElementById('rec_fecha').value = new Date().toISOString().split('T')[0];
+    cargar();
+})();
+</script>
+{% endblock %}

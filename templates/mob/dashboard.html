@@ -1,0 +1,2029 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d6efd">
+<title>FactuFácil — Dashboard</title>
+<link rel="manifest" href="{{ url_for('mobile.manifest') }}">
+<link rel="icon" href="/static/mob/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/static/mob/icon-192.png">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f1f4f9;
+  color: #1a1f2e;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── HEADER ─── */
+.app-header {
+  position: sticky;
+  top: 0; z-index: 50;
+  background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+  color: #fff;
+  padding: env(safe-area-inset-top) 1.2rem 1rem;
+  padding-top: calc(env(safe-area-inset-top, 0) + 1rem);
+}
+.header-row {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-greeting { font-size: 0.78rem; opacity: 0.85; }
+.header-name { font-size: 1.05rem; font-weight: 700; margin-top: 2px; }
+.header-actions { display: flex; gap: 0.6rem; }
+.header-btn {
+  width: 38px; height: 38px;
+  background: rgba(255,255,255,0.15);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.header-btn:active { background: rgba(255,255,255,0.25); }
+.header-btn.refreshing i { animation: spin 1s linear infinite; }
+@keyframes spin { from {transform: rotate(0)} to {transform: rotate(360deg)} }
+
+.last-update {
+  font-size: 0.72rem;
+  opacity: 0.75;
+  margin-top: 0.85rem;
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.last-update .pulse {
+  width: 8px; height: 8px;
+  background: #4ade80;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+.last-update .pulse.paused {
+  background: #fbbf24;
+  animation: none;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ─── DATE RANGE SELECTOR ─── */
+.date-bar {
+  background: #fff;
+  margin: -0.5rem 1rem 1rem;
+  border-radius: 14px;
+  padding: 0.85rem 0.9rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  position: relative;
+  z-index: 10;
+}
+.date-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.date-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.date-input-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-left: 0.2rem;
+}
+.date-input {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  font-size: 0.92rem;
+  font-family: inherit;
+  font-weight: 600;
+  color: #1a1f2e;
+  -webkit-appearance: none;
+}
+.date-input:focus {
+  outline: none;
+  background: #fff;
+  border-color: #0d6efd;
+}
+.date-quick {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.date-quick::-webkit-scrollbar { display: none; }
+.date-quick button {
+  background: #f3f4f6;
+  border: 1px solid transparent;
+  color: #4b5563;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.date-quick button:active {
+  background: #e5e7eb;
+}
+.date-quick button.active {
+  background: #0d6efd;
+  color: #fff;
+  border-color: #0d6efd;
+}
+
+/* ─── CONTENT ─── */
+.content { padding: 1rem 1rem 0; }
+
+/* ─── HERO CARD: VENTAS HOY ─── */
+.hero-card {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: #fff;
+  border-radius: 18px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+.hero-card::before {
+  content: '';
+  position: absolute;
+  top: -50%; right: -20%;
+  width: 250px; height: 250px;
+  background: radial-gradient(circle, rgba(13,110,253,0.3) 0%, transparent 60%);
+  pointer-events: none;
+}
+.hero-label {
+  font-size: 0.78rem;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.hero-amount {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -1px;
+  position: relative;
+  z-index: 1;
+}
+.hero-amount .currency { font-size: 1.4rem; font-weight: 600; opacity: 0.7; margin-right: 0.2rem; }
+.hero-meta {
+  margin-top: 0.85rem;
+  display: flex; align-items: center; gap: 0.8rem;
+  font-size: 0.85rem;
+  position: relative;
+  z-index: 1;
+}
+.hero-facturas { opacity: 0.75; }
+.variation {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.variation.up { background: rgba(34,197,94,0.2); color: #4ade80; }
+.variation.down { background: rgba(239,68,68,0.2); color: #fca5a5; }
+.variation.flat { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); }
+
+/* ─── ALERTAS ─── */
+.alerts-section {
+  margin-bottom: 1rem;
+}
+.alert-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 0.95rem 1rem;
+  margin-bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  border-left: 4px solid #ef4444;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.alert-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 0 0 rgba(0,0,0,0);
+}
+.alert-card.severidad-media { border-left-color: #f59e0b; }
+.alert-card.severidad-baja { border-left-color: #3b82f6; }
+.alert-icon {
+  width: 38px; height: 38px;
+  background: rgba(239,68,68,0.1);
+  color: #ef4444;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+.alert-card.severidad-media .alert-icon { background: rgba(245,158,11,0.1); color: #f59e0b; }
+.alert-card.severidad-baja .alert-icon { background: rgba(59,130,246,0.1); color: #3b82f6; }
+.alert-content { flex: 1; min-width: 0; }
+.alert-title {
+  font-weight: 700;
+  font-size: 0.93rem;
+  margin-bottom: 2px;
+}
+.alert-detail {
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
+/* ─── METRICS ROW (2 columns) ─── */
+.metrics-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+.metric-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.metric-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 0.7rem;
+  font-size: 0.95rem;
+}
+.metric-icon.green { background: rgba(34,197,94,0.12); color: #16a34a; }
+.metric-icon.purple { background: rgba(168,85,247,0.12); color: #9333ea; }
+.metric-icon.orange { background: rgba(249,115,22,0.12); color: #ea580c; }
+.metric-icon.cyan { background: rgba(6,182,212,0.12); color: #0891b2; }
+.metric-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.metric-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #1a1f2e;
+  word-break: break-word;
+}
+.metric-sub {
+  font-size: 0.72rem;
+  color: #6b7280;
+  margin-top: 3px;
+}
+
+/* ─── BIG CARDS (full width) ─── */
+.big-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1.1rem 1rem;
+  margin-bottom: 0.6rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.big-card-header {
+  display: flex; align-items: center; gap: 0.7rem;
+  margin-bottom: 0.7rem;
+}
+.big-card-icon {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+}
+.big-card-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.3px;
+  font-weight: 600;
+}
+.big-card-content { padding-left: 0.2rem; }
+.big-card-main {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1a1f2e;
+  line-height: 1.3;
+}
+.big-card-sub {
+  font-size: 0.82rem;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* ─── EMPTY STATES ─── */
+.empty-state {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  color: #9ca3af;
+  font-size: 0.88rem;
+}
+.empty-state i { font-size: 1.8rem; margin-bottom: 0.5rem; opacity: 0.5; display: block; }
+
+.no-data { color: #9ca3af; font-style: italic; font-size: 0.92rem; }
+
+/* ─── BOTTOM NAV ─── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  padding: 0.5rem 0.5rem;
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.2rem;
+  z-index: 50;
+}
+.bottom-nav a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.2rem;
+  text-decoration: none;
+  color: #9ca3af;
+  font-size: 0.65rem;
+  font-weight: 600;
+  gap: 0.2rem;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+.bottom-nav a i { font-size: 1.15rem; }
+.bottom-nav a.active { color: #0d6efd; }
+.bottom-nav a:active { background: #f3f4f6; }
+
+.disabled-nav {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ─── LOADING SKELETON ─── */
+.skeleton {
+  background: linear-gradient(90deg, #e5e7eb 0%, #f3f4f6 50%, #e5e7eb 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+  display: inline-block;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── TICKET PROMEDIO Y MÁRGEN INLINE ─── */
+.inline-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+.inline-stat {
+  background: #fff;
+  border-radius: 14px;
+  padding: 0.85rem 0.9rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.inline-stat-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.inline-stat-label i { font-size: 0.85rem; }
+.inline-stat-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #1a1f2e;
+  letter-spacing: -0.3px;
+}
+.inline-stat-sub {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+/* ─── MEDIOS DE PAGO BARS ─── */
+.pago-list { display: flex; flex-direction: column; gap: 0.7rem; padding-top: 0.4rem; }
+.pago-item-row { }
+.pago-row-top {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.85rem;
+}
+.pago-row-icon {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.pago-row-icon.efectivo { background: rgba(34,197,94,0.12); color: #16a34a; }
+.pago-row-icon.debito { background: rgba(59,130,246,0.12); color: #3b82f6; }
+.pago-row-icon.credito { background: rgba(168,85,247,0.12); color: #9333ea; }
+.pago-row-icon.transferencia { background: rgba(6,182,212,0.12); color: #0891b2; }
+.pago-row-icon.mp { background: rgba(249,115,22,0.12); color: #ea580c; }
+.pago-row-icon.otro { background: rgba(107,114,128,0.12); color: #6b7280; }
+
+.pago-row-name {
+  flex: 1;
+  font-weight: 600;
+  color: #1a1f2e;
+  text-transform: capitalize;
+}
+.pago-row-monto { font-weight: 700; color: #1a1f2e; }
+.pago-row-pct { font-size: 0.72rem; color: #9ca3af; margin-left: 0.4rem; }
+.pago-bar-bg {
+  height: 6px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-left: 36px;
+}
+.pago-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+/* ─── TOP LISTS ─── */
+.top-list { display: flex; flex-direction: column; gap: 0.5rem; padding-top: 0.4rem; }
+.top-row {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.6rem 0.6rem;
+  background: #f9fafb;
+  border-radius: 10px;
+  border-left: 3px solid #e5e7eb;
+}
+.top-row.rank-1 { border-left-color: #fbbf24; background: linear-gradient(90deg, #fffbeb 0%, #fefce8 100%); }
+.top-row.rank-2 { border-left-color: #94a3b8; background: linear-gradient(90deg, #f8fafc 0%, #ffffff 100%); }
+.top-row.rank-3 { border-left-color: #cd7f32; background: linear-gradient(90deg, #fef7ee 0%, #fff 100%); }
+.top-rank {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #6b7280;
+  font-weight: 800;
+  font-size: 0.78rem;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.top-row.rank-1 .top-rank { background: #fbbf24; color: #fff; }
+.top-row.rank-2 .top-rank { background: #94a3b8; color: #fff; }
+.top-row.rank-3 .top-rank { background: #cd7f32; color: #fff; }
+.top-info { flex: 1; min-width: 0; }
+.top-info-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #1a1f2e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.top-info-sub {
+  font-size: 0.72rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
+.top-info-monto {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #16a34a;
+  white-space: nowrap;
+}
+
+/* ─── MARGEN CARD ─── */
+.margen-card {
+  background: linear-gradient(135deg, #064e3b 0%, #047857 50%, #0e7490 100%);
+  color: #fff;
+  border-radius: 14px;
+  padding: 1.1rem 1rem;
+  margin-bottom: 0.6rem;
+  position: relative;
+  overflow: hidden;
+}
+.margen-card::before {
+  content: '';
+  position: absolute;
+  top: -30%; right: -20%;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(74,222,128,0.2) 0%, transparent 60%);
+  pointer-events: none;
+}
+.margen-header {
+  display: flex; align-items: center; gap: 0.6rem;
+  margin-bottom: 0.7rem;
+  position: relative;
+  z-index: 1;
+}
+.margen-icon {
+  width: 36px; height: 36px;
+  background: rgba(74,222,128,0.2);
+  color: #4ade80;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+.margen-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+.margen-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  position: relative;
+  z-index: 1;
+}
+.margen-cell-label {
+  font-size: 0.7rem;
+  opacity: 0.75;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 3px;
+}
+.margen-cell-value {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.margen-cell-value.big {
+  font-size: 1.5rem;
+  letter-spacing: -0.5px;
+  background: linear-gradient(90deg, #4ade80, #22d3ee);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.margen-cobertura {
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  font-size: 0.7rem;
+  opacity: 0.7;
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── 2B: VARIATIONS DOBLES (vs ayer + vs sem pasada) ─── */
+.variations-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 1;
+}
+.variation-block {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: rgba(255,255,255,0.08);
+  padding: 0.5rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.variation-block-label {
+  font-size: 0.65rem;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 600;
+}
+.variation-block-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.variation-block-value.up { color: #4ade80; }
+.variation-block-value.down { color: #fca5a5; }
+.variation-block-value.flat { color: rgba(255,255,255,0.7); }
+
+/* ─── 2B: GRÁFICO DE VENTAS POR HORA ─── */
+.chart-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1.1rem 1rem;
+  margin-bottom: 0.6rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.chart-wrapper {
+  position: relative;
+  height: 200px;
+  margin-top: 0.5rem;
+}
+.chart-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #9ca3af;
+}
+
+/* ─── 2B: ESTADO AFIP ─── */
+.afip-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1rem;
+  margin-bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  border-left: 4px solid #10b981;
+}
+.afip-card.status-warn { border-left-color: #f59e0b; }
+.afip-card.status-error { border-left-color: #ef4444; }
+.afip-card.status-idle { border-left-color: #9ca3af; }
+.afip-icon {
+  width: 42px; height: 42px;
+  border-radius: 11px;
+  background: rgba(16,185,129,0.12);
+  color: #10b981;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  position: relative;
+}
+.afip-card.status-warn .afip-icon { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.afip-card.status-error .afip-icon { background: rgba(239,68,68,0.12); color: #ef4444; }
+.afip-card.status-idle .afip-icon { background: rgba(156,163,175,0.12); color: #6b7280; }
+
+.afip-pulse {
+  position: absolute;
+  width: 10px; height: 10px;
+  background: #10b981;
+  border-radius: 50%;
+  bottom: 2px; right: 2px;
+  border: 2px solid #fff;
+  animation: pulse-afip 2s ease-in-out infinite;
+}
+.afip-card.status-warn .afip-pulse { background: #f59e0b; }
+.afip-card.status-error .afip-pulse { background: #ef4444; }
+.afip-card.status-idle .afip-pulse { background: #9ca3af; animation: none; }
+@keyframes pulse-afip {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.5; }
+}
+.afip-content { flex: 1; min-width: 0; }
+.afip-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 2px;
+}
+.afip-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.3px;
+  font-weight: 600;
+}
+.afip-status-text {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #1a1f2e;
+}
+.afip-meta {
+  font-size: 0.72rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+/* ─── 2B: OBJETIVO MENSUAL ─── */
+.obj-card {
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%);
+  color: #fff;
+  border-radius: 14px;
+  padding: 1.1rem 1rem;
+  margin-bottom: 0.6rem;
+  position: relative;
+  overflow: hidden;
+}
+.obj-card::before {
+  content: '';
+  position: absolute;
+  top: -40%; right: -20%;
+  width: 250px; height: 250px;
+  background: radial-gradient(circle, rgba(167,139,250,0.25) 0%, transparent 60%);
+  pointer-events: none;
+}
+.obj-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  position: relative;
+  z-index: 1;
+}
+.obj-icon {
+  width: 38px; height: 38px;
+  background: rgba(167,139,250,0.2);
+  color: #c4b5fd;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+}
+.obj-title {
+  flex: 1;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  opacity: 0.9;
+  letter-spacing: 0.4px;
+  font-weight: 600;
+}
+.obj-edit-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem;
+}
+.obj-amounts {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.7rem;
+  position: relative;
+  z-index: 1;
+}
+.obj-current {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.obj-target {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+.obj-bar-bg {
+  height: 10px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+.obj-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #a78bfa, #60a5fa);
+  border-radius: 6px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.obj-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.6rem;
+  font-size: 0.75rem;
+  opacity: 0.85;
+  position: relative;
+  z-index: 1;
+}
+.obj-pct-big {
+  font-weight: 800;
+  font-size: 1rem;
+  color: #c4b5fd;
+}
+.obj-empty {
+  text-align: center;
+  padding: 0.5rem 0;
+  position: relative;
+  z-index: 1;
+}
+.obj-empty button {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: #fff;
+  padding: 0.5rem 1.2rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ─── 2B: BANNER DE RÉCORD ─── */
+.record-banner {
+  background: linear-gradient(135deg, #fef08a 0%, #fbbf24 50%, #f59e0b 100%);
+  color: #78350f;
+  border-radius: 14px;
+  padding: 1rem;
+  margin-bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  font-weight: 700;
+  position: relative;
+  overflow: hidden;
+  animation: record-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes record-pop {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.record-banner::before {
+  content: '';
+  position: absolute;
+  top: -50%; right: -20%;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(255,255,255,0.4) 0%, transparent 60%);
+  pointer-events: none;
+}
+.record-icon {
+  width: 50px; height: 50px;
+  background: rgba(255,255,255,0.3);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+.record-content { flex: 1; min-width: 0; position: relative; z-index: 1; }
+.record-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+.record-detail {
+  font-size: 0.75rem;
+  opacity: 0.85;
+  font-weight: 600;
+}
+
+/* Confeti contenedor */
+.confetti-container {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 1000;
+  overflow: hidden;
+}
+.confetti-piece {
+  position: absolute;
+  top: -20px;
+  width: 10px; height: 16px;
+  opacity: 0.9;
+  animation: confetti-fall 3.5s linear forwards;
+}
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); }
+  100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+}
+
+/* Modal de configuración objetivo */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  animation: fade-in 0.2s ease;
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.modal-content {
+  background: #fff;
+  width: 100%;
+  border-radius: 20px 20px 0 0;
+  padding: 1.5rem 1.2rem calc(1.2rem + env(safe-area-inset-bottom));
+  animation: slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.modal-handle {
+  width: 40px; height: 4px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  margin: -0.5rem auto 1rem;
+}
+.modal-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+.modal-sub {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-bottom: 1.2rem;
+}
+.modal-input {
+  width: 100%;
+  padding: 0.95rem 1rem;
+  background: #f3f4f6;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1a1f2e;
+  font-family: inherit;
+  -webkit-appearance: none;
+}
+.modal-input:focus { outline: none; border-color: #0d6efd; background: #fff; }
+.modal-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-top: 1.2rem;
+}
+.modal-btn {
+  padding: 0.85rem;
+  border-radius: 10px;
+  border: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.modal-btn-primary { background: #0d6efd; color: #fff; }
+.modal-btn-secondary { background: #f3f4f6; color: #4b5563; }
+/* ─── BOTÓN INFO (ayuda) ─── */
+.info-btn {
+  background: rgba(13,110,253,0.12);
+  border: none;
+  color: #0d6efd;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  transition: background 0.2s;
+}
+.info-btn:active { background: rgba(13,110,253,0.25); }
+.info-btn-light {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+}
+.info-btn-light:active { background: rgba(255,255,255,0.35); }
+
+/* ─── MODAL DE AYUDA ─── */
+.help-modal-text {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: #374151;
+  margin: 0.5rem 0 1rem 0;
+  text-align: left;
+}
+.help-modal-text strong { color: #0d6efd; }
+.help-modal-text code {
+  background: #f3f4f6;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #1f2937;
+  font-family: 'Courier New', monospace;
+}
+.help-modal-text .help-example {
+  background: #f9fafb;
+  border-left: 3px solid #0d6efd;
+  padding: 0.6rem 0.8rem;
+  margin-top: 0.6rem;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.88rem;
+  color: #4b5563;
+}
+
+.modal-btn-clear {
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-top: 1rem;
+  cursor: pointer;
+  width: 100%;
+  padding: 0.5rem;
+  font-family: inherit;
+}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-row">
+    <div>
+      <div class="header-greeting">¡Hola!</div>
+      <div class="header-name">{{ nombre or 'Dueño' }}</div>
+    </div>
+    <div class="header-actions">
+      <button class="header-btn" id="btnRefresh" onclick="loadDashboard()" aria-label="Actualizar">
+        <i class="fas fa-sync-alt"></i>
+      </button>
+      <a href="{{ url_for('mobile.logout') }}" class="header-btn" aria-label="Cerrar sesión" style="text-decoration: none;">
+        <i class="fas fa-sign-out-alt"></i>
+      </a>
+    </div>
+  </div>
+  <div class="last-update">
+    <span class="pulse"></span>
+    <span id="lastUpdate">Cargando datos...</span>
+  </div>
+</header>
+
+<main class="content">
+
+  <!-- BARRA DE FILTROS DE FECHA -->
+  <div class="date-bar">
+    <div class="date-inputs">
+      <div class="date-input-group">
+        <label class="date-input-label" for="fechaDesde">Desde</label>
+        <input type="date" id="fechaDesde" class="date-input">
+      </div>
+      <div class="date-input-group">
+        <label class="date-input-label" for="fechaHasta">Hasta</label>
+        <input type="date" id="fechaHasta" class="date-input">
+      </div>
+    </div>
+    <div class="date-quick">
+      <button data-rango="hoy" class="active">Hoy</button>
+      <button data-rango="ayer">Ayer</button>
+      <button data-rango="7d">Últimos 7</button>
+      <button data-rango="mes">Este mes</button>
+      <button data-rango="mes_pasado">Mes pasado</button>
+    </div>
+  </div>
+
+  <!-- HERO: Ventas hoy -->
+  <div class="hero-card">
+    <div class="hero-label">
+      <i class="fas fa-chart-line"></i>
+      <span id="heroTitulo">Ventas hoy</span>
+      <span style="margin-left: auto; font-size: 0.7rem; opacity: 0.6;" id="fechaHoy"></span>
+    </div>
+    <div class="hero-amount">
+      <span class="currency">$</span><span id="ventasMonto">—</span>
+    </div>
+    <div class="hero-meta">
+      <span class="hero-facturas"><i class="fas fa-file-invoice"></i> <span id="ventasCantidad">—</span> facturas</span>
+    </div>
+    <div class="variations-row" id="variationsRow"></div>
+  </div>
+
+  <!-- BANNER RÉCORD (solo si rompe récord) -->
+  <div id="recordBanner"></div>
+
+  <!-- OBJETIVO MENSUAL -->
+  <div class="obj-card" id="objCard">
+    <div class="obj-header">
+      <div class="obj-icon"><i class="fas fa-bullseye"></i></div>
+      <div class="obj-title">Objetivo del mes</div>
+      <button class="obj-edit-btn" onclick="abrirModalObjetivo()" aria-label="Configurar objetivo">
+        <i class="fas fa-cog"></i>
+      </button>
+    </div>
+    <div id="objContent"></div>
+  </div>
+
+  <!-- TICKET PROMEDIO + DESGLOSE RÁPIDO -->
+  <div class="inline-stats">
+    <div class="inline-stat">
+      <div class="inline-stat-label"><i class="fas fa-receipt" style="color:#0d6efd;"></i> Ticket promedio<button class="info-btn" onclick="mostrarAyuda('ticket')" aria-label="Ayuda">?</button></div>
+      <div class="inline-stat-value" id="ticketPromedio">—</div>
+      <div class="inline-stat-sub" id="ticketPromedioSub">&nbsp;</div>
+    </div>
+    <div class="inline-stat">
+      <div class="inline-stat-label"><i class="fas fa-shopping-bag" style="color:#9333ea;"></i> Productos vendidos<button class="info-btn" onclick="mostrarAyuda('productos_vendidos')" aria-label="Ayuda">?</button></div>
+      <div class="inline-stat-value" id="productosVendidos">—</div>
+      <div class="inline-stat-sub" id="productosVendidosSub">&nbsp;</div>
+    </div>
+  </div>
+
+  <!-- GRÁFICO DE VENTAS POR HORA (solo si rango = 1 día) -->
+  <div class="chart-card" id="chartCard" style="display: none;">
+    <div class="big-card-header" style="margin-bottom: 0.3rem;">
+      <div class="big-card-icon" style="background: rgba(13,110,253,0.12); color: #0d6efd;">
+        <i class="fas fa-clock"></i>
+      </div>
+      <div class="big-card-title">Ventas por hora del día</div>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="chartHoras"></canvas>
+    </div>
+  </div>
+
+  <!-- ESTADO AFIP -->
+  <div class="afip-card" id="afipCard" style="display: none;">
+    <div class="afip-icon">
+      <i class="fas fa-shield-alt" id="afipIcon"></i>
+      <span class="afip-pulse"></span>
+    </div>
+    <div class="afip-content">
+      <div class="afip-title-row">
+        <span class="afip-label">Estado AFIP</span>
+      </div>
+      <div class="afip-status-text" id="afipStatusText">—</div>
+      <div class="afip-meta" id="afipMeta">&nbsp;</div>
+    </div>
+  </div>
+
+  <!-- MARGEN DEL PERÍODO -->
+  <div class="margen-card" id="margenCard" style="display: none;">
+    <div class="margen-header">
+      <div class="margen-icon"><i class="fas fa-chart-pie"></i></div>
+      <div>
+        <div class="margen-title" id="margenTitulo">Margen del período<button class="info-btn info-btn-light" onclick="mostrarAyuda('margen')" aria-label="Ayuda">?</button></div>
+      </div>
+    </div>
+    <div class="margen-grid">
+      <div>
+        <div class="margen-cell-label">Margen $</div>
+        <div class="margen-cell-value big" id="margenMonto">—</div>
+      </div>
+      <div>
+        <div class="margen-cell-label">Margen %</div>
+        <div class="margen-cell-value big" id="margenPct">—</div>
+      </div>
+      <div>
+        <div class="margen-cell-label">Costo de mercadería</div>
+        <div class="margen-cell-value" id="margenCosto">—</div>
+      </div>
+      <div>
+        <div class="margen-cell-label">Ventas</div>
+        <div class="margen-cell-value" id="margenVentas">—</div>
+      </div>
+    </div>
+    <div class="margen-cobertura" id="margenCobertura">&nbsp;</div>
+  </div>
+
+  <!-- ALERTAS (se renderean dinámicamente si hay) -->
+  <div class="alerts-section" id="alertsSection"></div>
+
+  <!-- MEDIOS DE PAGO -->
+  <div class="big-card" id="cardMediosPago" style="display: none;">
+    <div class="big-card-header">
+      <div class="big-card-icon" style="background: rgba(13,110,253,0.12); color: #0d6efd;">
+        <i class="fas fa-credit-card"></i>
+      </div>
+      <div class="big-card-title">Medios de pago</div>
+    </div>
+    <div class="pago-list" id="pagoList"></div>
+  </div>
+
+  <!-- TOP PRODUCTOS -->
+  <div class="big-card" id="cardTopProductos" style="display: none;">
+    <div class="big-card-header">
+      <div class="big-card-icon" style="background: rgba(168,85,247,0.12); color: #9333ea;">
+        <i class="fas fa-trophy"></i>
+      </div>
+      <div class="big-card-title">Top productos del período</div>
+    </div>
+    <div class="top-list" id="topProductosList"></div>
+  </div>
+
+  <!-- TOP CLIENTES -->
+  <div class="big-card" id="cardTopClientes" style="display: none;">
+    <div class="big-card-header">
+      <div class="big-card-icon" style="background: rgba(249,115,22,0.12); color: #ea580c;">
+        <i class="fas fa-crown"></i>
+      </div>
+      <div class="big-card-title">Top clientes del período</div>
+    </div>
+    <div class="top-list" id="topClientesList"></div>
+  </div>
+
+  <!-- CAJA: Efectivo del período -->
+  <div class="big-card" id="cardEfectivo" style="display: none;">
+    <div class="big-card-header">
+      <div class="big-card-icon" style="background: rgba(34,197,94,0.12); color: #16a34a;">
+        <i class="fas fa-money-bill-wave"></i>
+      </div>
+      <div class="big-card-title" id="efectivoTitulo">Efectivo del día</div>
+    </div>
+    <div class="big-card-content">
+      <div class="big-card-main" id="efectivoMonto">$ 0,00</div>
+      <div class="big-card-sub" id="efectivoSub">Cobranzas en efectivo de hoy</div>
+    </div>
+  </div>
+
+  <!-- COMPARATIVA: Período anterior -->
+  <div class="big-card" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #fbbf24;">
+    <div class="big-card-header" style="margin-bottom: 0;">
+      <div class="big-card-icon" style="background: rgba(245,158,11,0.2); color: #d97706;">
+        <i class="fas fa-history"></i>
+      </div>
+      <div style="flex: 1;">
+        <div style="font-size: 0.75rem; text-transform: uppercase; color: #92400e; letter-spacing: 0.3px; font-weight: 600;" id="anteriorTitulo">Ayer</div>
+        <div style="font-weight: 700; color: #78350f; margin-top: 2px; font-size: 0.95rem;" id="ayerInfo">—</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Modal de configuración objetivo -->
+<div class="modal-overlay" id="modalObjetivo" style="display:none;" onclick="cerrarModalObjetivo(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🎯 Objetivo mensual</div>
+    <div class="modal-sub">Cuánto querés vender este mes. Se guarda en este celular nada más.</div>
+    <input type="number" id="modalInputObjetivo" class="modal-input" placeholder="Ej: 5000000" inputmode="numeric">
+    <div class="modal-buttons">
+      <button class="modal-btn modal-btn-secondary" onclick="cerrarModalObjetivo()">Cancelar</button>
+      <button class="modal-btn modal-btn-primary" onclick="guardarObjetivo()">Guardar</button>
+    </div>
+    <button class="modal-btn-clear" onclick="limpiarObjetivo()">Quitar objetivo</button>
+  </div>
+</div>
+
+<!-- ─── MODAL DE AYUDA (genérico) ─── -->
+<div class="modal-overlay" id="modalAyuda" style="display:none;" onclick="cerrarAyuda(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="ayudaTitulo">Ayuda</div>
+    <div class="help-modal-text" id="ayudaContenido"></div>
+    <div class="modal-buttons">
+      <button class="modal-btn modal-btn-primary" onclick="cerrarAyuda()" style="width:100%;">Entendido</button>
+    </div>
+  </div>
+</div>
+
+<!-- Container para confeti -->
+<div class="confetti-container" id="confettiContainer"></div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="{{ url_for('mobile.dashboard') }}" class="active">
+    <i class="fas fa-home"></i><span>Inicio</span>
+  </a>
+  <a href="/facturas" title="Buscar facturas">
+    <i class="fas fa-search"></i><span>Buscar</span>
+  </a>
+  <a href="/productos" title="Stock de productos">
+    <i class="fas fa-box"></i><span>Stock</span>
+  </a>
+  <a href="/clientes" title="Clientes y Cuenta Corriente">
+    <i class="fas fa-money-check-alt"></i><span>Cta Cte</span>
+  </a>
+</nav>
+
+<script>
+let autoRefreshInterval = null;
+
+function fmtMoney(v) {
+  if (v === null || v === undefined) return '0,00';
+  return new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+}
+
+function fmtNum(v) {
+  if (v === null || v === undefined) return '0';
+  return new Intl.NumberFormat('es-AR').format(v);
+}
+
+function ymd(d) {
+  // Formato YYYY-MM-DD para inputs date
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Mapeo de medio de pago a ícono y color CSS class
+function medioPagoConfig(medio) {
+  const m = (medio || '').toLowerCase();
+  if (m.includes('efectivo')) return { icon: 'fa-money-bill-wave', cls: 'efectivo', color: '#16a34a' };
+  if (m.includes('debito') || m.includes('débito')) return { icon: 'fa-credit-card', cls: 'debito', color: '#3b82f6' };
+  if (m.includes('credito') || m.includes('crédito')) return { icon: 'fa-credit-card', cls: 'credito', color: '#9333ea' };
+  if (m.includes('transferencia') || m.includes('transfer')) return { icon: 'fa-exchange-alt', cls: 'transferencia', color: '#0891b2' };
+  if (m.includes('mercado') || m.includes('mp')) return { icon: 'fab fa-cc-amazon-pay', cls: 'mp', color: '#ea580c' };
+  return { icon: 'fa-money-check', cls: 'otro', color: '#6b7280' };
+}
+
+// ─── 2B: Render variations dobles ───
+function renderVariationBlock(label, pct, helpKey) {
+  if (pct === null || pct === undefined) return '';
+  let cls, icon, txt;
+  if (pct > 0) { cls = 'up'; icon = 'fa-arrow-up'; txt = pct.toFixed(1); }
+  else if (pct < 0) { cls = 'down'; icon = 'fa-arrow-down'; txt = Math.abs(pct).toFixed(1); }
+  else { cls = 'flat'; icon = 'fa-minus'; txt = '0'; }
+  const helpBtn = helpKey ? `<button class="info-btn" onclick="mostrarAyuda('${helpKey}')" aria-label="Ayuda">?</button>` : '';
+  return `<div class="variation-block">
+    <div class="variation-block-label">${label}${helpBtn}</div>
+    <div class="variation-block-value ${cls}"><i class="fas ${icon}"></i> ${txt}%</div>
+  </div>`;
+}
+
+function renderVariations(d) {
+  const row = document.getElementById('variationsRow');
+  let html = '';
+  if (d.variacion_pct !== null && d.variacion_pct !== undefined) {
+    const labelAnt = d.dias_rango === 1 ? 'vs día anterior' : 'vs período anterior';
+    html += renderVariationBlock(labelAnt, d.variacion_pct, 'periodo_anterior');
+  }
+  if (d.variacion_sem_pct !== null && d.variacion_sem_pct !== undefined) {
+    const labelSem = d.dias_rango === 1 ? 'vs sem. pasada' : 'vs misma sem. pasada';
+    html += renderVariationBlock(labelSem, d.variacion_sem_pct, 'semana_pasada');
+  }
+  row.innerHTML = html;
+}
+
+// ─── 2B: Gráfico de ventas por hora ───
+let chartHorasInstance = null;
+function renderChartHoras(ventasPorHora) {
+  const card = document.getElementById('chartCard');
+  if (!ventasPorHora || ventasPorHora.length === 0) {
+    card.style.display = 'none';
+    return;
+  }
+  const labels = ventasPorHora.map(h => h.label);
+  const data = ventasPorHora.map(h => h.monto);
+
+  card.style.display = 'block';
+
+  if (chartHorasInstance) {
+    chartHorasInstance.destroy();
+  }
+
+  if (typeof Chart === 'undefined') {
+    document.getElementById('chartCard').innerHTML = '<div class="chart-empty">Gráfico no disponible (Chart.js no cargó)</div>';
+    return;
+  }
+
+  const ctx = document.getElementById('chartHoras').getContext('2d');
+  chartHorasInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Ventas',
+        data: data,
+        backgroundColor: data.map(v => v > 0 ? 'rgba(13,110,253,0.7)' : 'rgba(229,231,235,0.5)'),
+        borderRadius: 4,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => `${items[0].label}:00`,
+            label: (item) => {
+              const idx = item.dataIndex;
+              const h = ventasPorHora[idx];
+              return [
+                `$ ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2 }).format(h.monto)}`,
+                `${h.cant} factura${h.cant === 1 ? '' : 's'}`
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(0,0,0,0.05)' },
+          ticks: {
+            font: { size: 9 },
+            callback: (v) => {
+              if (v >= 1000000) return '$' + (v/1000000).toFixed(1) + 'M';
+              if (v >= 1000) return '$' + (v/1000).toFixed(0) + 'k';
+              return '$' + v;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+// ─── 2B: Estado AFIP ───
+function renderAfip(estado) {
+  const card = document.getElementById('afipCard');
+  if (!estado) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'flex';
+  card.className = 'afip-card status-' + estado.status;
+
+  const iconEl = document.getElementById('afipIcon');
+  if (estado.status === 'ok') iconEl.className = 'fas fa-shield-alt';
+  else if (estado.status === 'warn') iconEl.className = 'fas fa-exclamation-triangle';
+  else if (estado.status === 'error') iconEl.className = 'fas fa-times-circle';
+  else iconEl.className = 'fas fa-power-off';
+
+  document.getElementById('afipStatusText').textContent = estado.label;
+
+  let meta = '';
+  if (estado.ultima_autorizada) meta += `Última factura autorizada: ${estado.ultima_autorizada}`;
+  if (estado.total_24h > 0) meta += (meta ? ' · ' : '') + `${estado.total_24h} facturas en 24h`;
+  document.getElementById('afipMeta').textContent = meta || 'Sin datos recientes';
+}
+
+// ─── 2B: Banner Récord + Confeti ───
+let recordYaMostrado = false;
+function renderRecord(recordInfo) {
+  const banner = document.getElementById('recordBanner');
+  if (!recordInfo) {
+    banner.innerHTML = '';
+    return;
+  }
+  banner.innerHTML = `
+    <div class="record-banner">
+      <div class="record-icon">🏆</div>
+      <div class="record-content">
+        <div class="record-title">¡Récord del mes pasado superado!</div>
+        <div class="record-detail">
+          Mejor día anterior: $${fmtMoney(recordInfo.mejor_anterior)} (${recordInfo.fecha_anterior})<br>
+          Vas $${fmtMoney(recordInfo.diferencia)} arriba (+${recordInfo.diferencia_pct.toFixed(1)}%)
+        </div>
+      </div>
+    </div>
+  `;
+  if (!recordYaMostrado) {
+    lanzarConfeti();
+    recordYaMostrado = true;
+  }
+}
+
+function lanzarConfeti() {
+  const container = document.getElementById('confettiContainer');
+  const colores = ['#fbbf24', '#a78bfa', '#60a5fa', '#34d399', '#fb7185', '#f59e0b'];
+  for (let i = 0; i < 60; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + '%';
+    piece.style.background = colores[Math.floor(Math.random() * colores.length)];
+    piece.style.animationDelay = (Math.random() * 0.5) + 's';
+    piece.style.animationDuration = (2.5 + Math.random() * 1.5) + 's';
+    container.appendChild(piece);
+    setTimeout(() => piece.remove(), 4000);
+  }
+}
+
+// ─── 2B: Objetivo mensual con localStorage ───
+const OBJETIVO_KEY = 'mob_objetivo_mensual';
+
+function getObjetivo() {
+  const v = localStorage.getItem(OBJETIVO_KEY);
+  return v ? parseFloat(v) : null;
+}
+function setObjetivo(v) { localStorage.setItem(OBJETIVO_KEY, String(v)); }
+function clearObjetivo() { localStorage.removeItem(OBJETIVO_KEY); }
+
+function renderObjetivo(d) {
+  const content = document.getElementById('objContent');
+  const objetivo = getObjetivo();
+  const ventasMes = d.mes_actual ? d.mes_actual.total : 0;
+
+  if (!objetivo || objetivo <= 0) {
+    content.innerHTML = `
+      <div class="obj-empty">
+        <div style="margin-bottom: 0.6rem; font-size: 0.85rem; opacity: 0.85;">
+          Vendiste <strong>$${fmtMoney(ventasMes)}</strong> este mes
+        </div>
+        <button onclick="abrirModalObjetivo()">+ Configurar objetivo</button>
+      </div>
+    `;
+    return;
+  }
+
+  const pct = Math.min((ventasMes / objetivo) * 100, 100);
+  const pctReal = (ventasMes / objetivo) * 100;
+  content.innerHTML = `
+    <div class="obj-amounts">
+      <div class="obj-current">$${fmtMoney(ventasMes)}</div>
+      <div class="obj-target">de $${fmtMoney(objetivo)}</div>
+    </div>
+    <div class="obj-bar-bg">
+      <div class="obj-bar-fill" style="width: ${pct}%;"></div>
+    </div>
+    <div class="obj-meta">
+      <span><span class="obj-pct-big">${pctReal.toFixed(1)}%</span> del objetivo</span>
+      <span>Faltan $${fmtMoney(Math.max(0, objetivo - ventasMes))}</span>
+    </div>
+  `;
+}
+
+function abrirModalObjetivo() {
+  const actual = getObjetivo();
+  document.getElementById('modalInputObjetivo').value = actual || '';
+  document.getElementById('modalObjetivo').style.display = 'flex';
+  setTimeout(() => document.getElementById('modalInputObjetivo').focus(), 100);
+}
+function cerrarModalObjetivo(event) {
+  if (event && event.target.id !== 'modalObjetivo') return;
+  document.getElementById('modalObjetivo').style.display = 'none';
+}
+function guardarObjetivo() {
+  const valor = parseFloat(document.getElementById('modalInputObjetivo').value);
+  if (isNaN(valor) || valor <= 0) {
+    alert('Ingresá un número válido');
+    return;
+  }
+  setObjetivo(valor);
+  cerrarModalObjetivo();
+  loadDashboard();
+}
+function limpiarObjetivo() {
+  if (confirm('¿Quitar el objetivo mensual?')) {
+    clearObjetivo();
+    cerrarModalObjetivo();
+    loadDashboard();
+  }
+}
+
+// ─── MODAL DE AYUDA (textos explicativos por métrica) ───
+const AYUDAS = {
+  ticket: {
+    titulo: '🧾 Ticket promedio',
+    contenido: `
+      <p>Es el <strong>promedio de plata que entra por cada factura</strong> en el período seleccionado.</p>
+      <p>Se calcula así:</p>
+      <p><code>Total vendido ÷ Cantidad de facturas</code></p>
+      <div class="help-example">
+        Si vendiste <strong>$500.000</strong> en <strong>10 facturas</strong>, tu ticket promedio es <strong>$50.000</strong>.
+      </div>
+      <p style="margin-top:0.8rem;">Sirve para ver si tus clientes están gastando más o menos por compra.</p>
+    `
+  },
+  productos_vendidos: {
+    titulo: '📦 Productos vendidos',
+    contenido: `
+      <p>Es la <strong>cantidad total de unidades vendidas</strong> en el período (suma de todas las cantidades de cada factura).</p>
+      <div class="help-example">
+        Si vendiste 3 facturas con 5 + 2 + 8 unidades, acá ves <strong>15 productos vendidos</strong>.
+      </div>
+      <p style="margin-top:0.8rem;">No es la cantidad de facturas, son las unidades sumadas.</p>
+    `
+  },
+  periodo_anterior: {
+    titulo: '📊 vs período anterior',
+    contenido: `
+      <p>Compara las ventas del rango que elegiste contra <strong>los mismos días inmediatamente anteriores</strong>.</p>
+      <div class="help-example">
+        Si elegís del <strong>1 al 26 de abril</strong> (26 días), te lo compara contra los <strong>26 días previos</strong> (del 6 al 31 de marzo).
+      </div>
+      <p style="margin-top:0.8rem;">
+        <span style="color:#16a34a;">↑ Verde</span> = vendiste más que en el período anterior.<br>
+        <span style="color:#dc2626;">↓ Rojo</span> = vendiste menos.
+      </p>
+    `
+  },
+  semana_pasada: {
+    titulo: '📅 vs misma sem. pasada',
+    contenido: `
+      <p>Compara contra <strong>el mismo rango pero corrido 7 días para atrás</strong>.</p>
+      <div class="help-example">
+        Si elegís <strong>"Hoy"</strong>, te lo compara contra el <strong>mismo día de la semana pasada</strong> (ej. martes vs martes anterior).
+      </div>
+      <p style="margin-top:0.8rem;">Es útil para detectar si tu negocio tiene patrones semanales (los lunes flojos, los viernes fuertes, etc).</p>
+    `
+  },
+  margen: {
+    titulo: '💰 Margen del período',
+    contenido: `
+      <p>Es la <strong>ganancia bruta</strong>: lo que te queda después de restarle a las ventas el costo de la mercadería vendida.</p>
+
+      <p style="margin-top:0.8rem;"><strong>Los 4 números que se muestran:</strong></p>
+      <p style="margin-left:0.5rem; line-height:1.6;">
+        🟢 <strong>Ventas</strong>: lo que entró por las facturas del período (montos <strong>sin IVA</strong>).<br>
+        🔴 <strong>Costo de mercadería</strong>: lo que te salió a vos comprar todo lo que vendiste.<br>
+        💵 <strong>Margen $</strong> = Ventas − Costo de mercadería.<br>
+        📊 <strong>Margen %</strong> = (Margen $ ÷ Ventas) × 100.
+      </p>
+
+      <div class="help-example">
+        Vendiste <strong>$100.000</strong> (sin IVA) y la mercadería te costó <strong>$70.000</strong>:<br>
+        Margen $ = <strong>$30.000</strong> · Margen % = <strong>30%</strong>
+      </div>
+
+      <p style="margin-top:0.8rem;"><strong>¿Cómo se calcula el costo de cada producto?</strong></p>
+      <p>Se usa el <strong>costo guardado al momento de la venta</strong>. Si por algún motivo ese dato no está, se toma el <strong>costo actual</strong> del producto.</p>
+      <p style="margin-top:0.5rem;">Como los costos los cargás <strong>con IVA incluido</strong> (lo que pagaste en la factura del proveedor), se le descuenta el IVA según el porcentaje de cada producto (<strong>21%, 10,5%</strong>, etc.) para poder compararlo con las ventas, que ya van sin IVA.</p>
+
+      <p style="margin-top:0.8rem;"><strong>¿Qué se incluye y qué no?</strong></p>
+      <p style="margin-left:0.5rem; line-height:1.7;">
+        ✅ Facturas válidas del período.<br>
+        ❌ Facturas canceladas.<br>
+        ❌ Combos (se calculan a partir de sus productos base).<br>
+        ❌ Productos sin costo cargado en el sistema.
+      </p>
+
+      <p style="margin-top:0.8rem; font-size:0.85rem; color:#6b7280;">
+        ℹ️ Estos números coinciden exactamente con el reporte <strong>"Margen por producto"</strong> de la web.
+      </p>
+    `
+  }
+};
+
+function mostrarAyuda(clave) {
+  const ayuda = AYUDAS[clave];
+  if (!ayuda) return;
+  document.getElementById('ayudaTitulo').textContent = ayuda.titulo;
+  document.getElementById('ayudaContenido').innerHTML = ayuda.contenido;
+  document.getElementById('modalAyuda').style.display = 'flex';
+}
+
+function cerrarAyuda(event) {
+  if (event && event.target.id !== 'modalAyuda' && event.type === 'click') {
+    if (event.target.closest('.modal-content') && !event.target.closest('.modal-btn-primary')) return;
+  }
+  document.getElementById('modalAyuda').style.display = 'none';
+}
+
+function setRangoFechas(desde, hasta) {
+  document.getElementById('fechaDesde').value = ymd(desde);
+  document.getElementById('fechaHasta').value = ymd(hasta);
+}
+
+function aplicarRangoRapido(rango) {
+  const hoy = new Date();
+  let desde, hasta;
+
+  if (rango === 'hoy') {
+    desde = hasta = hoy;
+  } else if (rango === 'ayer') {
+    const ayer = new Date(hoy);
+    ayer.setDate(ayer.getDate() - 1);
+    desde = hasta = ayer;
+  } else if (rango === '7d') {
+    desde = new Date(hoy);
+    desde.setDate(desde.getDate() - 6);
+    hasta = hoy;
+  } else if (rango === 'mes') {
+    desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    hasta = hoy;
+  } else if (rango === 'mes_pasado') {
+    desde = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+    hasta = new Date(hoy.getFullYear(), hoy.getMonth(), 0); // último día del mes anterior
+  }
+
+  setRangoFechas(desde, hasta);
+  marcarBotonActivo(rango);
+  loadDashboard();
+}
+
+function marcarBotonActivo(rango) {
+  document.querySelectorAll('.date-quick button').forEach(b => {
+    b.classList.toggle('active', b.dataset.rango === rango);
+  });
+}
+
+function detectarRangoActual() {
+  // Si las fechas coinciden con un atajo, marca ese botón. Sino, ninguno.
+  const desde = document.getElementById('fechaDesde').value;
+  const hasta = document.getElementById('fechaHasta').value;
+  const hoy = ymd(new Date());
+
+  if (desde === hoy && hasta === hoy) return 'hoy';
+
+  const ayer = new Date(); ayer.setDate(ayer.getDate() - 1);
+  const ayerY = ymd(ayer);
+  if (desde === ayerY && hasta === ayerY) return 'ayer';
+
+  const hace7 = new Date(); hace7.setDate(hace7.getDate() - 6);
+  if (desde === ymd(hace7) && hasta === hoy) return '7d';
+
+  const inicioMes = new Date(); inicioMes.setDate(1);
+  if (desde === ymd(inicioMes) && hasta === hoy) return 'mes';
+
+  const inicioMesPasado = new Date(); inicioMesPasado.setMonth(inicioMesPasado.getMonth() - 1); inicioMesPasado.setDate(1);
+  const finMesPasado = new Date(); finMesPasado.setDate(0);
+  if (desde === ymd(inicioMesPasado) && hasta === ymd(finMesPasado)) return 'mes_pasado';
+
+  return null;
+}
+
+function loadDashboard() {
+  const btn = document.getElementById('btnRefresh');
+  btn.classList.add('refreshing');
+
+  const desde = document.getElementById('fechaDesde').value;
+  const hasta = document.getElementById('fechaHasta').value;
+
+  const url = `{{ url_for("mobile.api_dashboard") }}?desde=${desde}&hasta=${hasta}`;
+
+  fetch(url)
+    .then(r => {
+      if (r.status === 401) {
+        window.location.href = '{{ url_for("mobile.login") }}';
+        return null;
+      }
+      return r.json();
+    })
+    .then(d => {
+      btn.classList.remove('refreshing');
+      if (!d || !d.success) return;
+
+      // Marcar botón rápido si corresponde
+      const rangoActual = detectarRangoActual();
+      if (rangoActual) {
+        marcarBotonActivo(rangoActual);
+      } else {
+        document.querySelectorAll('.date-quick button').forEach(b => b.classList.remove('active'));
+      }
+
+      // Header
+      document.getElementById('lastUpdate').textContent = 'Actualizado a las ' + d.timestamp + (d.es_hoy ? '' : ' · auto-refresh pausado');
+      document.querySelector('.last-update .pulse').classList.toggle('paused', !d.es_hoy);
+      document.getElementById('fechaHoy').textContent = d.label_periodo;
+
+      // Hero título
+      let heroTitulo = 'Ventas hoy';
+      if (!d.es_hoy) {
+        if (d.dias_rango === 1) {
+          heroTitulo = 'Ventas del día';
+        } else {
+          heroTitulo = `Ventas (${d.dias_rango} días)`;
+        }
+      }
+      document.getElementById('heroTitulo').textContent = heroTitulo;
+
+      // Ventas
+      document.getElementById('ventasMonto').textContent = fmtMoney(d.ventas_periodo.total);
+      document.getElementById('ventasCantidad').textContent = fmtNum(d.ventas_periodo.cantidad);
+
+      // Variaciones (período anterior + semana pasada)
+      renderVariations(d);
+
+      // Ticket promedio
+      if (d.ticket_promedio !== null && d.ticket_promedio !== undefined) {
+        document.getElementById('ticketPromedio').textContent = '$ ' + fmtMoney(d.ticket_promedio);
+        document.getElementById('ticketPromedioSub').textContent = `Por ${fmtNum(d.ventas_periodo.cantidad)} factura${d.ventas_periodo.cantidad === 1 ? '' : 's'}`;
+      } else {
+        document.getElementById('ticketPromedio').textContent = '—';
+        document.getElementById('ticketPromedioSub').textContent = 'Sin ventas';
+      }
+
+      // Productos vendidos (suma cantidad de top_productos como aproximación)
+      let totalProductosVendidos = 0;
+      if (d.top_productos && d.top_productos.length > 0) {
+        // No tenemos el total exacto, mostramos info del top
+        totalProductosVendidos = d.top_productos.reduce((s, p) => s + p.cantidad, 0);
+        document.getElementById('productosVendidos').textContent = fmtNum(totalProductosVendidos);
+        document.getElementById('productosVendidosSub').textContent = `Top 5 (${d.top_productos.length} productos)`;
+      } else {
+        document.getElementById('productosVendidos').textContent = '0';
+        document.getElementById('productosVendidosSub').textContent = '';
+      }
+
+      // ── MARGEN ──
+      if (d.margen) {
+        document.getElementById('margenCard').style.display = 'block';
+        document.getElementById('margenMonto').textContent = '$' + fmtMoney(d.margen.margen_monto);
+        document.getElementById('margenPct').textContent = d.margen.margen_pct.toFixed(1) + '%';
+        document.getElementById('margenCosto').textContent = '$ ' + fmtMoney(d.margen.costo);
+        document.getElementById('margenVentas').textContent = '$ ' + fmtMoney(d.margen.ventas);
+        const cob = d.margen.cobertura_pct;
+        if (cob < 100) {
+          document.getElementById('margenCobertura').innerHTML =
+            `<i class="fas fa-info-circle"></i> Calculado sobre ${cob.toFixed(0)}% de los productos vendidos (los demás no tienen costo cargado)`;
+        } else {
+          document.getElementById('margenCobertura').innerHTML =
+            `<i class="fas fa-check-circle"></i> Cálculo completo (todos los productos tienen costo cargado)`;
+        }
+      } else {
+        document.getElementById('margenCard').style.display = 'none';
+      }
+
+      // ── MEDIOS DE PAGO ──
+      const cardMP = document.getElementById('cardMediosPago');
+      const pagoList = document.getElementById('pagoList');
+      if (d.medios_pago && d.medios_pago.length > 0) {
+        cardMP.style.display = 'block';
+        pagoList.innerHTML = d.medios_pago.map(p => {
+          const cfg = medioPagoConfig(p.medio);
+          return `
+            <div class="pago-item-row">
+              <div class="pago-row-top">
+                <div class="pago-row-icon ${cfg.cls}"><i class="fas ${cfg.icon}"></i></div>
+                <div class="pago-row-name">${p.medio.replace('_', ' ')}</div>
+                <div class="pago-row-monto">$${fmtMoney(p.monto)}</div>
+                <div class="pago-row-pct">${p.pct}%</div>
+              </div>
+              <div class="pago-bar-bg">
+                <div class="pago-bar-fill" style="width: ${p.pct}%; background: ${cfg.color};"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        cardMP.style.display = 'none';
+      }
+
+      // ── TOP PRODUCTOS ──
+      const cardTP = document.getElementById('cardTopProductos');
+      const topProdList = document.getElementById('topProductosList');
+      if (d.top_productos && d.top_productos.length > 0) {
+        cardTP.style.display = 'block';
+        topProdList.innerHTML = d.top_productos.map((p, i) => `
+          <div class="top-row rank-${i+1}">
+            <div class="top-rank">${i+1}</div>
+            <div class="top-info">
+              <div class="top-info-name">${p.nombre}</div>
+              <div class="top-info-sub">${fmtNum(p.cantidad)} u · cód. ${p.codigo}</div>
+            </div>
+            <div class="top-info-monto">$${fmtMoney(p.monto)}</div>
+          </div>
+        `).join('');
+      } else {
+        cardTP.style.display = 'none';
+      }
+
+      // ── TOP CLIENTES ──
+      const cardTC = document.getElementById('cardTopClientes');
+      const topCliList = document.getElementById('topClientesList');
+      if (d.top_clientes && d.top_clientes.length > 0) {
+        cardTC.style.display = 'block';
+        topCliList.innerHTML = d.top_clientes.map((c, i) => `
+          <div class="top-row rank-${i+1}">
+            <div class="top-rank">${i+1}</div>
+            <div class="top-info">
+              <div class="top-info-name">${c.nombre}</div>
+              <div class="top-info-sub">${c.cant_facturas} factura${c.cant_facturas === 1 ? '' : 's'}</div>
+            </div>
+            <div class="top-info-monto">$${fmtMoney(c.monto)}</div>
+          </div>
+        `).join('');
+      } else {
+        cardTC.style.display = 'none';
+      }
+
+      // Efectivo
+      if (d.efectivo_periodo !== null && d.efectivo_periodo !== undefined) {
+        document.getElementById('cardEfectivo').style.display = 'block';
+        document.getElementById('efectivoMonto').textContent = '$ ' + fmtMoney(d.efectivo_periodo);
+        document.getElementById('efectivoTitulo').textContent = d.es_hoy ? 'Efectivo del día' : 'Efectivo del período';
+        document.getElementById('efectivoSub').textContent = d.es_hoy ? 'Cobranzas en efectivo de hoy' : 'Cobranzas en efectivo del período';
+      } else {
+        document.getElementById('cardEfectivo').style.display = 'none';
+      }
+
+      // Período anterior
+      if (d.ventas_anterior) {
+        document.getElementById('anteriorTitulo').textContent = d.dias_rango === 1 ? 'Día anterior' : 'Período anterior';
+        document.getElementById('ayerInfo').textContent =
+          `${d.label_anterior} · $${fmtMoney(d.ventas_anterior.total)} · ${fmtNum(d.ventas_anterior.cantidad)} fact`;
+      }
+
+      // Alertas
+      const alertsSection = document.getElementById('alertsSection');
+      if (d.alertas && d.alertas.length > 0) {
+        // Mapeo: cada tipo de alerta lleva a la pantalla de detalle correspondiente.
+        const linksPorTipo = {
+          'error_afip':              '/listado_facturas?estado=error_afip',
+          'stock_critico':           '/productos?filtro=stock_critico',
+          'pedidos_online':          '/admin/pedidos',
+          'deuda_clientes':          '/clientes?filtro=con_deuda',
+          'caja_abierta':            '/caja-multipv',
+          'mora_clientes':           '/clientes?filtro=con_mora',
+          'cheques_proximos':        '/cheques?filtro=proximos_vencer',
+          'mp_qr_pendientes':        '/mp/pagos?estado=pending',
+          'liquidaciones_pendientes':'/liquidaciones'
+        };
+        alertsSection.innerHTML = d.alertas.map(a => {
+          const href = linksPorTipo[a.tipo] || null;
+          const cursor = href ? 'cursor:pointer;' : '';
+          const onclick = href ? `onclick="window.location.href='${href}'"` : '';
+          const chevron = href ? '<i class="fas fa-chevron-right" style="color:#9ca3af; margin-left:auto; font-size:0.85rem;"></i>' : '';
+          return `
+            <div class="alert-card severidad-${a.severidad}" style="${cursor}" ${onclick}>
+              <div class="alert-icon"><i class="fas ${a.icono}"></i></div>
+              <div class="alert-content">
+                <div class="alert-title">${a.titulo}</div>
+                <div class="alert-detail">${a.detalle}</div>
+              </div>
+              ${chevron}
+            </div>
+          `;
+        }).join('');
+      } else {
+        alertsSection.innerHTML = '';
+      }
+
+      // ── 2B: Gráfico ventas por hora ──
+      renderChartHoras(d.ventas_por_hora);
+
+      // ── 2B: Estado AFIP ──
+      renderAfip(d.estado_afip);
+
+      // ── 2B: Récord (solo si es hoy) ──
+      if (d.es_hoy) {
+        renderRecord(d.record_info);
+      } else {
+        document.getElementById('recordBanner').innerHTML = '';
+      }
+
+      // ── 2B: Objetivo mensual ──
+      renderObjetivo(d);
+
+      // Manejar auto-refresh: solo si es hoy
+      gestionarAutoRefresh(d.es_hoy);
+    })
+    .catch(err => {
+      btn.classList.remove('refreshing');
+      console.error(err);
+      document.getElementById('lastUpdate').textContent = 'Error al actualizar';
+    });
+}
+
+function gestionarAutoRefresh(esHoy) {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+  }
+  if (esHoy && !document.hidden) {
+    autoRefreshInterval = setInterval(loadDashboard, 30000);
+  }
+}
+
+// ─── INIT: setear fechas a hoy y cargar ───
+const hoyDate = new Date();
+setRangoFechas(hoyDate, hoyDate);
+
+// Bind: cambios manuales en los inputs
+document.getElementById('fechaDesde').addEventListener('change', loadDashboard);
+document.getElementById('fechaHasta').addEventListener('change', loadDashboard);
+
+// Bind: botones rápidos
+document.querySelectorAll('.date-quick button').forEach(btn => {
+  btn.addEventListener('click', () => aplicarRangoRapido(btn.dataset.rango));
+});
+
+// Carga inicial
+loadDashboard();
+
+// Visibilidad de pestaña: pausar/reanudar
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (autoRefreshInterval) {
+      clearInterval(autoRefreshInterval);
+      autoRefreshInterval = null;
+    }
+  } else {
+    loadDashboard();
+  }
+});
+
+// Pull-to-refresh básico
+let touchStartY = 0;
+document.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+document.addEventListener('touchend', e => {
+  const touchEndY = e.changedTouches[0].clientY;
+  if (window.scrollY === 0 && touchEndY - touchStartY > 100) {
+    loadDashboard();
+  }
+}, { passive: true });
+
+// Service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/mob/service-worker.js', { scope: '/mob/' })
+    .catch(err => console.log('SW registration failed:', err));
+}
+</script>
+
+</body>
+</html>

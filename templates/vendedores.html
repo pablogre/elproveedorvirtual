@@ -1,0 +1,262 @@
+<!-- templates/vendedores.html -->
+{% extends "base.html" %}
+
+{% block title %}Vendedores - POS Argentina{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="fas fa-user-tie"></i> Gestión de Vendedores</h1>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalVendedor" onclick="limpiarFormVendedor()">
+        <i class="fas fa-plus"></i> Nuevo Vendedor
+    </button>
+</div>
+
+<!-- Buscador -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label">Buscar vendedor</label>
+                <input type="text" class="form-control" id="buscarVendedor" placeholder="Nombre o documento..." oninput="filtrarVendedores()">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-body table-responsive">
+        <table class="table table-striped table-hover" id="tablaVendedores">
+            <thead class="table-dark">
+                <tr>
+                    <th>Nombre y Apellido</th>
+                    <th>Documento</th>
+                    <th>Teléfono</th>
+                    <th>Dirección</th>
+                    <th>Notas</th>
+                    <th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for v in vendedores %}
+                <tr data-busqueda="{{ (v.nombre ~ ' ' ~ (v.documento or ''))|lower }}">
+                    <td><strong>{{ v.nombre }}</strong></td>
+                    <td>
+                        {% if v.documento %}
+                            <span class="badge bg-secondary">{{ v.tipo_documento }}</span>
+                            <code>{{ v.documento }}</code>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ v.telefono or '—' }}</td>
+                    <td>{{ v.direccion or '—' }}</td>
+                    <td>
+                        {% if v.notas %}
+                            <small class="text-muted">{{ v.notas[:60] }}{% if v.notas|length > 60 %}…{% endif %}</small>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group">
+                            <button class="btn btn-warning btn-sm" title="Editar" onclick="editarVendedor({{ v.id }})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-danger btn-sm" title="Eliminar" onclick="eliminarVendedor({{ v.id }}, '{{ v.nombre|e }}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        No hay vendedores cargados. Creá el primero con el botón "Nuevo Vendedor".
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Alta/Edición -->
+<div class="modal fade" id="modalVendedor" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="tituloModalVendedor">
+                    <i class="fas fa-user-tie me-2"></i>Nuevo Vendedor
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formVendedor">
+                    <input type="hidden" id="vendedorId">
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Nombre y Apellido <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="nombreVendedor" maxlength="150" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tipo de documento</label>
+                            <select class="form-select" id="tipoDocumentoVendedor">
+                                <option value="DNI">DNI</option>
+                                <option value="CUIT">CUIT</option>
+                                <option value="CUIL">CUIL</option>
+                                <option value="Pasaporte">Pasaporte</option>
+                            </select>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Documento</label>
+                            <input type="text" class="form-control" id="documentoVendedor" maxlength="20" placeholder="Sin puntos ni guiones">
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label">Dirección</label>
+                            <input type="text" class="form-control" id="direccionVendedor" maxlength="200">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label">Teléfono</label>
+                            <input type="text" class="form-control" id="telefonoVendedor" maxlength="30">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Notas</label>
+                            <textarea class="form-control" id="notasVendedor" rows="3" placeholder="Observaciones internas (zona, comisión acordada, etc.)"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="guardarVendedor()">
+                    <i class="fas fa-save"></i> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// ABM VENDEDORES
+// ─────────────────────────────────────────────
+
+function filtrarVendedores() {
+    const t = document.getElementById('buscarVendedor').value.trim().toLowerCase();
+    document.querySelectorAll('#tablaVendedores tbody tr[data-busqueda]').forEach(tr => {
+        tr.style.display = (!t || tr.dataset.busqueda.includes(t)) ? '' : 'none';
+    });
+}
+
+function limpiarFormVendedor() {
+    document.getElementById('formVendedor').reset();
+    document.getElementById('vendedorId').value = '';
+    document.getElementById('tipoDocumentoVendedor').value = 'DNI';
+    document.getElementById('tituloModalVendedor').innerHTML =
+        '<i class="fas fa-user-tie me-2"></i>Nuevo Vendedor';
+}
+
+function editarVendedor(id) {
+    fetch(`/api/vendedor/${id}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                Swal.fire('Error', data.error, 'error');
+                return;
+            }
+            document.getElementById('vendedorId').value = data.id;
+            document.getElementById('nombreVendedor').value = data.nombre || '';
+            document.getElementById('tipoDocumentoVendedor').value = data.tipo_documento || 'DNI';
+            document.getElementById('documentoVendedor').value = data.documento || '';
+            document.getElementById('direccionVendedor').value = data.direccion || '';
+            document.getElementById('telefonoVendedor').value = data.telefono || '';
+            document.getElementById('notasVendedor').value = data.notas || '';
+            document.getElementById('tituloModalVendedor').innerHTML =
+                '<i class="fas fa-user-tie me-2"></i>Editar Vendedor';
+            const modal = new bootstrap.Modal(document.getElementById('modalVendedor'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'No se pudieron cargar los datos del vendedor', 'error');
+        });
+}
+
+function guardarVendedor() {
+    const form = document.getElementById('formVendedor');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    const id = document.getElementById('vendedorId').value || null;
+    const formData = {
+        nombre:         document.getElementById('nombreVendedor').value.trim(),
+        tipo_documento: document.getElementById('tipoDocumentoVendedor').value,
+        documento:      document.getElementById('documentoVendedor').value.trim(),
+        direccion:      document.getElementById('direccionVendedor').value.trim(),
+        telefono:       document.getElementById('telefonoVendedor').value.trim(),
+        notas:          document.getElementById('notasVendedor').value.trim()
+    };
+
+    if (!formData.nombre) {
+        Swal.fire('Atención', 'El nombre es obligatorio', 'warning');
+        return;
+    }
+
+    const url = id ? `/api/vendedor/${id}/editar` : '/api/vendedor/nuevo';
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('modalVendedor')).hide();
+            Swal.fire('Guardado', data.message, 'success').then(() => {
+                window.location.reload();
+            });
+        } else {
+            Swal.fire('Error', data.error || 'Error desconocido', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error de conexión al guardar el vendedor', 'error');
+    });
+}
+
+function eliminarVendedor(id, nombre) {
+    Swal.fire({
+        title: '¿Eliminar vendedor?',
+        html: `¿Está seguro que desea eliminar el vendedor <strong>"${nombre}"</strong>?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc3545'
+    }).then((result) => {
+        if (!result.isConfirmed) return;
+        fetch(`/api/vendedor/${id}/eliminar`, { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire('Eliminado', data.message, 'success').then(() => {
+                    window.location.reload();
+                });
+            } else {
+                Swal.fire('Error', data.error || 'Error desconocido', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            Swal.fire('Error', 'Error de conexión al eliminar el vendedor', 'error');
+        });
+    });
+}
+</script>
+{% endblock %}

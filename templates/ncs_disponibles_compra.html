@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+{% block title %}NCs Disponibles{% endblock %}
+
+{% block content %}
+<style>
+    .nc-row:hover { background: #f8f9fa; cursor: pointer; }
+    .total-disponible-box {
+        background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+        color: white;
+        border-radius: 8px;
+        padding: 16px 20px;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3 flex-wrap gap-2">
+    <h2><i class="fas fa-receipt me-2"></i>Notas de Crédito con saldo disponible</h2>
+    <div>
+        <a href="/proveedores" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-arrow-left me-1"></i> Volver
+        </a>
+        <button class="btn btn-outline-info" onclick="abrirAyuda()">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+    </div>
+</div>
+
+<!-- Resumen y filtros -->
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="total-disponible-box">
+            <small>Total disponible para imputar</small>
+            <div class="fw-bold fs-3">$<span id="totalDisponible">0,00</span></div>
+            <small><span id="cantNCs">0</span> nota(s) de crédito</small>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-body py-2">
+                <label class="form-label small text-muted mb-1">
+                    <i class="fas fa-filter me-1"></i> Filtros
+                </label>
+                <div class="row g-2">
+                    <div class="col-md-7">
+                        <select class="form-select form-select-sm" id="filtroProveedor" onchange="aplicarFiltros()">
+                            <option value="">Todos los proveedores</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <input type="text" class="form-control form-control-sm" id="filtroBusqueda"
+                               placeholder="Buscar por nro NC..." oninput="aplicarFiltros()">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de NCs -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Proveedor</th>
+                        <th>CUIT</th>
+                        <th>Nota de Crédito</th>
+                        <th class="text-end">Total NC</th>
+                        <th class="text-end">Saldo disponible</th>
+                        <th class="text-center" width="120">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyNCs">
+                    <tr><td colspan="7" class="text-center text-muted py-4">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let todasLasNCs = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+    cargarNCs();
+});
+
+async function cargarNCs() {
+    const tbody = document.getElementById('tbodyNCs');
+    try {
+        const r = await fetch('/api/ncs_compra_disponibles');
+        const data = await r.json();
+        if (!data.success) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center py-3">${data.error || 'Error'}</td></tr>`;
+            return;
+        }
+        todasLasNCs = data.ncs || [];
+        // Poblar filtro de proveedores con los únicos
+        const proveedoresUnicos = {};
+        todasLasNCs.forEach(nc => {
+            if (!proveedoresUnicos[nc.proveedor_id]) {
+                proveedoresUnicos[nc.proveedor_id] = nc.proveedor;
+            }
+        });
+        const selProv = document.getElementById('filtroProveedor');
+        const provsOrdenados = Object.entries(proveedoresUnicos)
+            .sort((a, b) => a[1].localeCompare(b[1]));
+        provsOrdenados.forEach(([id, nombre]) => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = nombre;
+            selProv.appendChild(opt);
+        });
+        renderTabla(todasLasNCs);
+        actualizarResumen(todasLasNCs);
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center py-3">${e.message}</td></tr>`;
+    }
+}
+
+function renderTabla(ncs) {
+    const tbody = document.getElementById('tbodyNCs');
+    if (ncs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">No hay NCs con saldo disponible</td></tr>`;
+        return;
+    }
+    let html = '';
+    ncs.forEach(nc => {
+        html += `
+            <tr class="nc-row" onclick="window.location.href='/imputar_nc_compra/${nc.id}'">
+                <td>${nc.fecha || '-'}</td>
+                <td><strong>${nc.proveedor}</strong></td>
+                <td><small class="text-muted">${nc.cuit || '-'}</small></td>
+                <td>
+                    <span class="badge bg-info">${nc.tipo || 'A'}</span>
+                    ${nc.numero}
+                </td>
+                <td class="text-end">$${formato(nc.total)}</td>
+                <td class="text-end fw-bold text-success">$${formato(nc.saldo_pendiente)}</td>
+                <td class="text-center" onclick="event.stopPropagation()">
+                    <a href="/imputar_nc_compra/${nc.id}" class="btn btn-sm btn-success py-0">
+                        <i class="fas fa-link me-1"></i>Imputar
+                    </a>
+                </td>
+            </tr>`;
+    });
+    tbody.innerHTML = html;
+}
+
+function actualizarResumen(ncs) {
+    const total = ncs.reduce((s, nc) => s + nc.saldo_pendiente, 0);
+    document.getElementById('totalDisponible').textContent = formato(total);
+    document.getElementById('cantNCs').textContent = ncs.length;
+}
+
+function aplicarFiltros() {
+    const provId = document.getElementById('filtroProveedor').value;
+    const buscar = document.getElementById('filtroBusqueda').value.trim().toLowerCase();
+    let filtradas = todasLasNCs;
+    if (provId) {
+        filtradas = filtradas.filter(nc => String(nc.proveedor_id) === provId);
+    }
+    if (buscar) {
+        filtradas = filtradas.filter(nc =>
+            (nc.numero || '').toLowerCase().includes(buscar) ||
+            (nc.proveedor || '').toLowerCase().includes(buscar)
+        );
+    }
+    renderTabla(filtradas);
+    actualizarResumen(filtradas);
+}
+
+function formato(n) {
+    return Number(n || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function abrirAyuda() {
+    Swal.fire({
+        icon: 'info',
+        title: 'NCs disponibles',
+        html: `
+            <div class="text-start">
+                <p>Listado de todas las Notas de Crédito de compra que tienen
+                <strong>saldo disponible para imputar</strong> a facturas.</p>
+                <p>Click en una fila o en el botón <strong>Imputar</strong> para
+                ir a la pantalla de imputación.</p>
+                <p>El total arriba indica cuánto crédito tenés acumulado sin aplicar.</p>
+            </div>`,
+        width: '500px'
+    });
+}
+</script>
+{% endblock %}

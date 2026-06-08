@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escanear Producto</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/vendor/fontawesome/css/all.min.css" rel="stylesheet">
+    <!-- ZXing local (fallback para iOS/Safari donde no existe BarcodeDetector) -->
+    <script src="/static/vendor/zxing.min.js"></script>
+    <style>
+        body { background:#f5f7fa; padding-bottom: 60px; }
+        .header-bar {
+            background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+            color: white; padding: 16px;
+            text-align: center;
+        }
+        .header-bar h2 { margin: 0; font-size: 1.4rem; }
+        .header-bar small { opacity: 0.9; }
+        .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+        video { width: 100%; max-height: 320px; background:#000; border-radius:6px; display:block; }
+    </style>
+</head>
+<body>
+    <div class="header-bar">
+        <h2><i class="fas fa-camera me-2"></i>Escanear producto</h2>
+        <small>Apuntá la cámara al código de barras</small>
+    </div>
+
+    <div class="container">
+        <div id="estado" class="alert alert-info py-2 small mb-2 d-none"></div>
+
+        <div class="card mb-3">
+            <div class="card-body p-2">
+                <video id="videoCam" autoplay playsinline muted></video>
+                <div class="d-grid gap-2 mt-2">
+                    <button id="btnActivar" class="btn btn-primary" onclick="iniciarEscaner()">
+                        <i class="fas fa-camera me-2"></i>Activar cámara
+                    </button>
+                    <button id="btnDetener" class="btn btn-outline-secondary d-none" onclick="detenerEscaner()">
+                        <i class="fas fa-stop me-2"></i>Detener
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body p-2">
+                <label class="form-label small mb-1">O ingresá el código a mano:</label>
+                <div class="input-group input-group-sm">
+                    <input type="text" id="codigoManual" class="form-control" placeholder="Código de barras o código interno" autocomplete="off">
+                    <button class="btn btn-primary" onclick="consultarManual()">Consultar</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="resultado" class="card d-none">
+            <div class="card-body">
+                <h5 id="resNombre" class="mb-1"></h5>
+                <p id="resDescripcion" class="text-muted small mb-2"></p>
+
+                <!-- Bloque PRECIO (producto normal) -->
+                <div id="bloquePrecioNormal" class="d-flex justify-content-between align-items-end">
+                    <div>
+                        <small class="text-muted d-block">Código: <code id="resCodigo"></code></small>
+                    </div>
+                    <div class="text-end">
+                        <small class="text-muted d-block">Precio</small>
+                        <h2 class="mb-0 text-success" id="resPrecio">$0.00</h2>
+                    </div>
+                </div>
+
+                <!-- Bloque PESABLE (producto con etiqueta de balanza) -->
+                <div id="bloquePesable" class="d-none">
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <small class="text-muted d-block">Precio por kg</small>
+                            <strong id="resPrecioKg" class="text-secondary">$0.00</strong>
+                        </div>
+                        <div class="col-6 text-end">
+                            <small class="text-muted d-block">Peso</small>
+                            <strong id="resPeso" class="text-primary">0,000 kg</strong>
+                        </div>
+                    </div>
+                    <hr class="my-2">
+                    <div class="d-flex justify-content-between align-items-end">
+                        <div>
+                            <small class="text-muted d-block">Código: <code id="resCodigoPesable"></code></small>
+                        </div>
+                        <div class="text-end">
+                            <small class="text-muted d-block">Total</small>
+                            <h2 class="mb-0 text-success" id="resTotal">$0.00</h2>
+                        </div>
+                    </div>
+                </div>
+
+                {% if logueado %}
+                <hr class="my-2">
+                <div class="row g-2 small">
+                    <div class="col-6"><strong>Stock:</strong> <span id="resStock">—</span></div>
+                    <div class="col-6"><strong>Costo:</strong> <span id="resCosto">—</span></div>
+                    <div class="col-6"><strong>Margen:</strong> <span id="resMargen">—</span></div>
+                    <div class="col-6"><strong>IVA:</strong> <span id="resIva">—</span></div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div id="noEncontrado" class="alert alert-warning d-none">
+            <strong>Producto no encontrado</strong><br>
+            <small id="codigoBuscado"></small>
+        </div>
+
+        <div class="text-center mt-3">
+            <small class="text-muted">Powered by FactuFacil</small>
+        </div>
+    </div>
+
+    <script>
+    var LOGUEADO = {% if logueado %}true{% else %}false{% endif %};
+    var videoStream = null;
+    var detector = null;
+    var detectarInterval = null;
+    var ultimoCodigo = null;
+    var zxingReader = null;       // Fallback ZXing (iOS)
+    var modoLectura = null;       // 'nativo' | 'zxing'
+
+    function mostrarEstado(msg, tipo) {
+        tipo = tipo || 'info';
+        var el = document.getElementById('estado');
+        el.className = 'alert alert-' + tipo + ' py-2 small mb-2';
+        el.innerHTML = msg;
+        el.classList.remove('d-none');
+    }
+
+    async function iniciarEscaner() {
+        document.getElementById('btnActivar').classList.add('d-none');
+        document.getElementById('btnDetener').classList.remove('d-none');
+        mostrarEstado('Pidiendo permisos de cámara...', 'info');
+
+        // En iOS, ZXing maneja su propio getUserMedia internamente, así que NO
+        // pedimos el stream acá si vamos a usar ZXing — lo dejamos para más abajo.
+        var usaNativo = ('BarcodeDetector' in window);
+
+        if (usaNativo) {
+            // ═══ Modo NATIVO (Chrome Android): BarcodeDetector + getUserMedia manual ═══
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
+                    audio: false
+                });
+                var video = document.getElementById('videoCam');
+                video.srcObject = videoStream;
+                await video.play();
+            } catch (err) {
+                mostrarEstado(
+                    'No se pudo acceder a la cámara.<br><small>' + (err.message || err) + '. Verificá permisos y HTTPS.</small>',
+                    'danger'
+                );
+                document.getElementById('btnActivar').classList.remove('d-none');
+                document.getElementById('btnDetener').classList.add('d-none');
+                return;
+            }
+            try {
+                detector = new BarcodeDetector({
+                    formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code']
+                });
+            } catch(e) {
+                mostrarEstado('Error creando detector nativo: ' + e.message, 'danger');
+                return;
+            }
+            modoLectura = 'nativo';
+            mostrarEstado('Listo. Apuntá el código de barras.', 'success');
+            detectarInterval = setInterval(detectarUnFrame, 250);
+            return;
+        }
+
+        // ═══ Modo FALLBACK (iOS Safari y otros sin BarcodeDetector): ZXing ═══
+        if (typeof ZXing === 'undefined') {
+            mostrarEstado(
+                'No se pudo cargar la librería de escaneo.<br>' +
+                '<small>Refrescá la página o ingresá el código a mano.</small>',
+                'danger'
+            );
+            document.getElementById('btnActivar').classList.remove('d-none');
+            document.getElementById('btnDetener').classList.add('d-none');
+            return;
+        }
+
+        // PASO 1: pedir permisos de cámara ANTES de usar ZXing.
+        // En iOS, hasta que el usuario no aprueba, listVideoInputDevices() devuelve
+        // dispositivos con label vacío y a veces sin deviceId. Forzamos el prompt
+        // de permisos con un getUserMedia que liberamos inmediatamente.
+        try {
+            var tmpStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' } },
+                audio: false
+            });
+            // Liberamos el stream para que ZXing pueda tomar la cámara
+            tmpStream.getTracks().forEach(function(t){ t.stop(); });
+        } catch (err) {
+            mostrarEstado(
+                'No se pudo acceder a la cámara.<br><small>' + (err.message || err) + '</small>',
+                'danger'
+            );
+            document.getElementById('btnActivar').classList.remove('d-none');
+            document.getElementById('btnDetener').classList.add('d-none');
+            return;
+        }
+
+        // PASO 2: configurar ZXing
+        try {
+            var hints = new Map();
+            var enumFormat = ZXing.BarcodeFormat;
+            var formatos = [
+                enumFormat.EAN_13, enumFormat.EAN_8,
+                enumFormat.UPC_A, enumFormat.UPC_E,
+                enumFormat.CODE_128, enumFormat.CODE_39,
+                enumFormat.ITF, enumFormat.QR_CODE
+            ];
+            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formatos);
+            hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+            zxingReader = new ZXing.BrowserMultiFormatReader(hints, 250);
+            modoLectura = 'zxing';
+            mostrarEstado('Listo. Apuntá el código de barras.', 'success');
+
+            // PASO 3: arrancar el decodificador.
+            // Pasamos deviceId = undefined → ZXing usa facingMode 'environment' (cámara trasera).
+            // Mucho más confiable en iOS que listar deviceIds (que a veces son inestables).
+            zxingReader.decodeFromVideoDevice(undefined, 'videoCam', function(result, err) {
+                if (result) {
+                    var c = result.getText();
+                    if (c && c !== ultimoCodigo) {
+                        ultimoCodigo = c;
+                        consultarPrecio(c);
+                        setTimeout(function(){ ultimoCodigo = null; }, 2500);
+                    }
+                }
+                // err es NotFoundException la mayoría del tiempo (no encontró código en el frame) — ignorar
+            });
+        } catch(e) {
+            mostrarEstado('Error iniciando escáner: ' + (e.message || e), 'danger');
+            document.getElementById('btnActivar').classList.remove('d-none');
+            document.getElementById('btnDetener').classList.add('d-none');
+        }
+    }
+
+    async function detectarUnFrame() {
+        // Solo se usa en modo NATIVO. ZXing tiene su propio loop interno.
+        var video = document.getElementById('videoCam');
+        if (!video || video.readyState < 2 || !detector) return;
+        try {
+            var codigos = await detector.detect(video);
+            if (codigos && codigos.length > 0) {
+                var c = codigos[0].rawValue;
+                if (c && c !== ultimoCodigo) {
+                    ultimoCodigo = c;
+                    consultarPrecio(c);
+                    setTimeout(function(){ ultimoCodigo = null; }, 2500);
+                }
+            }
+        } catch(e) { /* ignorar */ }
+    }
+
+    function detenerEscaner() {
+        if (detectarInterval) { clearInterval(detectarInterval); detectarInterval = null; }
+        if (videoStream) {
+            videoStream.getTracks().forEach(function(t){ t.stop(); });
+            videoStream = null;
+        }
+        if (zxingReader) {
+            try { zxingReader.reset(); } catch(e) {}
+            zxingReader = null;
+        }
+        modoLectura = null;
+        document.getElementById('btnActivar').classList.remove('d-none');
+        document.getElementById('btnDetener').classList.add('d-none');
+        document.getElementById('estado').classList.add('d-none');
+    }
+
+    function consultarManual() {
+        var v = document.getElementById('codigoManual').value.trim();
+        if (!v) return;
+        ultimoCodigo = null;
+        consultarPrecio(v);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var inp = document.getElementById('codigoManual');
+        if (inp) {
+            inp.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); consultarManual(); }
+            });
+        }
+    });
+
+    // ═══ DETECCIÓN DE CÓDIGO DE BALANZA ═══
+    // Formato (mismo de nueva_venta.html):
+    //   13 dígitos, empieza con "20"
+    //   20 | XXXXX (código producto) | PPPPP (peso gramos) | V (verificador)
+    // Ejemplo: 2000035040454 → producto 00035, peso 4.045 kg
+    function detectarBalanza(codigo) {
+        if (codigo.length === 13 && codigo.startsWith('20') && /^\d{13}$/.test(codigo)) {
+            var codigoProducto = codigo.substring(2, 7);   // 5 dígitos
+            var pesoGramos = parseInt(codigo.substring(7, 12)); // 5 dígitos
+            var pesoKg = pesoGramos / 1000;
+            // Probamos dos formatos (unificado Schiro/Siamotre/FactuFácil):
+            //   - "1" + código (Schiro/LK-D)
+            //   - código tal cual (Siamotre/FactuFácil)
+            return {
+                esBalanza: true,
+                candidatos: ['1' + codigoProducto, codigoProducto],
+                peso: pesoKg,
+                codigoOriginal: codigo
+            };
+        }
+        return { esBalanza: false, candidatos: [codigo], peso: null, codigoOriginal: codigo };
+    }
+
+    async function consultarPrecio(codigo) {
+        mostrarEstado('Buscando <code>' + codigo + '</code>...', 'info');
+        document.getElementById('resultado').classList.add('d-none');
+        document.getElementById('noEncontrado').classList.add('d-none');
+
+        var info = detectarBalanza(codigo);
+
+        try {
+            var data = null;
+            var codigoConsultado = null;
+
+            // Probar candidatos en orden. El primero que existe gana.
+            for (var i = 0; i < info.candidatos.length; i++) {
+                var cod = info.candidatos[i];
+                var r = await fetch('/api/precio_publico/' + encodeURIComponent(cod));
+                if (r.status === 429) {
+                    mostrarEstado('Demasiadas consultas. Esperá un minuto.', 'warning');
+                    return;
+                }
+                var resp = await r.json();
+                if (resp && resp.success) {
+                    data = resp;
+                    codigoConsultado = cod;
+                    break;
+                }
+            }
+
+            if (!data) {
+                document.getElementById('noEncontrado').classList.remove('d-none');
+                document.getElementById('codigoBuscado').textContent = 'Código: ' + codigo;
+                mostrarEstado('No encontrado: ' + codigo, 'warning');
+                return;
+            }
+
+            // Datos comunes (nombre, descripción)
+            document.getElementById('resNombre').textContent = data.nombre;
+            document.getElementById('resDescripcion').textContent = data.descripcion || '';
+
+            var fmtMoney = function(n) {
+                return parseFloat(n).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+            };
+            var fmtPeso = function(n) {
+                return parseFloat(n).toLocaleString('es-AR', {minimumFractionDigits:3, maximumFractionDigits:3});
+            };
+
+            var bloqueNormal = document.getElementById('bloquePrecioNormal');
+            var bloquePesable = document.getElementById('bloquePesable');
+
+            // ═══ Si es balanza Y el producto está marcado como pesable → mostrar peso + total ═══
+            if (info.esBalanza && data.es_pesable) {
+                var precioKg = parseFloat(data.precio);
+                var total = precioKg * info.peso;
+
+                document.getElementById('resPrecioKg').textContent = '$' + fmtMoney(precioKg) + ' / kg';
+                document.getElementById('resPeso').textContent = fmtPeso(info.peso) + ' kg';
+                document.getElementById('resTotal').textContent = '$' + fmtMoney(total);
+                document.getElementById('resCodigoPesable').textContent = data.codigo;
+
+                bloqueNormal.classList.add('d-none');
+                bloquePesable.classList.remove('d-none');
+            } else {
+                // Producto normal: mostrar solo precio
+                document.getElementById('resCodigo').textContent = data.codigo;
+                document.getElementById('resPrecio').textContent = '$' + fmtMoney(data.precio);
+
+                bloquePesable.classList.add('d-none');
+                bloqueNormal.classList.remove('d-none');
+            }
+
+            if (LOGUEADO) {
+                if (data.stock !== undefined) document.getElementById('resStock').textContent = fmtMoney(data.stock);
+                if (data.costo !== undefined) document.getElementById('resCosto').textContent = '$' + fmtMoney(data.costo);
+                if (data.margen !== undefined) document.getElementById('resMargen').textContent = fmtMoney(data.margen) + '%';
+                if (data.iva !== undefined) document.getElementById('resIva').textContent = fmtMoney(data.iva) + '%';
+            }
+
+            document.getElementById('resultado').classList.remove('d-none');
+            var sufijo = (info.esBalanza && data.es_pesable)
+                ? ' (' + fmtPeso(info.peso) + ' kg)'
+                : '';
+            mostrarEstado('✓ ' + data.nombre + sufijo, 'success');
+
+        } catch (e) {
+            mostrarEstado('Error: ' + e.message, 'danger');
+        }
+    }
+    </script>
+</body>
+</html>

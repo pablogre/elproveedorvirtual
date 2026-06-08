@@ -1,0 +1,416 @@
+{% extends 'base.html' %}
+{% block title %}IVA Compras{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-4">
+    <h2><i class="fas fa-percent me-2"></i>Libro IVA Compras</h2>
+    <div class="d-flex gap-2">
+        <button class="btn btn-warning btn-sm fw-bold" onclick="exportarLibroIVA()" id="btnLibroIVA" style="display:none">
+            <i class="fas fa-file-archive me-1"></i> Exportar Libro IVA Digital
+        </button>
+        <button class="btn btn-outline-success btn-sm" onclick="exportarExcel()" id="btnExcel" style="display:none">
+            <i class="fas fa-file-excel me-1"></i> Exportar Excel
+        </button>
+        <button class="btn btn-outline-primary btn-sm" onclick="exportarCSV()" id="btnCSV" style="display:none">
+            <i class="fas fa-file-csv me-1"></i> Exportar CSV
+        </button>
+        <button class="btn btn-outline-dark btn-sm" onclick="window.print()" id="btnImprimir" style="display:none">
+            <i class="fas fa-print me-1"></i> Imprimir
+        </button>
+        <a href="/proveedores" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-truck me-1"></i> Proveedores
+        </a>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Desde <span class="text-danger">*</span></label>
+                <input type="date" id="filtroDes" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Hasta <span class="text-danger">*</span></label>
+                <input type="date" id="filtroHas" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Proveedor</label>
+                <select id="filtroProveedor" class="form-select form-select-sm">
+                    <option value="">Todos los proveedores</option>
+                    {% for p in proveedores %}
+                    <option value="{{ p.id }}">{{ p.razon_social }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Tipo Comprobante</label>
+                <select id="filtroTipo" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <optgroup label="Facturas">
+                        <option value="A">Factura A</option>
+                        <option value="B">Factura B</option>
+                        <option value="C">Factura C</option>
+                        <option value="M">Factura M</option>
+                    </optgroup>
+                    <optgroup label="Notas de Crédito">
+                        <option value="NCA">NC A</option>
+                        <option value="NCB">NC B</option>
+                        <option value="NCC">NC C</option>
+                    </optgroup>
+                    <optgroup label="Notas de Débito">
+                        <option value="NDA">ND A</option>
+                        <option value="NDB">ND B</option>
+                        <option value="NDC">ND C</option>
+                    </optgroup>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary btn-sm w-100" onclick="cargarIVA()">
+                    <i class="fas fa-search me-1"></i> Consultar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Panel de totales -->
+<div id="panelTotales" style="display:none">
+    <div class="row g-2 mb-3">
+        <div class="col">
+            <div class="card border-0 bg-light text-center py-2">
+                <div class="small text-muted">Neto 21%</div>
+                <div class="fw-bold" id="totNeto21">$0,00</div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-0 bg-warning bg-opacity-25 text-center py-2">
+                <div class="small text-muted">IVA 21%</div>
+                <div class="fw-bold text-warning" id="totIva21">$0,00</div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-0 bg-light text-center py-2">
+                <div class="small text-muted">Neto 10,5%</div>
+                <div class="fw-bold" id="totNeto105">$0,00</div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-0 bg-warning bg-opacity-25 text-center py-2">
+                <div class="small text-muted">IVA 10,5%</div>
+                <div class="fw-bold text-warning" id="totIva105">$0,00</div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-0 bg-info bg-opacity-25 text-center py-2">
+                <div class="small text-muted">No Gravado</div>
+                <div class="fw-bold" id="totNoGrav">$0,00</div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card border-0 bg-success bg-opacity-25 text-center py-2">
+                <div class="small text-muted">Percepciones</div>
+                <div class="fw-bold text-success" id="totPercep">$0,00</div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card bg-primary text-white text-center py-2">
+                <div class="small">Total</div>
+                <div class="fw-bold" id="totGeneral">$0,00</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- IVA Total + Subtotales por tipo -->
+    <div class="row g-2 mb-3">
+        <div class="col-md-6">
+            <div class="alert alert-warning d-flex justify-content-between align-items-center mb-0 py-2">
+                <div>
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Total IVA Crédito Fiscal:</strong>
+                    <span class="ms-2 fs-5" id="totIvaTotal">$0,00</span>
+                </div>
+                <small class="text-muted" id="totCant"></small>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body py-2">
+                    <div class="small text-muted fw-bold mb-1"><i class="fas fa-layer-group me-1"></i>Subtotales por tipo de comprobante</div>
+                    <div id="porTipo" class="d-flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla detalle -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 table-sm" id="tablaIVA">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Proveedor</th>
+                        <th>CUIT</th>
+                        <th>Comprobante</th>
+                        <th class="text-end">Neto 21%</th>
+                        <th class="text-end">IVA 21%</th>
+                        <th class="text-end">Neto 10,5%</th>
+                        <th class="text-end">IVA 10,5%</th>
+                        <th class="text-end">No Grav.</th>
+                        <th class="text-end">Perc. IVA</th>
+                        <th class="text-end">Perc. IIBB</th>
+                        <th class="text-end">Perc. Gcias.</th>
+                        <th class="text-end">Total</th>
+                        <th>CAE</th>
+                    </tr>
+                </thead>
+                <tbody id="bodyIVA">
+                    <tr><td colspan="14" class="text-center py-4 text-muted">Seleccione un período y consulte</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    @page { size: A4 landscape; margin: 8mm; }
+    body { font-size: 9px !important; }
+    nav, .navbar, .sidebar, .btn, .card.mb-3, #filtros { display: none !important; }
+    .card { border: none !important; box-shadow: none !important; padding: 0 !important; }
+    .card-body { padding: 2px !important; }
+    .table { font-size: 8px !important; width: 100% !important; }
+    .table th, .table td { padding: 2px 3px !important; white-space: nowrap !important; }
+    #panelTotales .row { display: flex !important; flex-wrap: nowrap !important; }
+    #panelTotales .col { flex: 1 !important; }
+    tr { page-break-inside: avoid !important; }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let datosGlobales = null;
+
+function fmt(v) {
+    return '$' + parseFloat(v || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+async function cargarIVA() {
+    const desde = document.getElementById('filtroDes').value;
+    const hasta = document.getElementById('filtroHas').value;
+    const prov  = document.getElementById('filtroProveedor').value;
+    const tipo  = document.getElementById('filtroTipo').value;
+
+    if (!desde || !hasta) {
+        Swal.fire('Atención', 'Seleccione el período (desde / hasta)', 'warning');
+        return;
+    }
+
+    let url = `/api/iva_compras?desde=${desde}&hasta=${hasta}`;
+    if (prov) url += `&proveedor_id=${prov}`;
+    if (tipo) url += `&tipo_comprobante=${tipo}`;
+
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (!data.success) {
+        Swal.fire('Error', data.error || 'Error al consultar', 'error');
+        return;
+    }
+
+    datosGlobales = data;
+
+    const facturas = data.facturas || [];
+    const totales  = data.totales  || {};
+    const porTipo  = data.por_tipo || {};
+    const tbody    = document.getElementById('bodyIVA');
+
+    if (!facturas.length) {
+        tbody.innerHTML = '<tr><td colspan="14" class="text-center py-4 text-muted">Sin facturas en el período</td></tr>';
+        document.getElementById('panelTotales').style.display = 'none';
+        document.getElementById('btnExcel').style.display = 'none';
+        document.getElementById('btnCSV').style.display = 'none';
+        document.getElementById('btnImprimir').style.display = 'none';
+        return;
+    }
+
+    // Mostrar totales
+    document.getElementById('totNeto21').textContent  = fmt(totales.neto_gravado_21);
+    document.getElementById('totIva21').textContent   = fmt(totales.iva_21);
+    document.getElementById('totNeto105').textContent = fmt(totales.neto_gravado_105);
+    document.getElementById('totIva105').textContent  = fmt(totales.iva_105);
+    document.getElementById('totNoGrav').textContent  = fmt(totales.neto_no_gravado);
+    document.getElementById('totPercep').textContent  = fmt(totales.percepciones_total);
+    document.getElementById('totGeneral').textContent = fmt(totales.total);
+    document.getElementById('totIvaTotal').textContent = fmt(totales.iva_total);
+    document.getElementById('totCant').textContent     = `${totales.cantidad || facturas.length} comprobantes`;
+
+    // Subtotales por tipo
+    const pt = document.getElementById('porTipo');
+    pt.innerHTML = '';
+    Object.keys(porTipo).sort().forEach(k => {
+        const v = porTipo[k];
+        const el = document.createElement('span');
+        el.className = 'badge bg-secondary';
+        el.style = 'font-size:0.78rem; padding:0.4rem 0.6rem;';
+        el.innerHTML = `<strong>${k}:</strong> ${v.cant} compr. · ${fmt(v.total)}`;
+        pt.appendChild(el);
+    });
+
+    document.getElementById('panelTotales').style.display = '';
+    document.getElementById('btnExcel').style.display = '';
+    document.getElementById('btnCSV').style.display = '';
+    document.getElementById('btnImprimir').style.display = '';
+    document.getElementById('btnLibroIVA').style.display = '';
+
+    tbody.innerHTML = facturas.map(f => {
+        let rowClass = '';
+        let badgeColor = 'bg-dark';
+        if (f.clase_comprobante === 'nota_credito') {
+            rowClass = 'table-info';
+            badgeColor = 'bg-info text-dark';
+        } else if (f.clase_comprobante === 'nota_debito') {
+            rowClass = 'table-warning';
+            badgeColor = 'bg-warning text-dark';
+        }
+        const codigo = f.codigo_afip || f.tipo_comprobante;
+        return `
+        <tr class="${rowClass}">
+            <td>${f.fecha}</td>
+            <td>${f.proveedor}</td>
+            <td class="text-muted small">${f.proveedor_cuit || ''}</td>
+            <td><span class="badge ${badgeColor}">${codigo}</span> ${f.punto_venta}-${f.numero}</td>
+            <td class="text-end">${fmt(f.neto_gravado_21)}</td>
+            <td class="text-end text-warning fw-bold">${fmt(f.iva_21)}</td>
+            <td class="text-end">${fmt(f.neto_gravado_105)}</td>
+            <td class="text-end text-warning fw-bold">${fmt(f.iva_105)}</td>
+            <td class="text-end">${fmt(f.neto_no_gravado)}</td>
+            <td class="text-end text-success">${f.percepcion_iva  != 0 ? fmt(f.percepcion_iva)  : '-'}</td>
+            <td class="text-end text-success">${f.percepcion_iibb != 0 ? fmt(f.percepcion_iibb) : '-'}</td>
+            <td class="text-end text-success">${f.percepcion_ganancias != 0 ? fmt(f.percepcion_ganancias) : '-'}</td>
+            <td class="text-end fw-bold">${fmt(f.total)}</td>
+            <td><small class="text-muted">${f.cae || '-'}</small></td>
+        </tr>
+    `;
+    }).join('');
+}
+
+function exportarCSV() {
+    if (!datosGlobales) return;
+    const rows = [
+        ['Fecha','Tipo','PV','Número','Proveedor','CUIT','Cond. IVA',
+         'Neto 21%','IVA 21%','Neto 10,5%','IVA 10,5%','No Gravado','Otros',
+         'Perc. IVA','Perc. IIBB','Perc. Ganancias','Total','CAE']
+    ];
+    datosGlobales.facturas.forEach(f => {
+        rows.push([
+            f.fecha, f.codigo_afip || f.tipo_comprobante, f.punto_venta, f.numero,
+            f.proveedor, f.proveedor_cuit, f.proveedor_cond_iva,
+            f.neto_gravado_21, f.iva_21, f.neto_gravado_105, f.iva_105,
+            f.neto_no_gravado, f.otros_impuestos,
+            f.percepcion_iva, f.percepcion_iibb, f.percepcion_ganancias,
+            f.total, f.cae
+        ]);
+    });
+    const t = datosGlobales.totales;
+    rows.push(['','','','','','','TOTALES',
+               t.neto_gravado_21, t.iva_21, t.neto_gravado_105, t.iva_105,
+               t.neto_no_gravado, t.otros_impuestos,
+               t.percepcion_iva, t.percepcion_iibb, t.percepcion_ganancias,
+               t.total, '']);
+
+    const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8;'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const desde = document.getElementById('filtroDes').value;
+    const hasta = document.getElementById('filtroHas').value;
+    a.href = url;
+    a.download = `iva_compras_${desde}_${hasta}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function exportarExcel() {
+    const desde = document.getElementById('filtroDes').value;
+    const hasta = document.getElementById('filtroHas').value;
+    const prov  = document.getElementById('filtroProveedor').value;
+    const tipo  = document.getElementById('filtroTipo').value;
+    if (!desde || !hasta) {
+        Swal.fire('Atención', 'Seleccione el período', 'warning');
+        return;
+    }
+    let url = `/api/iva_compras/exportar_excel?desde=${desde}&hasta=${hasta}`;
+    if (prov) url += `&proveedor_id=${prov}`;
+    if (tipo) url += `&tipo_comprobante=${tipo}`;
+    window.location.href = url;
+}
+
+// ═════════════════════════════════════════════════════════════
+// EXPORTAR LIBRO IVA DIGITAL (RG 4597) — Compras en un ZIP
+// ═════════════════════════════════════════════════════════════
+async function exportarLibroIVA() {
+    const desde = document.getElementById('filtroDes').value;
+    const hasta = document.getElementById('filtroHas').value;
+    if (!desde || !hasta) {
+        Swal.fire('Atención', 'Seleccioná el período', 'warning');
+        return;
+    }
+
+    // Validar que sean del mismo mes calendario (AFIP no permite mezclar meses)
+    const d1 = new Date(desde + 'T00:00:00');
+    const d2 = new Date(hasta + 'T00:00:00');
+    if (d1.getFullYear() !== d2.getFullYear() || d1.getMonth() !== d2.getMonth()) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Período inválido',
+            html: `El Libro IVA Digital debe ser de un <b>único mes calendario</b>.<br>
+                   AFIP no permite mezclar meses en un mismo archivo.<br><br>
+                   Seleccioná fechas dentro del mismo mes y reintentá.`
+        });
+        return;
+    }
+
+    const { isConfirmed } = await Swal.fire({
+        title: 'Exportar Libro IVA Digital (RG 4597)',
+        html: `
+            <div class="text-start">
+                <p class="mb-2">Se va a generar un ZIP con los archivos de <b>Compras</b>:</p>
+                <ul class="small mb-3">
+                    <li><b>LIBRO_IVA_DIGITAL_COMPRAS_CBTE.txt</b><br>
+                        <small class="text-muted">Un registro por comprobante</small></li>
+                    <li><b>LIBRO_IVA_DIGITAL_COMPRAS_ALICUOTAS.txt</b><br>
+                        <small class="text-muted">Un registro por alícuota (no incluye comprobantes B ni C)</small></li>
+                    <li>LEEME.txt</li>
+                </ul>
+                <div class="alert alert-warning small mb-0">
+                    <strong>Cómo presentarlo:</strong> Ingresá al <b>Portal IVA</b> de AFIP
+                    con clave fiscal, seleccioná el período, y en el Libro de Compras
+                    elegí <b>"Importación de datos"</b> para subir los dos TXT.
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Generar ZIP',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#ffc107',
+    });
+
+    if (!isConfirmed) return;
+
+    window.location.href = `/api/libro_iva/exportar_compras_zip?desde=${desde}&hasta=${hasta}`;
+}
+
+// Setear período del mes actual
+(function() {
+    const hoy   = new Date();
+    const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    document.getElementById('filtroDes').value = desde.toISOString().split('T')[0];
+    document.getElementById('filtroHas').value = hoy.toISOString().split('T')[0];
+})();
+</script>
+{% endblock %}

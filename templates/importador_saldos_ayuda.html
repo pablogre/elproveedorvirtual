@@ -1,0 +1,316 @@
+<!-- Modal Ayuda - Importador de Saldos -->
+<div class="modal fade" id="modalAyudaImportadorSaldos" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">
+                    <i class="fas fa-balance-scale"></i> Importar Saldos Iniciales — Manual completo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+
+                <div class="bg-light p-3 border-bottom">
+                    <strong><i class="fas fa-list"></i> Índice:</strong>
+                    <small class="ms-2">
+                        1. ¿Para qué sirve? · 2. ⚠️ Precondiciones · 3. Cliente vs Proveedor · 4. Reemplaza, no suma · 5. Cómo identifica · 6. Signo del monto · 7. Columnas reconocidas · 8. Validaciones · 9. Errores comunes · 10. Después · 11. Soporte
+                    </small>
+                </div>
+
+                <div class="accordion" id="accImpSal">
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#sal_c1">
+                                <i class="fas fa-info-circle text-info me-2"></i> <strong>1. ¿Para qué sirve esta pantalla?</strong>
+                            </button>
+                        </h2>
+                        <div id="sal_c1" class="accordion-collapse collapse show" data-bs-parent="#accImpSal">
+                            <div class="accordion-body">
+                                <p>Cargar masivamente los <strong>saldos iniciales</strong> de cuenta corriente:</p>
+                                <ul class="mb-2">
+                                    <li><strong>Saldos de Clientes</strong>: cuánto te debe cada cliente al inicio (cuando arrancás con el sistema o al cierre de un período).</li>
+                                    <li><strong>Saldos de Proveedores</strong>: cuánto le debés a cada proveedor.</li>
+                                </ul>
+                                <p class="mb-0">Caso típico: <strong>migración del sistema viejo</strong>. Tu contador o el sistema anterior te pasa un Excel con los saldos vivos al cierre, y vos los cargás de una al sistema nuevo.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sal_c2">
+                                <i class="fas fa-shield-alt text-danger me-2"></i> <strong>2. ⚠️ Precondiciones IMPORTANTES</strong>
+                            </button>
+                        </h2>
+                        <div id="sal_c2" class="accordion-collapse collapse" data-bs-parent="#accImpSal">
+                            <div class="accordion-body">
+                                <div class="alert alert-danger">
+                                    <strong><i class="fas fa-exclamation-triangle"></i> Antes de importar saldos, los clientes / proveedores deben EXISTIR en el sistema.</strong>
+                                </div>
+                                <p>El importador busca cada registro <strong>por CUIT</strong> en la BD. Si el CUIT no existe → la fila se descarta y queda en el reporte como "no encontrado".</p>
+
+                                <h6>Orden recomendado de importación:</h6>
+                                <ol>
+                                    <li><strong>Primero</strong>: importá Clientes (pantalla "Importar Clientes").</li>
+                                    <li><strong>Segundo</strong>: importá Proveedores (pantalla "Importar Proveedores").</li>
+                                    <li><strong>Tercero</strong>: importá Saldos (esta pantalla).</li>
+                                </ol>
+
+                                <div class="alert alert-warning mb-0">
+                                    <strong><i class="fas fa-database"></i> Hacé backup de la BD antes de importar saldos masivamente.</strong>
+                                    Este importador <strong>reemplaza</strong> los saldos existentes — si te equivocás de archivo podés pisar saldos ya cargados.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sal_c3">
+                                <i class="fas fa-tag text-primary me-2"></i> <strong>3. Saldos de Clientes vs. Saldos de Proveedores</strong>
+                            </button>
+                        </h2>
+                        <div id="sal_c3" class="accordion-collapse collapse" data-bs-parent="#accImpSal">
+                            <div class="accordion-body">
+                                <p>En el primer paso de la pantalla elegís qué tipo de saldo querés importar:</p>
+
+                                <div class="card mb-2">
+                                    <div class="card-header py-2 bg-primary text-white">
+                                        <strong><i class="fas fa-users"></i> Saldos de Clientes</strong>
+                                    </div>
+                                    <div class="card-body small">
+                                        Saldos <strong>deudores</strong>: cuánto te deben los clientes.<br>
+                                        Monto positivo (ej: 5000) = el cliente te debe $5000.<br>
+                                        Monto negativo (ej: -300) = el cliente tiene $300 a favor (saldo a favor).<br>
+                                        El sistema busca por CUIT/DNI en la tabla de Clientes.
+                                    </div>
+                                </div>
+
+                                <div class="card mb-0">
+                                    <div class="card-header py-2 bg-info text-white">
+                                        <strong><i class="fas fa-truck"></i> Saldos de Proveedores</strong>
+                                    </div>
+                                    <div class="card-body small">
+                                        Saldos <strong>acreedores</strong>: cuánto les debés a tus proveedores.<br>
+                                        Monto positivo (ej: 15000) = vos le debés $15000 al proveedor.<br>
+                                        Monto negativo = tenés saldo a favor con ese proveedor (anticipo).<br>
+                                        El sistema busca por CUIT en la tabla de Proveedores.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sal_c4">
+                                <i class="fas fa-exchange-alt text-warning me-2"></i> <strong>4. ⚠️ REEMPLAZA el saldo, no suma</strong>
+                            </button>
+                        </h2>
+                        <div id="sal_c4" class="accordion-collapse collapse" data-bs-parent="#accImpSal">
+                            <div class="accordion-body">
+                                <div class="alert alert-warning">
+                                    <strong><i class="fas fa-exclamation-triangle"></i> Comportamiento clave:</strong>
+                                    Si un cliente o proveedor ya tiene saldo cargado, el importador <strong>SOBRESCRIBE</strong> ese saldo con el del Excel.
+                                </div>
+                                <p>Ejemplo:</p>
+                                <ul>
+                                    <li>Cliente "Juan Pérez" en la BD tiene saldo = $3.000.</li>
+                                    <li>El Excel trae para Juan Pérez: $5.000.</li>
+                                    <li>Después del import, el saldo queda = $5.000 (NO $8.000).</li>
+                                </ul>
+                                <p>Esto es lo correcto para una <strong>importación de saldos iniciales</strong> (vos querés que quede exactamente lo que dice tu Excel).</p>
+                                <div class="alert alert-info mb-0 small">
+                                    <i class="fas fa-lightbulb"></i> Si lo que querés en cambio es <strong>sumar movimientos</strong> (ej: cargar pagos pendientes uno por uno), no uses esta pantalla — registralos como ajustes desde el ABM de Cta Cte.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sal_c5">
+                                <i class="fas fa-search text-success me-2"></i> <strong>5. ¿Cómo identifica al cliente/proveedor?</strong>
+                            </button>
+                        </h2>
+                        <div id="sal_c5" class="accordion-collapse collapse" data-bs-parent="#accImpSal">
+                            <div class="accordion-body">
+                                <p><strong>Solo por CUIT (o DNI para clientes).</strong></p>
+                                <ul>
+                                    <li>El sistema limpia automáticamente guiones, puntos y espacios. Da igual si viene "20-12345678-9" o "20123456789".</li>
+                                    <li>Compara el CUIT contra el campo "documento" (clientes) o "cuit" (proveedores) de tu BD.</li>
+                                    <li>Si el CUIT no existe en la BD → fila descartada y figura en el reporte como "no encontrado".</li>
+                                </ul>
+                                <div class="alert alert-info small mb-0">
+                                    <i class="fas fa-lightbulb"></i> <strong>¿Por qué solo por CUIT?</strong>
+                                    Comparar por nombre es propenso a errores ("Juan Pérez" vs "Juan Perez" vs "Juan Pérez S.A." son distintos). El CUIT es único y exacto.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sal_c6">
+                                <i class="fas fa-plus-minus text-primary me-2"></i> <strong>6. Signo del monto (positivo / negativo)</strong>
+                            </button>
+                        </h2>
+                        <div id="sal_c6" class="accordion-collapse collapse" data-bs-parent="#accImpSal">
+                            <div class="accordion-body">
+                                <p>El sistema interpreta el monto según el tipo de import:</p>
+
+                                <table class="table table-sm">
+                                    <thead class="table-light">
+                                        <tr><th>Tipo</th><th>Monto del Excel</th><th>Significado</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td rowspan="2"><strong>Clientes</strong></td><td>5000 (positivo)</td><td>El cliente te debe $5.000</td></tr>
+                                        <tr><td>-300 (negativo)</td><td>El cliente tiene $300 a favor</td></tr>
+                                        <tr><td rowspan="2"><strong>Proveedores</strong></td><td>15000 (positivo)</td><td>Vos le debés $15.000 al proveedor</td></tr>
+                                        <tr><td>-500 (negativo)</td><td>Tenés $500 a favor con ese proveedor (anticipo)</td></tr>
+                                    </tbody>
+                                </table>
+
+                                <div class="alert alert-info mb-0 small">
+                                    <i class="fas fa-lightbulb"></i> <strong>Tip:</strong>
+                                    Acepta formato argentino "1.234,56" sin problema. Acepta el símbolo $ y se ignora.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sal_c7">
+                                <i class="fas fa-columns text-info me-2"></i> <strong>7. Columnas que el sistema reconoce</strong>
+                            </button>
+                        </h2>
+                        <div id="sal_c7" class="accordion-collapse collapse" data-bs-parent="#accImpSal">
+                            <div class="accordion-body">
+                                <table class="table table-sm">
+                                    <thead class="table-light">
+                                        <tr><th>Campo</th><th>Obligatorio</th><th>Sinónimos reconocidos</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td><strong>CUIT (para identificar)</strong></td><td><span class="badge bg-danger">Sí</span></td><td class="small">cuit, c.u.i.t., cuit/dni, documento, doc</td></tr>
+                                        <tr><td><strong>Monto del saldo</strong></td><td><span class="badge bg-danger">Sí</span></td><td class="small">monto, saldo, importe, deuda, debe, total</td></tr>
+                                        <tr><td><strong>Razón Social (referencia)</strong></td><td>No</td><td class="small">razón social, nombre, cliente, proveedor</td></tr>
+                                    </tbody>
+                                </table>
+
+                                <div class="alert alert-info small mb-0">
+                                    <i class="fas fa-lightbulb"></i>
+                                    La <strong>razón social es solo referencia</strong>: aparece en el reporte de "no encontrados" para que sepas a qué cliente/proveedor te referías. NO se usa para identificar (eso lo hace el CUIT).
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sal_c8">
+                                <i class="fas fa-check-double text-success me-2"></i> <strong>8. Validaciones del sistema</strong>
+                            </button>
+                        </h2>
+                        <div id="sal_c8" class="accordion-collapse collapse" data-bs-parent="#accImpSal">
+                            <div class="accordion-body">
+                                <h6>CUIT:</h6>
+                                <ul>
+                                    <li>Tiene que tener al menos 7 dígitos (mínimo DNI).</li>
+                                    <li>Limpia automáticamente guiones, puntos y espacios.</li>
+                                    <li>Si no existe en la BD → fila descartada como "no encontrado".</li>
+                                </ul>
+                                <h6>Monto:</h6>
+                                <ul class="mb-0">
+                                    <li>Acepta números positivos y negativos.</li>
+                                    <li>Acepta formato argentino: "1.234,56" → 1234.56</li>
+                                    <li>Acepta símbolo $ y se ignora: "$5.000" → 5000</li>
+                                    <li>Si está vacío o no es número → fila descartada con error.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sal_c9">
+                                <i class="fas fa-exclamation-triangle text-danger me-2"></i> <strong>9. Errores comunes</strong>
+                            </button>
+                        </h2>
+                        <div id="sal_c9" class="accordion-collapse collapse" data-bs-parent="#accImpSal">
+                            <div class="accordion-body">
+
+                                <div class="card mb-2"><div class="card-header py-2 bg-light">
+                                    <strong>❓ Muchos "No encontrados"</strong>
+                                </div><div class="card-body small">
+                                    Significa que esos CUITs no existen en tu BD. Causas: (a) <strong>todavía no importaste los clientes/proveedores</strong> — primero hacelo. (b) Los CUITs en el Excel de saldos no coinciden con los que cargaste antes. Verificá si hay diferencias de formato (con/sin guiones).
+                                </div></div>
+
+                                <div class="card mb-2"><div class="card-header py-2 bg-light">
+                                    <strong>❓ "Falta CUIT" en muchas filas</strong>
+                                </div><div class="card-body small">
+                                    El detector mapeó mal la columna del CUIT. Andá al paso 3 y verificá manualmente.
+                                </div></div>
+
+                                <div class="card mb-2"><div class="card-header py-2 bg-light">
+                                    <strong>❓ "Monto inválido"</strong>
+                                </div><div class="card-body small">
+                                    La columna del monto tiene texto en lugar de números (ej: "consultar", "pendiente"). Limpiá el Excel: solo números o vacío.
+                                </div></div>
+
+                                <div class="card mb-0"><div class="card-header py-2 bg-light">
+                                    <strong>❓ Importé y los signos quedaron al revés</strong>
+                                </div><div class="card-body small">
+                                    Verificá si tu Excel tiene los saldos con la convención esperada (ver sección 6). Si vienen con la convención opuesta (ej: positivo = saldo a favor), abrí el Excel, multiplicá la columna por -1 y volvé a importar.
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sal_c10">
+                                <i class="fas fa-check-circle text-success me-2"></i> <strong>10. Después de importar</strong>
+                            </button>
+                        </h2>
+                        <div id="sal_c10" class="accordion-collapse collapse" data-bs-parent="#accImpSal">
+                            <div class="accordion-body">
+                                <ol class="mb-0">
+                                    <li><strong>Revisá el reporte final</strong>: cuántos saldos actualizados, cuántos no encontrados.</li>
+                                    <li><strong>Mirá el reporte de "Saldos de Clientes"</strong> (en el menú Cta Cte) para ver el panorama general.</li>
+                                    <li><strong>Verificá un cliente puntual</strong>: andá al ABM de clientes, abrí su detalle y verificá que el saldo coincida con lo que esperás.</li>
+                                    <li>Si tenés "no encontrados", primero importá esos clientes/proveedores faltantes y volvé a correr el importador de saldos.</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sal_c11">
+                                <i class="fas fa-headset text-primary me-2"></i> <strong>11. Soporte</strong>
+                            </button>
+                        </h2>
+                        <div id="sal_c11" class="accordion-collapse collapse" data-bs-parent="#accImpSal">
+                            <div class="accordion-body">
+                                <div class="card"><div class="card-body">
+                                    <p class="mb-1"><strong>Pablo Ré</strong> — Desarrollador</p>
+                                    <p class="mb-1"><i class="fas fa-envelope"></i> pablogustavore@gmail.com</p>
+                                    <p class="mb-1"><i class="fab fa-whatsapp text-success"></i> +54 9 3364 537093</p>
+                                    <p class="mb-0"><i class="fas fa-globe"></i> pablore.com.ar</p>
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

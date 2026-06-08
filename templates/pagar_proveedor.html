@@ -1,0 +1,1592 @@
+{% extends 'base.html' %}
+{% block title %}Pagar Proveedor{% endblock %}
+
+{% block content %}
+<style>
+    .card-totales { position: sticky; bottom: 0; z-index: 10; }
+    .medio-row { background: #f8f9fa; border-left: 4px solid #0d6efd; }
+    .medio-row.cheque_propio_nuevo { border-left-color: #ffc107; }
+    .medio-row.cheque_propio_existente { border-left-color: #6f42c1; }
+    .medio-row.cheque_tercero_existente { border-left-color: #fd7e14; }
+    .medio-row.transferencia { border-left-color: #20c997; }
+    .medio-row.efectivo { border-left-color: #0d6efd; }
+    .medio-row.saldo_a_favor { border-left-color: #198754; background: #e8f5e9; }
+    .factura-vencida { background: #ffe5e5; }
+    .factura-porvencer { background: #fff9e5; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3 flex-wrap gap-2">
+    <h2><i class="fas fa-hand-holding-dollar me-2"></i>Pagar Proveedor</h2>
+    <div>
+        <a href="/proveedores" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-arrow-left me-1"></i> Volver
+        </a>
+        <button class="btn btn-outline-info" onclick="abrirAyuda()">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- Selección de proveedor + fecha                             -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-7">
+                <label class="form-label fw-bold">Proveedor <span class="text-danger">*</span></label>
+                <input type="text" id="proveedorBusqueda" class="form-control"
+                       list="listaProveedores" placeholder="Escribí para buscar..."
+                       oninput="seleccionarProveedor()">
+                <datalist id="listaProveedores"></datalist>
+                <input type="hidden" id="proveedor_id">
+                <div class="form-text" id="provSelectedInfo">
+                    Escribí el nombre del proveedor y seleccionalo de la lista.
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Fecha del pago <span class="text-danger">*</span></label>
+                <input type="date" id="fechaPago" class="form-control">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold">Pto. Vta. Recibo</label>
+                <input type="number" id="puntoVentaRecibo" class="form-control" value="1" min="1">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- Info del proveedor                                         -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="card mb-3" id="cardProveedorInfo" style="display:none">
+    <div class="card-body py-2">
+        <div class="row g-2 text-center">
+            <div class="col-md-3">
+                <small class="text-muted">Proveedor</small>
+                <div class="fw-bold" id="infoProvNombre">-</div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted">Saldo cta cte</small>
+                <div class="fw-bold fs-5" id="infoProvSaldo">$0,00</div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted">Total facturas pendientes</small>
+                <div class="fw-bold fs-5 text-warning" id="infoTotalPendiente">$0,00</div>
+            </div>
+            <div class="col-md-3" id="cardSaldoFavor" style="display:none">
+                <small class="text-success">Saldo a favor disponible</small>
+                <div class="fw-bold fs-5 text-success" id="infoSaldoFavor">$0,00</div>
+                <small class="text-muted d-block">Podés aplicarlo como medio de pago</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- BANNER PAGO A CUENTA — saldo deuda sin facturas             -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="alert alert-info shadow-sm mb-3 border-info border-2" id="bannerPagoACuenta" style="display:none">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div class="flex-grow-1">
+            <h4 class="mb-2 text-info-emphasis">
+                <i class="fas fa-info-circle me-2"></i><strong>PAGO A CUENTA disponible</strong>
+            </h4>
+            <p class="mb-1 fs-6">
+                Este proveedor tiene un saldo en cta cte
+                <strong class="fs-5 text-danger" id="bannerMonto">$0,00</strong>
+                <strong>sin facturas pendientes</strong> a las que imputar.
+            </p>
+            <p class="mb-0 small text-muted">
+                <i class="fas fa-lightbulb me-1"></i>
+                Tocá <em>"Pagar todo a cuenta"</em> para cargar un pago en efectivo por el saldo total,
+                o cargá manualmente los medios de pago abajo y emití sin tildar facturas.
+            </p>
+        </div>
+        <button class="btn btn-success btn-lg shadow" onclick="precargarPagoACuenta()" id="btnPagarTodoACuenta">
+            <i class="fas fa-bolt me-2"></i> Pagar todo a cuenta
+        </button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- BANNER MODO PAGO A CUENTA ACTIVO (visible si hay a cuenta > 0) -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="alert alert-success py-2 mb-3" id="bannerModoACuenta" style="display:none">
+    <i class="fas fa-piggy-bank me-2"></i>
+    <strong>Modo pago a cuenta activo:</strong>
+    <span id="bannerModoTexto">Estás registrando un pago de <strong id="bannerModoMonto">$0,00</strong> a cuenta del proveedor (no se imputa a facturas).</span>
+</div>
+
+<div class="row">
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- IZQUIERDA: FACTURAS A IMPUTAR                           -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="col-lg-7 mb-3">
+        <div class="card">
+            <div class="card-header bg-warning text-dark py-2">
+                <strong><i class="fas fa-file-invoice-dollar me-1"></i> Facturas pendientes</strong>
+                <span class="float-end">
+                    <button class="btn btn-sm btn-light" onclick="marcarTodas()">
+                        <i class="fas fa-check-double"></i> Seleccionar todas
+                    </button>
+                </span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:40px" class="text-center">#</th>
+                                <th>Factura</th>
+                                <th>Fecha</th>
+                                <th>Vencimiento</th>
+                                <th class="text-end">Total</th>
+                                <th class="text-end">Saldo</th>
+                                <th class="text-end" style="width:140px">A pagar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bodyFacturas">
+                            <tr><td colspan="7" class="text-center text-muted py-4">
+                                Seleccioná un proveedor para ver sus facturas pendientes.
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- DERECHA: MEDIOS DE PAGO                                 -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div class="col-lg-5 mb-3">
+        <div class="card">
+            <div class="card-header bg-primary text-white py-2">
+                <strong><i class="fas fa-money-bill-wave me-1"></i> Medios de pago</strong>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-1 mb-3">
+                    <button class="btn btn-sm btn-outline-primary" onclick="agregarMedio('efectivo')">
+                        <i class="fas fa-money-bill"></i> Efectivo
+                    </button>
+                    <button class="btn btn-sm btn-outline-success" onclick="agregarMedio('transferencia')">
+                        <i class="fas fa-university"></i> Transferencia
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="agregarMedio('cheque_propio_nuevo')">
+                        <i class="fas fa-pen"></i> Cheque propio nuevo
+                    </button>
+                    <button class="btn btn-sm btn-outline-dark" onclick="agregarMedio('cheque_propio_existente')">
+                        <i class="fas fa-money-check"></i> Cheque propio de cartera
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="agregarMedio('cheque_tercero_existente')">
+                        <i class="fas fa-hand-holding-usd"></i> Cheque de tercero
+                    </button>
+                    <button class="btn btn-sm btn-success" id="btnSaldoFavor" onclick="agregarMedio('saldo_a_favor')" style="display:none">
+                        <i class="fas fa-piggy-bank"></i> Saldo a favor
+                    </button>
+                </div>
+                <div id="containerMedios">
+                    <div class="text-muted text-center py-3" id="mediosEmpty">
+                        <i class="fas fa-info-circle"></i> Aún no agregaste medios de pago.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- TOTALES + BOTÓN EMITIR                                      -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="card card-totales shadow-lg mb-3" id="cardTotales">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-2 text-center">
+                <small class="text-muted d-block">Imputado a facturas</small>
+                <div class="fs-5 fw-bold text-warning" id="totalImputado">$0,00</div>
+            </div>
+            <div class="col-md-2 text-center">
+                <small class="text-muted d-block">Pago a cuenta</small>
+                <div class="fs-5 fw-bold text-info" id="totalACuenta">$0,00</div>
+            </div>
+            <div class="col-md-2 text-center">
+                <small class="text-muted d-block">Total medios</small>
+                <div class="fs-5 fw-bold text-primary" id="totalMedios">$0,00</div>
+            </div>
+            <div class="col-md-2 text-center">
+                <small class="text-muted d-block">Diferencia</small>
+                <div class="fs-5 fw-bold" id="totalDiferencia">$0,00</div>
+            </div>
+            <div class="col-md-4 text-center">
+                <button class="btn btn-success btn-lg w-100" id="btnEmitir" onclick="emitirPago()" disabled>
+                    <i class="fas fa-check-circle me-1"></i> Emitir Recibo
+                </button>
+                <button class="btn btn-outline-success btn-sm w-100 mt-2" onclick="abrirPagoACuenta()" id="btnPagoACuenta" disabled>
+                    <i class="fas fa-piggy-bank me-1"></i> Pago a cuenta / Adelanto
+                </button>
+            </div>
+        </div>
+        <div class="row mt-2">
+            <div class="col-12">
+                <label class="form-label small fw-bold mb-1">Observaciones (opcional)</label>
+                <input type="text" id="observaciones" class="form-control form-control-sm" placeholder="Notas sobre este pago...">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- Modal RESULTADO del pago                                   -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalResultado" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-check-circle me-2"></i>Pago emitido</h5>
+            </div>
+            <div class="modal-body text-center">
+                <i class="fas fa-circle-check text-success" style="font-size:4rem"></i>
+                <h4 class="mt-3">¡Pago registrado exitosamente!</h4>
+                <p class="mb-1">Recibo Nº <strong id="resRecibo"></strong></p>
+                <p class="mb-1">Total: <strong id="resTotal"></strong></p>
+                <p class="mb-0 text-muted">Nuevo saldo del proveedor: <strong id="resSaldo"></strong></p>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <a href="#" id="btnDescargarPdf" class="btn btn-primary" target="_blank">
+                    <i class="fas fa-file-pdf me-1"></i> Descargar PDF
+                </a>
+                <button class="btn btn-outline-secondary" onclick="limpiarPantalla()" data-bs-dismiss="modal">
+                    <i class="fas fa-plus me-1"></i> Nuevo Pago
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- Modal AYUDA -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Ayuda — Pagar Proveedor</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- ═══════════ INTRO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-book me-2"></i>¿Qué es esta pantalla?</h4>
+                <p>
+                    Es el <strong>corazón del módulo de pagos a proveedores</strong>. Acá armás y emitís
+                    una <strong>Orden de Pago (OP)</strong>: elegís un proveedor, seleccionás qué facturas
+                    pagar (y cuánto imputar a cada una), combinás los medios de pago que uses
+                    (efectivo + cheques + transferencia + etc.), y al confirmar el sistema registra todo
+                    y te genera el PDF del recibo.
+                </p>
+                <div class="alert alert-primary small">
+                    <strong><i class="fas fa-lightbulb me-1"></i> Analogía simple:</strong> es como armar una
+                    "canasta de pago". De un lado ponés las facturas que querés saldar; del otro,
+                    los métodos de pago con los que vas a saldarlas. Cuando los dos lados de la
+                    balanza suman lo mismo → emitís el recibo.
+                </div>
+                <div class="alert alert-success">
+                    <strong><i class="fas fa-magic me-1"></i> Lo que hace el sistema al emitir la OP:</strong>
+                    <ul class="mb-0">
+                        <li>Crea el pago con número de recibo correlativo (ej. R 0001-00000001).</li>
+                        <li>Descuenta el saldo de cada factura imputada.</li>
+                        <li>Marca las facturas como "pagada" o "parcial" según cuánto imputaste.</li>
+                        <li>Crea o vincula cheques propios (los marca como "entregado").</li>
+                        <li>Endosa los cheques de terceros usados (los marca como "endosado").</li>
+                        <li>Registra el movimiento en la cta cte del proveedor.</li>
+                        <li>Actualiza el saldo de deuda del proveedor.</li>
+                        <li>Genera el <strong>PDF de la Orden de Pago</strong>.</li>
+                    </ul>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ESTRUCTURA ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-th-large me-2"></i>Estructura de la pantalla</h4>
+
+                <h6 class="fw-bold mt-3">1) Selección de proveedor y datos iniciales (arriba)</h6>
+                <ul>
+                    <li><strong>Proveedor</strong>: escribí el nombre y seleccionalo de la lista desplegable.
+                        Una vez seleccionado, aparece una tilde verde de confirmación.</li>
+                    <li><strong>Fecha del pago</strong>: por defecto hoy. La podés cambiar si el pago efectivo fue otro día.</li>
+                    <li><strong>Pto. Vta. Recibo</strong>: por default 1. Solo se cambia si llevás varios puntos de venta de recibos (raro).</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">2) Tarjeta de info del proveedor</h6>
+                <p>Al elegir un proveedor, se muestra:</p>
+                <ul>
+                    <li><strong>Razón social</strong>.</li>
+                    <li><strong>Saldo cta cte</strong> (rojo): lo que le debés en total.</li>
+                    <li><strong>Total facturas pendientes</strong> (amarillo): suma de saldos pendientes
+                        de todas sus facturas. <em>Puede no coincidir con el saldo cta cte</em> si hay
+                        saldo inicial migrado o ajustes que no están en facturas.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">3) Tabla de facturas pendientes (izquierda)</h6>
+                <p>Aparecen todas las facturas del proveedor con saldo > 0, ordenadas por vencimiento.</p>
+                <ul>
+                    <li><strong>Checkbox</strong>: tildalo para imputar la factura.</li>
+                    <li><strong>Factura</strong>: número completo.</li>
+                    <li><strong>Fecha</strong>: fecha de la factura.</li>
+                    <li><strong>Vencimiento</strong>: fecha de pago.</li>
+                    <li><strong>Total</strong>: total original de la factura.</li>
+                    <li><strong>Saldo</strong>: lo que todavía queda por pagar.</li>
+                    <li><strong>A pagar</strong>: monto a imputar. Se autocompleta con el saldo total
+                        al tildar el checkbox, pero podés editarlo para hacer un <strong>pago parcial</strong>.</li>
+                </ul>
+                <p>Código de colores:</p>
+                <ul>
+                    <li><strong style="color:#842029; background:#ffe5e5; padding:1px 4px">Fondo rojo</strong>: factura vencida.</li>
+                    <li><strong style="color:#664d03; background:#fff9e5; padding:1px 4px">Fondo amarillo</strong>: vence en ≤ 7 días.</li>
+                </ul>
+                <p>Botón <strong>Seleccionar todas</strong>: tilda todas las facturas con monto completo.
+                    Útil cuando pagás todo lo que debés.</p>
+
+                <h6 class="fw-bold mt-3">4) Medios de pago (derecha)</h6>
+                <p>Hay 5 tipos de medios. Podés combinar cuantos quieras:</p>
+                <ul>
+                    <li><button class="btn btn-sm btn-outline-primary disabled"><i class="fas fa-money-bill"></i> Efectivo</button></li>
+                    <li><button class="btn btn-sm btn-outline-success disabled"><i class="fas fa-university"></i> Transferencia</button></li>
+                    <li><button class="btn btn-sm btn-outline-warning disabled"><i class="fas fa-pen"></i> Cheque propio nuevo</button></li>
+                    <li><button class="btn btn-sm btn-outline-dark disabled"><i class="fas fa-money-check"></i> Cheque propio de cartera</button></li>
+                    <li><button class="btn btn-sm btn-outline-danger disabled"><i class="fas fa-hand-holding-usd"></i> Cheque de tercero</button></li>
+                </ul>
+                <p>Cada botón agrega un medio en la lista. Para eliminarlo, la X roja en la esquina
+                    de cada medio. Cada medio tiene sus campos específicos (ver detalle más abajo).</p>
+
+                <h6 class="fw-bold mt-3">5) Barra inferior de totales (sticky)</h6>
+                <p>Siempre visible al fondo. Muestra:</p>
+                <ul>
+                    <li><strong>Total imputado</strong> (amarillo): suma de los montos "A pagar" de las facturas tildadas.</li>
+                    <li><strong>Total medios</strong> (azul): suma de los medios de pago cargados.</li>
+                    <li><strong>Diferencia</strong>: en verde si es $0 (todo cuadra), en rojo si no.</li>
+                    <li><strong>Botón Emitir Recibo</strong>: habilitado SOLO cuando diferencia = $0 y
+                        el total imputado > 0.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ TIPOS DE MEDIOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-money-bill-wave me-2"></i>Los 5 tipos de medios en detalle</h4>
+
+                <h6 class="fw-bold mt-3"><span class="badge bg-primary">1. Efectivo</span></h6>
+                <p>Para pagos en efectivo físico. Único campo: <strong>monto</strong>.</p>
+
+                <h6 class="fw-bold mt-3"><span class="badge bg-success">2. Transferencia</span></h6>
+                <p>Para transferencias bancarias. Campos:</p>
+                <ul>
+                    <li><strong>Banco destino</strong> (obligatorio): a qué banco la mandaste.</li>
+                    <li><strong>CBU</strong> (opcional): CBU destino.</li>
+                    <li><strong>Monto</strong> (obligatorio).</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3"><span class="badge bg-warning text-dark">3. Cheque propio nuevo</span></h6>
+                <p>Para cuando emitís un cheque en el momento (lo sacás de tu chequera). Campos:</p>
+                <ul>
+                    <li><strong>Banco</strong>, <strong>Cuenta</strong>: datos de tu cuenta.</li>
+                    <li><strong>Nº de cheque</strong>: el número del talón.</li>
+                    <li><strong>Fecha emisión</strong>: hoy por default.</li>
+                    <li><strong>Fecha vencimiento</strong>: si es diferido. Vacío = a la vista.</li>
+                    <li><strong>Monto</strong>.</li>
+                </ul>
+                <p class="text-muted small"><i class="fas fa-info-circle me-1"></i>
+                    El cheque se crea automáticamente en el sistema con estado "entregado", vinculado
+                    a este pago y al proveedor.</p>
+
+                <h6 class="fw-bold mt-3"><span class="badge bg-dark">4. Cheque propio de cartera</span></h6>
+                <p>Para usar un cheque propio que ya cargaste antes en estado "pendiente".</p>
+                <ul>
+                    <li><strong>Seleccionar cheque</strong>: desplegable con todos los cheques propios en
+                        estado "pendiente". Muestra banco + número + vencimiento + monto.</li>
+                </ul>
+                <p>El monto se toma automáticamente del cheque (no se puede editar — si querés usar un
+                    cheque de $5000 tenés que imputar $5000, no menos).</p>
+                <p class="text-muted small"><i class="fas fa-info-circle me-1"></i>
+                    Al emitir el pago, el cheque pasa de "pendiente" a "entregado" y se vincula al pago.</p>
+
+                <h6 class="fw-bold mt-3"><span class="badge bg-danger">5. Cheque de tercero (endoso)</span></h6>
+                <p>Para endosar a este proveedor un cheque que te dio un cliente (cheque de tercero de cartera).</p>
+                <ul>
+                    <li><strong>Seleccionar cheque</strong>: desplegable con cheques de terceros en estado
+                        "en_cartera". Muestra banco + número + librador + vencimiento + monto.</li>
+                </ul>
+                <p>Igual que el anterior, el monto se toma del cheque. Al emitir el pago, el cheque pasa a
+                    "endosado" y queda vinculado al proveedor destino.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ REGLA FUNDAMENTAL ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-balance-scale me-2"></i>La regla fundamental</h4>
+                <div class="alert alert-warning">
+                    <strong>Total imputado (facturas) = Total medios de pago.</strong><br>
+                    La barra inferior te muestra la diferencia en vivo. Hasta que esa diferencia sea
+                    exactamente $0, el botón "Emitir Recibo" está deshabilitado.
+                </div>
+                <p><strong>Esto significa:</strong> no podés pagar más ni menos que lo que estás imputando.
+                    Si querés pagar $50.000 a cuenta de futuras facturas, eso es una situación distinta (pago
+                    adelantado), y no se hace desde esta pantalla — por ahora.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ PAGO PARCIAL ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-divide me-2"></i>Pagos parciales</h4>
+                <p>Podés pagar solo una parte de una factura. Ejemplo:</p>
+                <ol>
+                    <li>Factura de $100.000 tildada.</li>
+                    <li>Editás el campo "A pagar" y ponés $40.000.</li>
+                    <li>Agregás $40.000 en efectivo como medio.</li>
+                    <li>Emitís el recibo.</li>
+                </ol>
+                <p>Resultado:</p>
+                <ul>
+                    <li>La factura queda con saldo pendiente de $60.000.</li>
+                    <li>Estado de la factura: "parcial".</li>
+                    <li>En la próxima visita a esta pantalla, aparece otra vez con $60.000 disponibles para imputar.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ CASOS DE USO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-tasks me-2"></i>Casos de uso típicos</h4>
+
+                <h6 class="fw-bold">Caso 1 — Pago simple: una factura en efectivo</h6>
+                <ol>
+                    <li>Elegir proveedor.</li>
+                    <li>Tildar la factura a pagar (el monto "A pagar" queda con el saldo total).</li>
+                    <li>Clickear botón <strong>Efectivo</strong> → poner el mismo monto.</li>
+                    <li>La barra inferior dice "Diferencia: $0" → botón verde se habilita.</li>
+                    <li>Click <strong>Emitir Recibo</strong> → confirmar → ver PDF.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 2 — Pago mixto: mitad efectivo, mitad transferencia</h6>
+                <ol>
+                    <li>Elegir proveedor + tildar factura.</li>
+                    <li>Agregar <strong>Efectivo</strong> $50.000.</li>
+                    <li>Agregar <strong>Transferencia</strong> $50.000 (completar banco destino).</li>
+                    <li>Total facturas $100.000 = Total medios $100.000 → emitir.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 3 — Pago con cheque propio nuevo</h6>
+                <ol>
+                    <li>Proveedor + facturas.</li>
+                    <li>Botón <strong>Cheque propio nuevo</strong>.</li>
+                    <li>Completar banco, cuenta, número de cheque, fecha emisión, fecha vto., monto.</li>
+                    <li>Emitir. El cheque queda automáticamente en "Cheques Propios" con estado "entregado".</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 4 — Pago con cheque propio de cartera</h6>
+                <p><em>Pre-requisito:</em> tener cheques propios en estado "pendiente" en la cartera
+                    (se cargan desde <a href="/cheques_propios">Cheques Propios</a>).</p>
+                <ol>
+                    <li>Proveedor + facturas.</li>
+                    <li>Botón <strong>Cheque propio de cartera</strong>.</li>
+                    <li>Seleccionar el cheque del desplegable. El monto se completa solo.</li>
+                    <li>Emitir. El cheque pasa de "pendiente" a "entregado".</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 5 — Endoso de cheque de tercero</h6>
+                <p><em>Pre-requisito:</em> tener cheques de terceros en estado "en cartera".</p>
+                <ol>
+                    <li>Proveedor + facturas.</li>
+                    <li>Botón <strong>Cheque de tercero</strong>.</li>
+                    <li>Seleccionar el cheque. El monto se completa solo.</li>
+                    <li>Emitir. El cheque se endosa a este proveedor.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 6 — Pago parcial (ver sección "Pagos parciales" arriba)</h6>
+
+                <h6 class="fw-bold mt-3">Caso 7 — Pagar varias facturas de golpe</h6>
+                <ol>
+                    <li>Proveedor.</li>
+                    <li>Botón <strong>Seleccionar todas</strong> (arriba de la tabla de facturas).</li>
+                    <li>Agregar medios de pago por el total.</li>
+                    <li>Emitir.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 8 — Combinación mega-completa</h6>
+                <p>Ejemplo real: pagás a un proveedor con una factura de $200.000 usando:</p>
+                <ul>
+                    <li>$30.000 en efectivo.</li>
+                    <li>$70.000 con transferencia al Santander.</li>
+                    <li>Un cheque propio nuevo de $50.000 a 30 días.</li>
+                    <li>Un cheque de tercero (endoso) de $50.000 de tu cartera.</li>
+                </ul>
+                <p>Todo eso se carga en esta pantalla en un solo paso, y al emitir queda registrado con
+                    su trazabilidad completa — el PDF del recibo los lista todos.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ DESPUÉS DE EMITIR ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-receipt me-2"></i>Después de emitir el recibo</h4>
+                <p>Al confirmar, aparece un modal con:</p>
+                <ul>
+                    <li><strong>Número de recibo</strong> generado (ej. R 0001-00000001).</li>
+                    <li><strong>Total pagado</strong>.</li>
+                    <li><strong>Nuevo saldo del proveedor</strong> (ya actualizado).</li>
+                    <li>Botón <strong>Descargar PDF</strong>: abre el PDF de la Orden de Pago en una pestaña nueva.
+                        Lo podés imprimir, guardar o mandar al proveedor.</li>
+                    <li>Botón <strong>Nuevo Pago</strong>: limpia la pantalla y te prepara para armar otro pago.</li>
+                </ul>
+                <p>Si necesitás reimprimir el PDF más tarde, andá a
+                    <a href="/pagos_proveedores"><strong>Compras → Pagos Emitidos</strong></a> y desde ahí
+                    podés reimprimir cualquier recibo emitido.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ATAJOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-bolt me-2"></i>Atajos útiles</h4>
+                <ul>
+                    <li><strong>Entrar desde Cta Cte Proveedor</strong>: en la pantalla de cta cte hay un
+                        botón "Pagar" que te trae acá con el proveedor ya seleccionado.</li>
+                    <li><strong>Entrar desde Proveedores</strong>: en el listado de proveedores, el ícono
+                        💵 en cada fila abre esta pantalla con ese proveedor.</li>
+                    <li><strong>URL directa</strong>: <code>/pagar_proveedor?proveedor_id=5</code> te deja
+                        en la pantalla con el proveedor 5 preseleccionado.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ FAQ ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-question-circle me-2"></i>Preguntas frecuentes</h4>
+                <div class="accordion" id="faqAccPP">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPP1">
+                                Selecciono un proveedor pero no aparecen facturas pendientes
+                            </button>
+                        </h2>
+                        <div id="faqPP1" class="accordion-collapse collapse" data-bs-parent="#faqAccPP">
+                            <div class="accordion-body">
+                                Significa que no hay facturas con saldo pendiente. Opciones:
+                                <ul class="mb-0">
+                                    <li>Todas las facturas están pagadas.</li>
+                                    <li>Todavía no cargaste ninguna factura de este proveedor.</li>
+                                    <li>Las facturas son anteriores al módulo (su deuda está reflejada en
+                                        el "saldo inicial migrado" de la cta cte pero no como facturas
+                                        pendientes). En este caso no se pueden imputar desde acá — hay que
+                                        crear una factura nueva o hacer un ajuste.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPP2">
+                                El botón "Emitir Recibo" está deshabilitado
+                            </button>
+                        </h2>
+                        <div id="faqPP2" class="accordion-collapse collapse" data-bs-parent="#faqAccPP">
+                            <div class="accordion-body">
+                                Dos motivos posibles:
+                                <ol class="mb-0">
+                                    <li>No hay facturas imputadas (todos los checkboxes vacíos).</li>
+                                    <li>La diferencia entre facturas y medios no es $0. Mirá la barra
+                                        inferior: si la diferencia es positiva, faltan medios; si es
+                                        negativa, te pasaste.</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPP3">
+                                Quiero editar el monto de un cheque de cartera pero no me deja
+                            </button>
+                        </h2>
+                        <div id="faqPP3" class="accordion-collapse collapse" data-bs-parent="#faqAccPP">
+                            <div class="accordion-body">
+                                Es correcto. Los cheques existentes (propios o de terceros) se usan por
+                                su monto total. No podés "romper" un cheque de $5000 y pagar solo $3000
+                                con él. Si necesitás un monto distinto, usá un cheque propio nuevo con
+                                el monto que querés, o combiná varios medios.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPP4">
+                                Me equivoqué y emití un pago mal. ¿Cómo lo deshago?
+                            </button>
+                        </h2>
+                        <div id="faqPP4" class="accordion-collapse collapse" data-bs-parent="#faqAccPP">
+                            <div class="accordion-body">
+                                Andá a <a href="/pagos_proveedores"><strong>Compras → Pagos Emitidos</strong></a>,
+                                buscás el pago y botón "Anular" (ícono rojo de prohibición). Te va a pedir
+                                un motivo obligatorio y luego:
+                                <ul class="mb-0">
+                                    <li>Revierte el saldo pendiente de las facturas.</li>
+                                    <li>Devuelve los cheques usados a su estado previo (pendiente / en cartera).</li>
+                                    <li>Crea un movimiento inverso en la cta cte del proveedor.</li>
+                                </ul>
+                                <strong>Limitación:</strong> si un cheque usado en el pago ya cambió de estado
+                                después (ej. ya fue cobrado), el sistema no te deja anular. Habría que
+                                resolverlo contablemente.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPP5">
+                                ¿Por qué no aparece la opción de pagar una factura de hace 6 meses?
+                            </button>
+                        </h2>
+                        <div id="faqPP5" class="accordion-collapse collapse" data-bs-parent="#faqAccPP">
+                            <div class="accordion-body">
+                                Las facturas anteriores al inicio del módulo <u>no se cargaron</u> como facturas
+                                pendientes. Su deuda está sumada en el "saldo inicial migrado" de la cta cte.
+                                Son facturas viejas que, a efectos del sistema, ya están "pagadas" (aunque en
+                                realidad estén pendientes). Opciones:
+                                <ul class="mb-0">
+                                    <li><strong>Recomendado:</strong> cargar una factura nueva con los datos reales
+                                        (fecha original o fecha actual como prefieras) y pagarla normalmente.
+                                        El saldo total del proveedor no cambia.</li>
+                                    <li>Pedir a Pablo un ajuste SQL que convierta el saldo inicial en facturas
+                                        individuales (trabajoso, solo si tenés muchas).</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPP6">
+                                ¿Puedo pagar facturas de varios proveedores en un mismo pago?
+                            </button>
+                        </h2>
+                        <div id="faqPP6" class="accordion-collapse collapse" data-bs-parent="#faqAccPP">
+                            <div class="accordion-body">
+                                No. Cada OP es para un solo proveedor. Si tenés que pagar a 3 proveedores
+                                el mismo día, hacés 3 OPs distintas (una por cada uno).
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPP7">
+                                ¿Qué pasa si cierro el navegador antes de emitir?
+                            </button>
+                        </h2>
+                        <div id="faqPP7" class="accordion-collapse collapse" data-bs-parent="#faqAccPP">
+                            <div class="accordion-body">
+                                Se pierde lo que estabas armando. La pantalla no guarda borradores. Nada
+                                se afecta en la base de datos hasta que clickees "Emitir Recibo" y confirmes.
+                                Es decir: <strong>es seguro cerrar</strong>, pero vas a tener que rehacer
+                                el pago desde cero.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPP8">
+                                ¿Qué tipo de cheque elijo: "propio nuevo" o "propio de cartera"?
+                            </button>
+                        </h2>
+                        <div id="faqPP8" class="accordion-collapse collapse" data-bs-parent="#faqAccPP">
+                            <div class="accordion-body">
+                                <ul class="mb-0">
+                                    <li><strong>Cheque propio nuevo</strong>: lo emitís <u>ahora</u>, en este momento.
+                                        Lo cargás acá con todos sus datos y el sistema lo crea al guardar el pago.</li>
+                                    <li><strong>Cheque propio de cartera</strong>: ya lo cargaste antes en la pantalla
+                                        de Cheques Propios como "pendiente", y ahora lo estás entregando. Lo
+                                        seleccionás de una lista.</li>
+                                </ul>
+                                En la práctica, el 99% de las veces usás "nuevo".
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPP9">
+                                El proveedor no está en la lista, ¿cómo lo agrego?
+                            </button>
+                        </h2>
+                        <div id="faqPP9" class="accordion-collapse collapse" data-bs-parent="#faqAccPP">
+                            <div class="accordion-body">
+                                Primero hay que crearlo: andá a <a href="/proveedores"><strong>Compras → Proveedores</strong></a>
+                                → botón "Nuevo Proveedor", completá razón social + CUIT y guardá. Después
+                                volvé acá y ya aparece en la lista.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ERRORES COMUNES ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-exclamation-triangle me-2"></i>Errores comunes</h4>
+                <ul>
+                    <li><strong>"La suma de medios no coincide con la suma de imputaciones"</strong> → mirá
+                        la barra inferior: la diferencia debe ser $0.</li>
+                    <li><strong>"Seleccioná el cheque de la lista"</strong> → en un medio de cheque
+                        existente, olvidaste elegir uno del desplegable.</li>
+                    <li><strong>"Cheque propio nuevo: faltan datos obligatorios"</strong> → revisá banco,
+                        número y fecha de emisión. Son los tres obligatorios.</li>
+                    <li><strong>"Transferencia sin banco destino"</strong> → tenés que poner el banco
+                        al que transferiste.</li>
+                    <li><strong>"Ya existe un cheque propio banco X Nº Y"</strong> → el número de cheque
+                        que estás usando ya está cargado en el sistema. Revisá.</li>
+                    <li><strong>"La factura X no pertenece a este proveedor"</strong> → no debería pasar
+                        en la UI, pero si ocurre, avisá a Pablo.</li>
+                    <li><strong>"El monto del cheque no coincide con el imputado"</strong> → estás usando
+                        un cheque existente con un monto distinto al que imputaste. Revisá que el monto
+                        del medio sea igual al del cheque.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ PAGO A CUENTA ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-piggy-bank me-2"></i>Pago a cuenta / Adelanto</h4>
+                <p>
+                    Si querés pagarle al proveedor sin tener una factura específica para imputar —
+                    por ejemplo, un adelanto para una futura compra — usá el botón
+                    <strong>💰 Pago a cuenta / Adelanto</strong> que aparece debajo del "Emitir Recibo".
+                </p>
+                <div class="alert alert-info small">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <strong>¿Cómo usarlo?</strong><br>
+                    1. Seleccioná el proveedor (el botón se habilita automáticamente)<br>
+                    2. Hacé clic en <strong>Pago a cuenta / Adelanto</strong><br>
+                    3. Elegí el medio de pago, ingresá el importe y una observación opcional<br>
+                    4. Hacé clic en <strong>Registrar</strong>
+                </div>
+                <p>
+                    El importe queda registrado como <strong>Haber</strong> en la CTA.CTE del proveedor
+                    y reduce el saldo que le debés. Cuando llegue la factura, la imputás normalmente
+                    en una Orden de Pago y el sistema la procesa como siempre.
+                </p>
+                <div class="alert alert-warning small">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    El pago a cuenta <strong>no genera una Orden de Pago imprimible</strong> — queda registrado
+                    solo en la CTA.CTE del proveedor. Si necesitás un comprobante, documentalo en las observaciones.
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ RELACIÓN CON OTROS MÓDULOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-link me-2"></i>Relación con otros módulos</h4>
+                <ul>
+                    <li><strong>Facturas de Compra</strong>: se nutre de acá — solo aparecen facturas con saldo > 0.</li>
+                    <li><strong>Cta Cte Proveedor</strong>: el pago se refleja ahí como movimiento "pago".</li>
+                    <li><strong>Cheques Propios</strong>: los cheques creados o usados cambian de estado.</li>
+                    <li><strong>Cheques de Terceros</strong>: los endosados cambian a "endosado".</li>
+                    <li><strong>Pagos Emitidos</strong>: después de emitir, el pago aparece ahí para consulta,
+                        reimpresión de PDF o anulación.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ NOTAS TÉCNICAS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-cog me-2"></i>Notas técnicas</h4>
+                <ul class="small text-muted">
+                    <li>Endpoint principal: <code>POST /api/pagar_proveedor</code>.</li>
+                    <li>Campos leídos: <code>proveedor_id</code>, <code>fecha</code>, <code>punto_venta_recibo</code>,
+                        <code>observaciones</code>, <code>imputaciones[]</code>, <code>medios[]</code>.</li>
+                    <li>Transacción completa: crea <code>pago_proveedor</code> + <code>pago_proveedor_detalle</code>
+                        + <code>pago_proveedor_medio</code>, actualiza facturas y cheques, inserta <code>proveedor_movimiento</code>.</li>
+                    <li>Numerador correlativo: <code>PagoProveedorNumerador.siguiente_numero(pv)</code> con <code>FOR UPDATE</code>.</li>
+                    <li>Todos los pagos creados acá tienen <code>forma_pago = 'multiple'</code> (para diferenciarlos
+                        de los históricos).</li>
+                </ul>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Pago a cuenta -->
+<div class="modal fade" id="modalPagoACuenta" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#198754; color:white;">
+                <h5 class="modal-title"><i class="fas fa-piggy-bank me-2"></i>Pago a cuenta / Adelanto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">Registrá un pago al proveedor sin imputarlo a ninguna factura. Quedará como saldo a favor tuyo.</p>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Medio de pago</label>
+                    <select id="pacMedio" class="form-select">
+                        <option value="efectivo">💵 Efectivo</option>
+                        <option value="transferencia">🏦 Transferencia</option>
+                        <option value="cheque">📋 Cheque</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Importe <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" id="pacImporte" class="form-control" step="0.01" min="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Observaciones</label>
+                    <input type="text" id="pacObs" class="form-control" placeholder="Opcional">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-success" onclick="confirmarPagoACuenta()">
+                    <i class="fas fa-piggy-bank me-1"></i> Registrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ════════════════════════════════════════════════════════════
+let modalResultado = null;
+let modalAyuda     = null;
+
+function abrirAyuda() {
+    if (!modalAyuda) modalAyuda = new bootstrap.Modal(document.getElementById('modalAyuda'));
+    modalAyuda.show();
+}
+
+let proveedoresCache   = [];   // lista completa de proveedores
+let chequesPropiosDisp = [];   // cheques propios 'pendiente'
+let chequesTercDisp    = [];   // cheques terceros 'en_cartera'
+let facturas           = [];   // facturas pendientes del proveedor actual
+let medios             = [];   // medios de pago armados (array de objetos)
+let proveedorActual    = null;
+let medioIdCounter     = 0;
+
+function fmt(v) {
+    return '$' + parseFloat(v || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+// ════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════
+document.getElementById('fechaPago').valueAsDate = new Date();
+
+async function cargarProveedores() {
+    const res = await fetch('/api/proveedores');
+    const data = await res.json();
+    if (data.success) {
+        proveedoresCache = data.proveedores || [];
+        const dl = document.getElementById('listaProveedores');
+        dl.innerHTML = proveedoresCache.map(p =>
+            `<option data-id="${p.id}" value="${p.razon_social.replace(/"/g,'&quot;')}">`
+        ).join('');
+    }
+}
+
+async function cargarChequesDisponibles() {
+    const [r1, r2] = await Promise.all([
+        fetch('/api/cheques_propios/disponibles').then(r => r.json()),
+        fetch('/api/cheques_terceros/disponibles').then(r => r.json()),
+    ]);
+    if (r1.success) chequesPropiosDisp = r1.cheques || [];
+    if (r2.success) chequesTercDisp    = r2.cheques || [];
+}
+
+// ════════════════════════════════════════════════════════════
+// PROVEEDOR
+// ════════════════════════════════════════════════════════════
+function seleccionarProveedor() {
+    const nombre = document.getElementById('proveedorBusqueda').value.trim();
+    const info = document.getElementById('provSelectedInfo');
+    if (!nombre) {
+        document.getElementById('proveedor_id').value = '';
+        info.innerHTML = 'Escribí el nombre del proveedor y seleccionalo de la lista.';
+        info.className = 'form-text';
+        ocultarProveedorInfo();
+        return;
+    }
+    const p = proveedoresCache.find(x => x.razon_social.toLowerCase() === nombre.toLowerCase());
+    if (p) {
+        document.getElementById('proveedor_id').value = p.id;
+        info.innerHTML = `<i class="fas fa-check-circle text-success"></i> Proveedor: <strong>${p.razon_social}</strong> (ID ${p.id})`;
+        info.className = 'form-text text-success';
+        cargarFacturas(p.id);
+    } else {
+        document.getElementById('proveedor_id').value = '';
+        info.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> Proveedor no encontrado.';
+        info.className = 'form-text text-warning';
+        ocultarProveedorInfo();
+    }
+}
+
+function ocultarProveedorInfo() {
+    document.getElementById('cardProveedorInfo').style.display = 'none';
+    document.getElementById('bannerPagoACuenta').style.display = 'none';
+    document.getElementById('bannerModoACuenta').style.display = 'none';
+    facturas = [];
+    renderFacturas();
+    recalcularTotales();
+}
+
+async function cargarFacturas(provId, preFacturaId = null) {
+    const res = await fetch('/api/proveedor/' + provId + '/facturas_pendientes');
+    const data = await res.json();
+    if (!data.success) { Swal.fire('Error', data.error || 'No se pudo cargar', 'error'); return; }
+    proveedorActual = data.proveedor;
+    facturas = data.facturas.map(f => ({...f, checked: false, monto_a_pagar: 0}));
+
+    document.getElementById('cardProveedorInfo').style.display = '';
+    document.getElementById('infoProvNombre').textContent = proveedorActual.razon_social;
+
+    // Saldo del proveedor (puede ser negativo = a favor)
+    const saldoProv = parseFloat(proveedorActual.saldo || 0);
+    const elSaldo = document.getElementById('infoProvSaldo');
+    if (saldoProv > 0.005) {
+        elSaldo.textContent = fmt(saldoProv);
+        elSaldo.className = 'fw-bold fs-5 text-danger';
+    } else if (saldoProv < -0.005) {
+        elSaldo.textContent = fmt(Math.abs(saldoProv)) + ' a favor';
+        elSaldo.className = 'fw-bold fs-5 text-success';
+    } else {
+        elSaldo.textContent = fmt(0);
+        elSaldo.className = 'fw-bold fs-5 text-muted';
+    }
+
+    document.getElementById('infoTotalPendiente').textContent = fmt(data.total_pendiente);
+
+    // Saldo a favor disponible
+    const saldoFavor = parseFloat(proveedorActual.saldo_a_favor || 0);
+    if (saldoFavor > 0.005) {
+        document.getElementById('cardSaldoFavor').style.display = '';
+        document.getElementById('infoSaldoFavor').textContent = fmt(saldoFavor);
+        document.getElementById('btnSaldoFavor').style.display = '';
+    } else {
+        document.getElementById('cardSaldoFavor').style.display = 'none';
+        document.getElementById('btnSaldoFavor').style.display = 'none';
+    }
+
+    // Si vino una factura pre-seleccionada por URL, tildala con monto completo
+    if (preFacturaId) {
+        const idx = facturas.findIndex(f => f.id == preFacturaId);
+        if (idx >= 0) {
+            facturas[idx].checked = true;
+            facturas[idx].monto_a_pagar = parseFloat(facturas[idx].saldo_pendiente);
+        } else {
+            Swal.fire({
+                icon: 'info',
+                title: 'Factura ya saldada',
+                text: 'La factura que seleccionaste no tiene saldo pendiente. Seleccioná otras facturas de este proveedor para pagar.',
+            });
+        }
+    }
+
+    // BANNER pago a cuenta: aparece cuando hay saldo deuda > 0 y NO hay facturas pendientes
+    const banner = document.getElementById('bannerPagoACuenta');
+    if (saldoProv > 0.005 && facturas.length === 0) {
+        banner.style.display = '';
+        document.getElementById('bannerMonto').textContent = fmt(saldoProv);
+    } else {
+        banner.style.display = 'none';
+    }
+
+    renderFacturas();
+    recalcularTotales();
+}
+
+function renderFacturas() {
+    const tbody = document.getElementById('bodyFacturas');
+    if (!facturas.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Sin facturas pendientes.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = facturas.map((f, idx) => {
+        let rowClass = '';
+        if (f.dias_para_vencer !== null) {
+            if (f.dias_para_vencer < 0)      rowClass = 'factura-vencida';
+            else if (f.dias_para_vencer <= 7) rowClass = 'factura-porvencer';
+        }
+        return `
+        <tr class="${rowClass}">
+            <td class="text-center">
+                <input type="checkbox" class="form-check-input" ${f.checked ? 'checked':''}
+                       onchange="toggleFactura(${idx}, this.checked)">
+            </td>
+            <td><strong>${f.numero_completo}</strong></td>
+            <td>${f.fecha}</td>
+            <td>${f.fecha_vencimiento || '-'}</td>
+            <td class="text-end">${fmt(f.total)}</td>
+            <td class="text-end fw-bold text-danger">${fmt(f.saldo_pendiente)}</td>
+            <td class="text-end">
+                <input type="number" class="form-control form-control-sm text-end"
+                       style="max-width:140px; display:inline-block"
+                       ${!f.checked ? 'disabled' : ''}
+                       step="0.01" min="0" max="${f.saldo_pendiente}"
+                       value="${f.monto_a_pagar.toFixed(2)}"
+                       onchange="cambiarMontoFactura(${idx}, this.value)">
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function toggleFactura(idx, checked) {
+    facturas[idx].checked = checked;
+    if (checked && facturas[idx].monto_a_pagar === 0) {
+        // Default: monto completo pendiente
+        facturas[idx].monto_a_pagar = parseFloat(facturas[idx].saldo_pendiente);
+    }
+    if (!checked) facturas[idx].monto_a_pagar = 0;
+    renderFacturas();
+    recalcularTotales();
+}
+
+function cambiarMontoFactura(idx, valor) {
+    let v = parseFloat(valor || 0);
+    const saldo = parseFloat(facturas[idx].saldo_pendiente);
+    if (v < 0) v = 0;
+    if (v > saldo) v = saldo;
+    facturas[idx].monto_a_pagar = v;
+    recalcularTotales();
+}
+
+function marcarTodas() {
+    facturas.forEach(f => {
+        f.checked = true;
+        f.monto_a_pagar = parseFloat(f.saldo_pendiente);
+    });
+    renderFacturas();
+    recalcularTotales();
+}
+
+// ════════════════════════════════════════════════════════════
+// MEDIOS DE PAGO
+// ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// PAGO A CUENTA — atajo: precarga un medio efectivo con el saldo total
+// ════════════════════════════════════════════════════════════
+function precargarPagoACuenta() {
+    if (!proveedorActual) {
+        Swal.fire('Atención', 'Seleccioná primero un proveedor', 'warning'); return;
+    }
+    const saldo = parseFloat(proveedorActual.saldo || 0);
+    if (saldo <= 0.005) {
+        Swal.fire('Atención', 'Este proveedor no tiene saldo deudor para pagar a cuenta', 'info'); return;
+    }
+    // Reemplazar todos los medios por uno solo de efectivo con el saldo total
+    medios = [];
+    medioIdCounter++;
+    medios.push({
+        id: medioIdCounter,
+        tipo: 'efectivo',
+        monto: saldo,
+        banco_destino: '',
+        cbu_destino: '',
+        banco: '',
+        cuenta: '',
+        numero: '',
+        fecha_emision: new Date().toISOString().slice(0,10),
+        fecha_vencimiento: '',
+        cheque_id: '',
+    });
+    renderMedios();
+    recalcularTotales();
+    Swal.fire({
+        icon: 'info',
+        title: '⚠️ Falta un paso más',
+        html: `Cargué un pago en <strong>efectivo</strong> por <strong>${fmt(saldo)}</strong>.<br><br>
+               <div class="alert alert-warning mb-0 text-start">
+                   <strong>👉 Ahora tenés que tocar el botón verde<br>"Emitir Recibo" abajo para confirmar el pago.</strong>
+               </div>
+               <small class="text-muted d-block mt-3">
+                   Si querés cambiar el medio (transferencia, cheque, etc.) antes de emitir,
+                   tocá la X del medio cargado y agregá el que prefieras.
+               </small>`,
+        confirmButtonText: 'Entendido, voy a emitir',
+        confirmButtonColor: '#198754',
+        allowOutsideClick: false,
+    });
+}
+
+function agregarMedio(tipo) {
+    medios.push({
+        id: ++medioIdCounter,
+        tipo: tipo,
+        monto: 0,
+        // campos específicos
+        banco_destino: '',
+        cbu_destino: '',
+        banco: '',
+        cuenta: '',
+        numero: '',
+        fecha_emision: new Date().toISOString().slice(0,10),
+        fecha_vencimiento: '',
+        cheque_id: '',
+    });
+    renderMedios();
+    recalcularTotales();
+}
+
+function quitarMedio(id) {
+    medios = medios.filter(m => m.id !== id);
+    renderMedios();
+    recalcularTotales();
+}
+
+function actualizarMedio(id, campo, valor) {
+    const m = medios.find(x => x.id === id);
+    if (!m) return;
+    m[campo] = valor;
+    // Si cambia el cheque seleccionado, auto-completar el monto con el monto del cheque
+    if (campo === 'cheque_id' && valor) {
+        if (m.tipo === 'cheque_propio_existente') {
+            const ch = chequesPropiosDisp.find(c => c.id == valor);
+            if (ch) m.monto = parseFloat(ch.monto);
+        } else if (m.tipo === 'cheque_tercero_existente') {
+            const ch = chequesTercDisp.find(c => c.id == valor);
+            if (ch) m.monto = parseFloat(ch.monto);
+        }
+        renderMedios();
+    }
+    recalcularTotales();
+}
+
+function renderMedios() {
+    const cont = document.getElementById('containerMedios');
+    const empty = document.getElementById('mediosEmpty');
+    if (!medios.length) {
+        empty.style.display = '';
+        cont.innerHTML = '<div class="text-muted text-center py-3" id="mediosEmpty"><i class="fas fa-info-circle"></i> Aún no agregaste medios de pago.</div>';
+        return;
+    }
+    cont.innerHTML = medios.map(m => {
+        let inner = '';
+        if (m.tipo === 'efectivo') {
+            inner = `
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="fas fa-money-bill text-primary"></i>
+                    <strong>Efectivo</strong>
+                    <button class="btn btn-sm btn-link text-danger ms-auto p-0" onclick="quitarMedio(${m.id})">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text">$</span>
+                    <input type="number" class="form-control text-end" step="0.01" min="0"
+                           value="${m.monto}" onchange="actualizarMedio(${m.id}, 'monto', parseFloat(this.value||0))">
+                </div>`;
+        } else if (m.tipo === 'transferencia') {
+            inner = `
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="fas fa-university text-success"></i>
+                    <strong>Transferencia</strong>
+                    <button class="btn btn-sm btn-link text-danger ms-auto p-0" onclick="quitarMedio(${m.id})">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+                <div class="row g-1">
+                    <div class="col-12">
+                        <input type="text" class="form-control form-control-sm" placeholder="Banco destino *"
+                               value="${m.banco_destino}" onchange="actualizarMedio(${m.id}, 'banco_destino', this.value)">
+                    </div>
+                    <div class="col-12">
+                        <input type="text" class="form-control form-control-sm" placeholder="CBU (opcional)"
+                               value="${m.cbu_destino}" onchange="actualizarMedio(${m.id}, 'cbu_destino', this.value)">
+                    </div>
+                    <div class="col-12">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control text-end" step="0.01" min="0"
+                                   value="${m.monto}" onchange="actualizarMedio(${m.id}, 'monto', parseFloat(this.value||0))">
+                        </div>
+                    </div>
+                </div>`;
+        } else if (m.tipo === 'cheque_propio_nuevo') {
+            inner = `
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="fas fa-pen text-warning"></i>
+                    <strong>Cheque propio nuevo</strong>
+                    <button class="btn btn-sm btn-link text-danger ms-auto p-0" onclick="quitarMedio(${m.id})">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+                <div class="row g-1">
+                    <div class="col-6">
+                        <input type="text" class="form-control form-control-sm" placeholder="Banco *"
+                               value="${m.banco}" onchange="actualizarMedio(${m.id}, 'banco', this.value)">
+                    </div>
+                    <div class="col-6">
+                        <input type="text" class="form-control form-control-sm" placeholder="Cuenta"
+                               value="${m.cuenta}" onchange="actualizarMedio(${m.id}, 'cuenta', this.value)">
+                    </div>
+                    <div class="col-12">
+                        <input type="text" class="form-control form-control-sm" placeholder="Nº de cheque *"
+                               value="${m.numero}" onchange="actualizarMedio(${m.id}, 'numero', this.value)">
+                    </div>
+                    <div class="col-6">
+                        <input type="date" class="form-control form-control-sm" title="Emisión"
+                               value="${m.fecha_emision}" onchange="actualizarMedio(${m.id}, 'fecha_emision', this.value)">
+                    </div>
+                    <div class="col-6">
+                        <input type="date" class="form-control form-control-sm" title="Vencimiento"
+                               value="${m.fecha_vencimiento}" onchange="actualizarMedio(${m.id}, 'fecha_vencimiento', this.value)">
+                    </div>
+                    <div class="col-12">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control text-end" step="0.01" min="0"
+                                   value="${m.monto}" onchange="actualizarMedio(${m.id}, 'monto', parseFloat(this.value||0))">
+                        </div>
+                    </div>
+                </div>`;
+        } else if (m.tipo === 'cheque_propio_existente') {
+            const opciones = chequesPropiosDisp.map(c =>
+                `<option value="${c.id}" ${m.cheque_id == c.id ? 'selected':''}>
+                    ${c.banco} Nº ${c.numero} — Vto ${c.fecha_vencimiento || 's/f'} — ${fmt(c.monto)}
+                </option>`).join('');
+            const aviso = chequesPropiosDisp.length ? '' :
+                '<div class="alert alert-warning py-1 small mb-1">No hay cheques propios pendientes en cartera.</div>';
+            inner = `
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="fas fa-money-check text-dark"></i>
+                    <strong>Cheque propio de cartera</strong>
+                    <button class="btn btn-sm btn-link text-danger ms-auto p-0" onclick="quitarMedio(${m.id})">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+                ${aviso}
+                <select class="form-select form-select-sm mb-1"
+                        onchange="actualizarMedio(${m.id}, 'cheque_id', this.value)">
+                    <option value="">-- Seleccionar cheque --</option>
+                    ${opciones}
+                </select>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text">$</span>
+                    <input type="number" class="form-control text-end" step="0.01" min="0"
+                           value="${m.monto}" readonly
+                           title="El monto se toma del cheque seleccionado">
+                </div>`;
+        } else if (m.tipo === 'cheque_tercero_existente') {
+            const opciones = chequesTercDisp.map(c =>
+                `<option value="${c.id}" ${m.cheque_id == c.id ? 'selected':''}>
+                    ${c.banco} Nº ${c.numero} — ${c.librador || 's/librador'} — Vto ${c.fecha_vencimiento || 's/f'} — ${fmt(c.monto)}
+                </option>`).join('');
+            const aviso = chequesTercDisp.length ? '' :
+                '<div class="alert alert-warning py-1 small mb-1">No hay cheques de terceros en cartera.</div>';
+            inner = `
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="fas fa-hand-holding-usd text-danger"></i>
+                    <strong>Cheque de tercero (endoso)</strong>
+                    <button class="btn btn-sm btn-link text-danger ms-auto p-0" onclick="quitarMedio(${m.id})">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+                ${aviso}
+                <select class="form-select form-select-sm mb-1"
+                        onchange="actualizarMedio(${m.id}, 'cheque_id', this.value)">
+                    <option value="">-- Seleccionar cheque --</option>
+                    ${opciones}
+                </select>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text">$</span>
+                    <input type="number" class="form-control text-end" step="0.01" min="0"
+                           value="${m.monto}" readonly
+                           title="El monto se toma del cheque seleccionado">
+                </div>`;
+        } else if (m.tipo === 'saldo_a_favor') {
+            const disp = proveedorActual ? parseFloat(proveedorActual.saldo_a_favor || 0) : 0;
+            inner = `
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <i class="fas fa-piggy-bank text-success"></i>
+                    <strong>Aplicar saldo a favor</strong>
+                    <button class="btn btn-sm btn-link text-danger ms-auto p-0" onclick="quitarMedio(${m.id})">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                </div>
+                <div class="small text-muted mb-1">Disponible: <strong>${fmt(disp)}</strong></div>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text">$</span>
+                    <input type="number" class="form-control text-end" step="0.01" min="0" max="${disp}"
+                           value="${m.monto}" onchange="actualizarMedio(${m.id}, 'monto', parseFloat(this.value||0))">
+                </div>`;
+        }
+        return `<div class="medio-row ${m.tipo} rounded p-2 mb-2">${inner}</div>`;
+    }).join('');
+}
+
+// ════════════════════════════════════════════════════════════
+// TOTALES
+// ════════════════════════════════════════════════════════════
+function recalcularTotales() {
+    const totImp = facturas.filter(f => f.checked).reduce((s,f) => s + parseFloat(f.monto_a_pagar || 0), 0);
+    const totMed = medios.reduce((s,m) => s + parseFloat(m.monto || 0), 0);
+
+    // A cuenta = lo que sobra de medios después de imputar
+    let aCuenta = totMed - totImp;
+    if (aCuenta < 0.005) aCuenta = 0;
+
+    // Diferencia: si totMed < totImp es problema (medios faltan); si totMed >= totImp ya está cubierto
+    const dif = totImp - totMed;
+
+    document.getElementById('totalImputado').textContent = fmt(totImp);
+    document.getElementById('totalMedios').textContent   = fmt(totMed);
+
+    // Pago a cuenta: resaltar fuerte si > 0
+    const elACuenta = document.getElementById('totalACuenta');
+    elACuenta.textContent = fmt(aCuenta);
+    if (aCuenta > 0.005) {
+        elACuenta.className = 'fs-4 fw-bold text-info';
+    } else {
+        elACuenta.className = 'fs-5 fw-bold text-muted';
+    }
+
+    // Banner "modo pago a cuenta activo" — visible cuando hay a cuenta > 0
+    const bannerModo = document.getElementById('bannerModoACuenta');
+    if (aCuenta > 0.005) {
+        bannerModo.style.display = '';
+        document.getElementById('bannerModoMonto').textContent = fmt(aCuenta);
+    } else {
+        bannerModo.style.display = 'none';
+    }
+
+    const elDif = document.getElementById('totalDiferencia');
+    if (Math.abs(dif) < 0.005) {
+        // Cuadra perfecto: medios = imputado, no hay a cuenta
+        elDif.textContent = fmt(0);
+        elDif.className = 'fs-5 fw-bold text-success';
+    } else if (dif < 0) {
+        // Medios > imputado: ok, va a cuenta. La "diferencia" se muestra como 0 porque está cubierto
+        elDif.textContent = '— a cuenta';
+        elDif.className = 'fs-5 fw-bold text-info';
+    } else {
+        // Medios < imputado: faltan medios
+        elDif.textContent = fmt(dif) + ' falta';
+        elDif.className = 'fs-5 fw-bold text-danger';
+    }
+
+    // Validar saldo a favor usado contra disponible
+    const saldoFavorUsado = medios.filter(m => m.tipo === 'saldo_a_favor')
+                                  .reduce((s,m) => s + parseFloat(m.monto || 0), 0);
+    const saldoFavorDisp  = proveedorActual ? parseFloat(proveedorActual.saldo_a_favor || 0) : 0;
+    const saldoFavorOK = saldoFavorUsado <= saldoFavorDisp + 0.005;
+
+    // Habilitar botón si: hay medios cargados, total medios >= total imputado, saldo a favor OK,
+    // y el pago aporta algo (imputaciones o a cuenta > 0)
+    const btn = document.getElementById('btnEmitir');
+    btn.disabled = !(
+        totMed > 0 &&
+        (totImp + aCuenta) > 0 &&
+        dif <= 0.005 &&        // medios cubren las imputaciones (o sobran)
+        saldoFavorOK
+    );
+
+    // Habilitar pago a cuenta si hay proveedor seleccionado
+    const provId = document.getElementById('proveedor_id').value;
+    document.getElementById('btnPagoACuenta').disabled = !provId;
+}
+
+function abrirPagoACuenta() {
+    const provId = document.getElementById('proveedor_id').value;
+    if (!provId) { Swal.fire('Error', 'Seleccioná un proveedor primero', 'warning'); return; }
+    document.getElementById('pacImporte').value = '';
+    document.getElementById('pacObs').value = '';
+    new bootstrap.Modal(document.getElementById('modalPagoACuenta')).show();
+}
+
+async function confirmarPagoACuenta() {
+    const provId  = document.getElementById('proveedor_id').value;
+    const importe = parseFloat(document.getElementById('pacImporte').value || 0);
+    const medio   = document.getElementById('pacMedio').value;
+    const obs     = document.getElementById('pacObs').value;
+    if (importe <= 0) { Swal.fire('Error', 'Ingresá un importe válido', 'warning'); return; }
+    try {
+        const r = await fetch('/api/proveedor/pago_a_cuenta', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ proveedor_id: parseInt(provId), importe, medio, observaciones: obs })
+        });
+        const data = await r.json();
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('modalPagoACuenta')).hide();
+            Swal.fire({ icon:'success', title:'Registrado', html:`Pago a cuenta de <strong>$${importe.toLocaleString('es-AR',{minimumFractionDigits:2})}</strong> registrado.`, confirmButtonColor:'#198754' });
+            document.getElementById('pacImporte').value = '';
+            document.getElementById('pacObs').value = '';
+        } else {
+            Swal.fire('Error', data.error, 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// EMITIR PAGO
+// ════════════════════════════════════════════════════════════
+async function emitirPago() {
+    const provId = document.getElementById('proveedor_id').value;
+    const fecha  = document.getElementById('fechaPago').value;
+
+    if (!provId) { Swal.fire('Error', 'Seleccioná un proveedor', 'warning'); return; }
+    if (!fecha)  { Swal.fire('Error', 'Fecha obligatoria', 'warning'); return; }
+
+    const imputaciones = facturas.filter(f => f.checked && f.monto_a_pagar > 0).map(f => ({
+        factura_id: f.id,
+        monto: parseFloat(f.monto_a_pagar),
+    }));
+
+    if (!medios.length) {
+        Swal.fire('Error', 'Cargá al menos un medio de pago', 'warning'); return;
+    }
+
+    // Validar cada medio tiene lo que necesita
+    for (const m of medios) {
+        if (!m.monto || m.monto <= 0) {
+            Swal.fire('Error', `Un medio ${m.tipo} no tiene monto válido`, 'warning'); return;
+        }
+        if (m.tipo === 'transferencia' && !m.banco_destino) {
+            Swal.fire('Error', 'Transferencia sin banco destino', 'warning'); return;
+        }
+        if (m.tipo === 'cheque_propio_nuevo') {
+            if (!m.banco || !m.numero || !m.fecha_emision) {
+                Swal.fire('Error', 'Cheque propio nuevo: faltan datos obligatorios (banco, número, fecha emisión)', 'warning'); return;
+            }
+        }
+        if ((m.tipo === 'cheque_propio_existente' || m.tipo === 'cheque_tercero_existente') && !m.cheque_id) {
+            Swal.fire('Error', 'Seleccioná el cheque de la lista', 'warning'); return;
+        }
+        if (m.tipo === 'saldo_a_favor') {
+            const disp = parseFloat(proveedorActual?.saldo_a_favor || 0);
+            if (parseFloat(m.monto) > disp + 0.005) {
+                Swal.fire('Error', `Querés usar $${m.monto} de saldo a favor pero solo hay $${disp.toFixed(2)} disponible`, 'warning');
+                return;
+            }
+        }
+    }
+
+    const totImp = imputaciones.reduce((s,i) => s + i.monto, 0);
+    const totMed = medios.reduce((s,m) => s + parseFloat(m.monto || 0), 0);
+    const aCuenta = Math.max(0, totMed - totImp);
+
+    // Validación: o imputás algo, o pagás a cuenta
+    if (totImp <= 0 && aCuenta <= 0) {
+        Swal.fire('Error', 'Tenés que imputar facturas o cargar medios para un pago a cuenta', 'warning'); return;
+    }
+    // Medios deben ser >= imputaciones
+    if (totMed + 0.005 < totImp) {
+        Swal.fire('Error', `Los medios ($${fmt(totMed)}) son menores que lo imputado ($${fmt(totImp)})`, 'warning'); return;
+    }
+
+    // Confirmación
+    let detalleHtml = '';
+    if (imputaciones.length > 0) {
+        detalleHtml += `<p><strong>Facturas imputadas:</strong> ${imputaciones.length} (${fmt(totImp)})</p>`;
+    }
+    if (aCuenta > 0) {
+        detalleHtml += `<p class="text-info"><strong>Pago a cuenta:</strong> ${fmt(aCuenta)}</p>`;
+    }
+
+    const conf = await Swal.fire({
+        title: '¿Emitir pago?',
+        html: `
+            <div class="text-start">
+                <p><strong>Proveedor:</strong> ${proveedorActual.razon_social}</p>
+                <p><strong>Fecha:</strong> ${fecha}</p>
+                ${detalleHtml}
+                <p><strong>Medios de pago:</strong> ${medios.length}</p>
+                <p class="fs-4 text-success"><strong>TOTAL: ${fmt(totMed)}</strong></p>
+            </div>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, emitir',
+        cancelButtonText: 'No',
+        confirmButtonColor: '#198754',
+    });
+    if (!conf.isConfirmed) return;
+
+    // Armar medios para backend (limpio, solo los campos necesarios)
+    const mediosBackend = medios.map(m => {
+        const base = { tipo: m.tipo, monto: parseFloat(m.monto) };
+        if (m.tipo === 'transferencia')            return {...base, banco_destino: m.banco_destino, cbu_destino: m.cbu_destino};
+        if (m.tipo === 'cheque_propio_nuevo')      return {...base, banco: m.banco, cuenta: m.cuenta, numero: m.numero,
+                                                           fecha_emision: m.fecha_emision, fecha_vencimiento: m.fecha_vencimiento};
+        if (m.tipo === 'cheque_propio_existente') return {...base, cheque_id: parseInt(m.cheque_id)};
+        if (m.tipo === 'cheque_tercero_existente') return {...base, cheque_id: parseInt(m.cheque_id)};
+        return base;
+    });
+
+    const payload = {
+        proveedor_id: parseInt(provId),
+        fecha: fecha,
+        punto_venta_recibo: parseInt(document.getElementById('puntoVentaRecibo').value || 1),
+        observaciones: document.getElementById('observaciones').value.trim(),
+        imputaciones: imputaciones,
+        medios: mediosBackend,
+    };
+
+    Swal.fire({ title: 'Emitiendo pago...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
+    const res = await fetch('/api/pagar_proveedor', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    Swal.close();
+
+    if (!data.success) {
+        Swal.fire('Error', data.error || 'No se pudo emitir el pago', 'error');
+        return;
+    }
+
+    // Modal de éxito
+    document.getElementById('resRecibo').textContent = data.numero_recibo_completo;
+    document.getElementById('resTotal').textContent  = fmt(data.total);
+    document.getElementById('resSaldo').textContent  = fmt(data.saldo_proveedor_actualizado);
+    document.getElementById('btnDescargarPdf').href  = '/api/pago_proveedor/' + data.pago_id + '/recibo_pdf';
+    if (!modalResultado) modalResultado = new bootstrap.Modal(document.getElementById('modalResultado'));
+    modalResultado.show();
+}
+
+function limpiarPantalla() {
+    document.getElementById('proveedorBusqueda').value = '';
+    document.getElementById('proveedor_id').value = '';
+    document.getElementById('observaciones').value = '';
+    document.getElementById('fechaPago').valueAsDate = new Date();
+    facturas = [];
+    medios = [];
+    proveedorActual = null;
+    ocultarProveedorInfo();
+    renderMedios();
+    document.getElementById('provSelectedInfo').innerHTML = 'Escribí el nombre del proveedor y seleccionalo de la lista.';
+    document.getElementById('provSelectedInfo').className = 'form-text';
+    // Recargar cheques disponibles (cambiaron estados)
+    cargarChequesDisponibles();
+}
+
+// ════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════
+(async function init() {
+    await cargarProveedores();
+    await cargarChequesDisponibles();
+
+    // Si la URL trae ?proveedor_id=X (opcionalmente &factura_id=Y), preseleccionar
+    const urlParams = new URLSearchParams(window.location.search);
+    const preProvId    = urlParams.get('proveedor_id');
+    const preFacturaId = urlParams.get('factura_id');
+    if (preProvId) {
+        const p = proveedoresCache.find(x => x.id == preProvId);
+        if (p) {
+            // Marcar proveedor en la UI
+            document.getElementById('proveedorBusqueda').value = p.razon_social;
+            document.getElementById('proveedor_id').value = p.id;
+            const info = document.getElementById('provSelectedInfo');
+            info.innerHTML = `<i class="fas fa-check-circle text-success"></i> Proveedor: <strong>${p.razon_social}</strong> (ID ${p.id})`;
+            info.className = 'form-text text-success';
+            // Cargar facturas (con factura pre-tildada si vino)
+            await cargarFacturas(p.id, preFacturaId);
+        }
+    }
+})();
+</script>
+{% endblock %}

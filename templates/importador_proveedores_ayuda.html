@@ -1,0 +1,244 @@
+<!-- Modal Ayuda - Importador de Proveedores -->
+<div class="modal fade" id="modalAyudaImportadorProveedores" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-truck"></i> Importar Proveedores — Manual completo
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+
+                <div class="bg-light p-3 border-bottom">
+                    <strong><i class="fas fa-list"></i> Índice:</strong>
+                    <small class="ms-2">
+                        1. ¿Para qué sirve? · 2. Backup · 3. Cómo exportar · 4. Opciones de carga · 5. Columnas reconocidas · 6. Duplicados · 7. Validaciones · 8. Errores comunes · 9. Después · 10. Soporte
+                    </small>
+                </div>
+
+                <div class="accordion" id="accImpProv">
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#prov_c1">
+                                <i class="fas fa-info-circle text-info me-2"></i> <strong>1. ¿Para qué sirve esta pantalla?</strong>
+                            </button>
+                        </h2>
+                        <div id="prov_c1" class="accordion-collapse collapse show" data-bs-parent="#accImpProv">
+                            <div class="accordion-body">
+                                <p>Cargar masivamente <strong>proveedores</strong> desde Excel/CSV. Casos típicos:</p>
+                                <ul class="mb-0">
+                                    <li><strong>Migración inicial</strong>: cargar la lista completa de proveedores del comercio al instalar el sistema.</li>
+                                    <li><strong>Lista nueva</strong> que te pasó el contador o un colaborador.</li>
+                                    <li><strong>Replicar proveedores</strong> entre sucursales o sistemas paralelos.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prov_c2">
+                                <i class="fas fa-shield-alt text-danger me-2"></i> <strong>2. Antes de empezar — Backup</strong>
+                            </button>
+                        </h2>
+                        <div id="prov_c2" class="accordion-collapse collapse" data-bs-parent="#accImpProv">
+                            <div class="accordion-body">
+                                <div class="alert alert-danger">
+                                    <strong><i class="fas fa-exclamation-triangle"></i> Hacé backup de la BD antes de importar masivamente.</strong>
+                                </div>
+                                <p class="mb-0">Probá primero con 5-10 proveedores. Si todo bien, repetís con el archivo completo.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prov_c3">
+                                <i class="fas fa-file-export text-success me-2"></i> <strong>3. Cómo exportar proveedores del sistema viejo</strong>
+                            </button>
+                        </h2>
+                        <div id="prov_c3" class="accordion-collapse collapse" data-bs-parent="#accImpProv">
+                            <div class="accordion-body">
+                                <div class="card mb-2"><div class="card-body small">
+                                    <strong>Tango</strong> → Listados → Maestro de Proveedores → Exportar a Excel.
+                                </div></div>
+                                <div class="card mb-2"><div class="card-body small">
+                                    <strong>Bejerman</strong> → Tablas → Proveedores → Imprimir → Excel/CSV.
+                                </div></div>
+                                <div class="card mb-0"><div class="card-body small">
+                                    <strong>Excel propio</strong> con razón social, CUIT, teléfono, etc. Anda perfecto si la primera fila tiene los headers.
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prov_c4">
+                                <i class="fas fa-route text-primary me-2"></i> <strong>4. Dos opciones para cargar el archivo</strong>
+                            </button>
+                        </h2>
+                        <div id="prov_c4" class="accordion-collapse collapse" data-bs-parent="#accImpProv">
+                            <div class="accordion-body">
+                                <h6><span class="badge bg-success">OPCIÓN A</span> Subir el Excel tal cual</h6>
+                                <p class="ms-4 small">El detector reconoce las columnas. Si no acierta todo, lo corregís en el paso 2.</p>
+
+                                <h6><span class="badge bg-info">OPCIÓN B</span> Descargar la plantilla y completarla</h6>
+                                <p class="ms-4 small mb-0">Botón "Descargar Plantilla" arriba a la derecha. Te da un Excel con las columnas listas. Detección al 100%.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prov_c5">
+                                <i class="fas fa-columns text-info me-2"></i> <strong>5. Columnas que el sistema reconoce</strong>
+                            </button>
+                        </h2>
+                        <div id="prov_c5" class="accordion-collapse collapse" data-bs-parent="#accImpProv">
+                            <div class="accordion-body">
+                                <table class="table table-sm">
+                                    <thead class="table-light">
+                                        <tr><th>Campo</th><th>Obligatorio</th><th>Sinónimos reconocidos</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td><strong>Razón Social</strong></td><td><span class="badge bg-danger">Sí</span></td><td class="small">razón social, nombre, proveedor, denominación</td></tr>
+                                        <tr><td><strong>CUIT</strong></td><td>No</td><td class="small">cuit, c.u.i.t., documento, doc</td></tr>
+                                        <tr><td><strong>Condición IVA</strong></td><td>No</td><td class="small">condición iva, cond iva, iva, situación iva</td></tr>
+                                        <tr><td><strong>Dirección</strong></td><td>No</td><td class="small">dirección, domicilio, calle</td></tr>
+                                        <tr><td><strong>Teléfono</strong></td><td>No</td><td class="small">teléfono, tel, celular, móvil, whatsapp</td></tr>
+                                        <tr><td><strong>Email</strong></td><td>No</td><td class="small">email, e-mail, mail, correo</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="alert alert-info small mb-0">
+                                    <i class="fas fa-lightbulb"></i> Si tu Excel tiene columnas con nombres raros, en el paso 2 las mapeás manualmente.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prov_c6">
+                                <i class="fas fa-clone text-warning me-2"></i> <strong>6. Cómo se manejan los duplicados</strong>
+                            </button>
+                        </h2>
+                        <div id="prov_c6" class="accordion-collapse collapse" data-bs-parent="#accImpProv">
+                            <div class="accordion-body">
+                                <p>El sistema <strong>NO sobrescribe</strong> proveedores existentes:</p>
+                                <ul>
+                                    <li>Si en el Excel viene un <strong>CUIT que ya existe</strong> en tu BD → la fila se saltea.</li>
+                                    <li>Si el proveedor <strong>no tiene CUIT</strong>, se compara por <strong>razón social exacta</strong> (case-insensitive).</li>
+                                    <li>Las filas saltadas figuran en el reporte final con su número.</li>
+                                </ul>
+                                <div class="alert alert-info small mb-0">
+                                    <i class="fas fa-lightbulb"></i> <strong>¿Necesitás actualizar datos de proveedores existentes?</strong>
+                                    El importador solo crea nuevos. Para actualizar masivamente, contactanos.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prov_c7">
+                                <i class="fas fa-check-double text-success me-2"></i> <strong>7. Validaciones del sistema</strong>
+                            </button>
+                        </h2>
+                        <div id="prov_c7" class="accordion-collapse collapse" data-bs-parent="#accImpProv">
+                            <div class="accordion-body">
+                                <h6>CUIT:</h6>
+                                <ul>
+                                    <li>Si tiene 11 dígitos verifica el dígito verificador. Si está mal, se carga igual con advertencia.</li>
+                                    <li>Limpia automáticamente guiones, puntos y espacios.</li>
+                                </ul>
+                                <h6>Email:</h6>
+                                <ul>
+                                    <li>Verifica que tenga @ y dominio con punto. Si está mal, se carga con advertencia.</li>
+                                </ul>
+                                <h6>Condición IVA:</h6>
+                                <ul class="mb-0">
+                                    <li>Acepta variantes y las normaliza (RI → Responsable Inscripto, MT → Monotributista, etc.).</li>
+                                    <li>Si está vacía, asigna <strong>Responsable Inscripto</strong> por default (es lo más común para proveedores).</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prov_c8">
+                                <i class="fas fa-exclamation-triangle text-danger me-2"></i> <strong>8. Errores comunes</strong>
+                            </button>
+                        </h2>
+                        <div id="prov_c8" class="accordion-collapse collapse" data-bs-parent="#accImpProv">
+                            <div class="accordion-body">
+                                <div class="card mb-2"><div class="card-header py-2 bg-light">
+                                    <strong>❓ "Falta razón social" en muchas filas</strong>
+                                </div><div class="card-body small">
+                                    El detector mapeó mal la columna principal. Andá al paso 2 y verificá. A veces lo confunde con la columna de contacto.
+                                </div></div>
+
+                                <div class="card mb-2"><div class="card-header py-2 bg-light">
+                                    <strong>❓ Casi todos los CUITs tienen advertencia</strong>
+                                </div><div class="card-body small">
+                                    Probablemente el Excel tiene los CUITs con formato raro. Abrí el Excel, formato → texto en esa columna y verificá.
+                                </div></div>
+
+                                <div class="card mb-0"><div class="card-header py-2 bg-light">
+                                    <strong>❓ Todos quedaron como "Responsable Inscripto"</strong>
+                                </div><div class="card-body small">
+                                    Es el default cuando la columna Condición IVA no se mapeó o sus valores no se reconocieron. Andá al paso 2 y verificá.
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prov_c9">
+                                <i class="fas fa-check-circle text-success me-2"></i> <strong>9. Después de importar</strong>
+                            </button>
+                        </h2>
+                        <div id="prov_c9" class="accordion-collapse collapse" data-bs-parent="#accImpProv">
+                            <div class="accordion-body">
+                                <ol class="mb-0">
+                                    <li><strong>Revisá el reporte final</strong>: importados, duplicados, errores.</li>
+                                    <li><strong>Andá al ABM de Proveedores</strong> y verificá. Buscá uno por nombre o CUIT.</li>
+                                    <li><strong>Probá registrar una compra</strong> de prueba con un proveedor importado.</li>
+                                    <li>Una vez con los proveedores cargados, podés importar los <strong>saldos iniciales</strong> desde la pantalla "Saldos Iniciales".</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prov_c10">
+                                <i class="fas fa-headset text-primary me-2"></i> <strong>10. Soporte</strong>
+                            </button>
+                        </h2>
+                        <div id="prov_c10" class="accordion-collapse collapse" data-bs-parent="#accImpProv">
+                            <div class="accordion-body">
+                                <div class="card"><div class="card-body">
+                                    <p class="mb-1"><strong>Pablo Ré</strong> — Desarrollador</p>
+                                    <p class="mb-1"><i class="fas fa-envelope"></i> pablogustavore@gmail.com</p>
+                                    <p class="mb-1"><i class="fab fa-whatsapp text-success"></i> +54 9 3364 537093</p>
+                                    <p class="mb-0"><i class="fas fa-globe"></i> pablore.com.ar</p>
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

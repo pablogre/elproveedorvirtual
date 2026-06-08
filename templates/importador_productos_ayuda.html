@@ -1,0 +1,366 @@
+<!-- Modal Ayuda - Importador de Productos -->
+<div class="modal fade" id="modalAyudaImportadorProductos" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-box"></i> Importar Productos — Manual completo
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+
+                <div class="bg-light p-3 border-bottom">
+                    <strong><i class="fas fa-list"></i> Índice:</strong>
+                    <small class="ms-2">
+                        1. ¿Para qué sirve? · 2. Backup · 3. Cómo exportar · 4. Costo y margen · 5. Las 5 listas de precios · 6. Categorías · 7. Pesables y código de barras · 8. Columnas reconocidas · 9. Duplicados · 10. Validaciones · 11. Errores comunes · 12. Soporte
+                    </small>
+                </div>
+
+                <div class="accordion" id="accImpProd">
+
+                    <!-- 1. PARA QUE SIRVE -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#prod_c1">
+                                <i class="fas fa-info-circle text-info me-2"></i> <strong>1. ¿Para qué sirve esta pantalla?</strong>
+                            </button>
+                        </h2>
+                        <div id="prod_c1" class="accordion-collapse collapse show" data-bs-parent="#accImpProd">
+                            <div class="accordion-body">
+                                <p>Cargar masivamente productos al sistema desde Excel/CSV. Casos de uso típicos:</p>
+                                <ul class="mb-0">
+                                    <li><strong>Migración inicial</strong> al instalar el sistema (cargar los 500-2000 productos del comercio).</li>
+                                    <li><strong>Lista nueva del proveedor</strong>: el proveedor te manda Excel con su catálogo y precios actualizados.</li>
+                                    <li><strong>Carga de stock inicial</strong> al hacer un inventario.</li>
+                                    <li><strong>Productos de temporada</strong> que se cargan en bloque (campañas, navidad, vuelta al cole).</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. BACKUP -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prod_c2">
+                                <i class="fas fa-shield-alt text-danger me-2"></i> <strong>2. Antes de empezar — Backup</strong>
+                            </button>
+                        </h2>
+                        <div id="prod_c2" class="accordion-collapse collapse" data-bs-parent="#accImpProd">
+                            <div class="accordion-body">
+                                <div class="alert alert-danger">
+                                    <strong><i class="fas fa-exclamation-triangle"></i> Hacé backup antes de importar masivamente.</strong>
+                                </div>
+                                <p class="mb-0">Probá primero con 10-20 productos. Si todo sale bien, repetís con el archivo completo. Una vez cargados, si algo está mal podemos borrarlos masivamente con un SQL — pero es mejor evitarlo.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. COMO EXPORTAR -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prod_c3">
+                                <i class="fas fa-file-export text-success me-2"></i> <strong>3. Cómo exportar productos del sistema viejo</strong>
+                            </button>
+                        </h2>
+                        <div id="prod_c3" class="accordion-collapse collapse" data-bs-parent="#accImpProd">
+                            <div class="accordion-body">
+                                <div class="card mb-2"><div class="card-body small">
+                                    <strong>Tango</strong> → Listados → Maestro de Artículos → Exportar a Excel.
+                                </div></div>
+                                <div class="card mb-2"><div class="card-body small">
+                                    <strong>Bejerman</strong> → Tablas → Artículos → Imprimir → Excel/CSV.
+                                </div></div>
+                                <div class="card mb-2"><div class="card-body small">
+                                    <strong>Excel propio del proveedor</strong>: muchos proveedores te pasan listas en Excel con código, descripción y precio. Andan perfecto.
+                                </div></div>
+                                <div class="card mb-0"><div class="card-body small">
+                                    <strong>PDF de catálogo</strong>: si solo tenés un PDF, contactanos. Se puede extraer con OCR pero requiere preparación previa.
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. COSTO Y MARGEN -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prod_c4">
+                                <i class="fas fa-percentage text-warning me-2"></i> <strong>4. Costo y margen — IMPORTANTE</strong>
+                            </button>
+                        </h2>
+                        <div id="prod_c4" class="accordion-collapse collapse" data-bs-parent="#accImpProd">
+                            <div class="accordion-body">
+                                <div class="alert alert-info">
+                                    <strong><i class="fas fa-info-circle"></i> Concepto clave:</strong>
+                                    En este sistema, el <strong>costo se carga SIN IVA</strong> (neto). Es la <strong>base</strong> que usa el sistema para calcular los precios de las 5 listas mediante el margen.
+                                    <br><br>
+                                    <strong>Fórmula:</strong> <code>Precio Lista N = Costo × (1 + Margen N / 100)</code>
+                                    <br>
+                                    El IVA se aplica recién al momento de facturar (no está incluido en el costo ni en los precios de lista).
+                                </div>
+
+                                <h6>Caso A: el Excel SÍ trae costo</h6>
+                                <p>El sistema usa el costo del Excel y <strong>calcula automáticamente el margen real</strong> a partir del precio (lista 1) y ese costo. Ejemplo:</p>
+                                <ul>
+                                    <li>Excel trae: precio = $12.622,58, costo = $10.518,82</li>
+                                    <li>Sistema guarda: costo = $10.518,82, margen = 20% (calculado: (12622.58 - 10518.82) / 10518.82 × 100)</li>
+                                </ul>
+
+                                <h6>Caso B: el Excel NO trae costo</h6>
+                                <p>El sistema usa el <strong>"Margen default a aplicar"</strong> (lo configurás en la pantalla de importación, default 30%) y calcula el costo <strong>hacia atrás</strong>. Ejemplo:</p>
+                                <ul>
+                                    <li>Excel trae: precio = $12.622,58 (sin costo)</li>
+                                    <li>Margen default ingresado: 20%</li>
+                                    <li>Sistema guarda: costo = $10.518,82 (calculado: 12622.58 / 1.20), margen = 20%</li>
+                                </ul>
+
+                                <div class="alert alert-warning small mb-0">
+                                    <i class="fas fa-lightbulb"></i> <strong>Recomendación:</strong>
+                                    si tu proveedor te pasa lista con precios netos y costo neto, podés importar directo. Si tu Excel viene con precios o costos <strong>con IVA incluido</strong>, primero dividilos por 1.21 antes de importar (o por 1.105 si son productos al 10.5%). Si querés ayuda con esa conversión avisanos, lo hacemos en una columna nueva del Excel y queda listo.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 5. LAS 5 LISTAS DE PRECIOS -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prod_c5">
+                                <i class="fas fa-list-ol text-primary me-2"></i> <strong>5. Las 5 listas de precios</strong>
+                            </button>
+                        </h2>
+                        <div id="prod_c5" class="accordion-collapse collapse" data-bs-parent="#accImpProd">
+                            <div class="accordion-body">
+                                <p>El sistema soporta <strong>hasta 5 precios distintos</strong> por producto (típicamente: minorista, mayorista, distribuidor, mayorista grande, especial). Cada cliente está asignado a una lista, y al facturarle se usa el precio de esa lista.</p>
+
+                                <h6>En el Excel podés tener:</h6>
+                                <ul>
+                                    <li>Solo una columna "Precio" → va a Lista 1. Las otras 4 listas quedan vacías. Lo más común.</li>
+                                    <li>Cinco columnas "Precio 1", "Precio 2", "Precio 3", "Precio 4", "Precio 5" → se mapean directo a las 5 listas.</li>
+                                    <li>Variantes: "Precio Lista 1", "P1", "Lista 1" — todas se reconocen.</li>
+                                </ul>
+
+                                <h6>Después de importar:</h6>
+                                <p>Si solo cargaste lista 1, podés <strong>generar las otras listas con un margen</strong> desde el ABM de productos (botón "Recalcular precios por margen"). O completarlas a mano producto por producto.</p>
+
+                                <div class="alert alert-info small mb-0">
+                                    <i class="fas fa-lightbulb"></i> <strong>Recordá:</strong> los 5 precios se cargan <strong>sin IVA</strong> (igual que el costo). El IVA se aplica recién al facturar, según la alícuota del producto (21% por default).
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 6. CATEGORIAS -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prod_c6">
+                                <i class="fas fa-tags text-info me-2"></i> <strong>6. Categorías — cómo se manejan</strong>
+                            </button>
+                        </h2>
+                        <div id="prod_c6" class="accordion-collapse collapse" data-bs-parent="#accImpProd">
+                            <div class="accordion-body">
+                                <p>La categoría es <strong>texto libre</strong> en el modelo (no es FK a otra tabla). Esto significa que:</p>
+                                <ul>
+                                    <li>Podés cargar cualquier texto como categoría: "Almacén", "Bebidas Sin Alcohol", "Limpieza", etc.</li>
+                                    <li>Si la categoría <strong>no existe</strong>, se "crea" automáticamente al asignársela al producto.</li>
+                                    <li>Si una categoría se escribe distinto en filas distintas (ej: "Bebidas" vs. "BEBIDAS" vs. "Bebida"), el sistema las trata como categorías distintas.</li>
+                                </ul>
+                                <div class="alert alert-warning small mb-0">
+                                    <i class="fas fa-lightbulb"></i> <strong>Tip:</strong> antes de importar, abrí el Excel y unificá la columna Categoría (sacá variaciones de mayúsculas, plurales, etc.). Eso te ahorra dolores de cabeza después.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 7. PESABLES Y CODIGO DE BARRAS -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prod_c7">
+                                <i class="fas fa-balance-scale text-secondary me-2"></i> <strong>7. Productos pesables y código de barras</strong>
+                            </button>
+                        </h2>
+                        <div id="prod_c7" class="accordion-collapse collapse" data-bs-parent="#accImpProd">
+                            <div class="accordion-body">
+                                <h6>Pesables (carnicería, fiambrería, verdulería)</h6>
+                                <p>Si tenés productos que se venden por peso, agregá una columna <strong>"Pesable"</strong> al Excel con valores S/N (también acepta Si/No, 1/0, true/false). Los marcados como pesables se procesan distinto en la facturación (el sistema pide el peso al venderlos).</p>
+
+                                <h6>Código de barras</h6>
+                                <p>Columna opcional. Aceptamos cualquier formato (EAN-13, código interno de 5 dígitos para balanza, etc.). El sistema NO valida el dígito verificador del EAN — lo carga tal cual viene.</p>
+
+                                <h6>Stock mínimo</h6>
+                                <p class="mb-0">Si querés cargar el umbral de stock mínimo (para que el sistema te alerte cuando bajás de ese valor), agregá la columna "Stock Mínimo". Si no, queda en 0.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 8. COLUMNAS RECONOCIDAS -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prod_c8">
+                                <i class="fas fa-columns text-info me-2"></i> <strong>8. Columnas que el sistema reconoce</strong>
+                            </button>
+                        </h2>
+                        <div id="prod_c8" class="accordion-collapse collapse" data-bs-parent="#accImpProd">
+                            <div class="accordion-body">
+                                <table class="table table-sm">
+                                    <thead class="table-light">
+                                        <tr><th>Campo</th><th>Obligatorio</th><th>Sinónimos reconocidos</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td><strong>Código</strong></td><td><span class="badge bg-danger">Sí</span></td><td class="small">codigo, code, cod, sku, codigo articulo</td></tr>
+                                        <tr><td><strong>Nombre</strong></td><td><span class="badge bg-danger">Sí</span></td><td class="small">nombre, descripcion, producto, articulo, detalle</td></tr>
+                                        <tr><td><strong>Precio (Lista 1)</strong></td><td><span class="badge bg-danger">Sí</span></td><td class="small">precio, precio venta, precio 1, precio publico</td></tr>
+                                        <tr><td><strong>Precio Lista 2-5</strong></td><td>No</td><td class="small">precio 2/3/4/5, p2/p3/p4/p5, lista 2/3/4/5</td></tr>
+                                        <tr><td><strong>Costo</strong></td><td>No</td><td class="small">costo, precio costo, costo final</td></tr>
+                                        <tr><td><strong>Stock</strong></td><td>No</td><td class="small">stock, cantidad, existencia, inventario</td></tr>
+                                        <tr><td><strong>IVA %</strong></td><td>No</td><td class="small">iva, alicuota, alicuota iva, iva %</td></tr>
+                                        <tr><td><strong>Categoría</strong></td><td>No</td><td class="small">categoria, rubro, familia, grupo</td></tr>
+                                        <tr><td><strong>Cód. Barras</strong></td><td>No</td><td class="small">codigo barras, ean, barcode, cb</td></tr>
+                                        <tr><td><strong>Stock Mín.</strong></td><td>No</td><td class="small">stock minimo, min, minimo</td></tr>
+                                        <tr><td><strong>Pesable</strong></td><td>No</td><td class="small">pesable, balanza, por peso</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="alert alert-info small mb-0">
+                                    <i class="fas fa-lightbulb"></i> Si tu Excel tiene columnas con nombres raros, en el paso 2 las mapeás manualmente con los dropdowns.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 9. DUPLICADOS -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prod_c9">
+                                <i class="fas fa-clone text-warning me-2"></i> <strong>9. ¿Cómo se manejan los duplicados?</strong>
+                            </button>
+                        </h2>
+                        <div id="prod_c9" class="accordion-collapse collapse" data-bs-parent="#accImpProd">
+                            <div class="accordion-body">
+                                <p>El sistema identifica los duplicados <strong>por código</strong>:</p>
+                                <ul>
+                                    <li>Si el código ya existe en la BD → la fila se saltea.</li>
+                                    <li>Las filas saltadas figuran en el reporte final con su número de fila y código.</li>
+                                </ul>
+
+                                <div class="alert alert-info small mb-0">
+                                    <i class="fas fa-lightbulb"></i> <strong>¿Querés actualizar precios masivamente?</strong>
+                                    El importador actual solo crea productos nuevos. Para actualizar precios de productos existentes (típico cuando el proveedor te manda lista nueva), tenemos que armar un módulo aparte. Contactanos.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 10. VALIDACIONES -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prod_c10">
+                                <i class="fas fa-check-double text-success me-2"></i> <strong>10. Validaciones que hace el sistema</strong>
+                            </button>
+                        </h2>
+                        <div id="prod_c10" class="accordion-collapse collapse" data-bs-parent="#accImpProd">
+                            <div class="accordion-body">
+                                <h6>Código:</h6>
+                                <ul>
+                                    <li>Obligatorio. Hasta 50 caracteres. Debe ser único.</li>
+                                </ul>
+
+                                <h6>Nombre:</h6>
+                                <ul>
+                                    <li>Obligatorio. Hasta 200 caracteres.</li>
+                                </ul>
+
+                                <h6>Precios y costo:</h6>
+                                <ul>
+                                    <li>Acepta números con coma o punto decimal ("1.234,56" → 1234.56). Acepta símbolo $ y se ignora.</li>
+                                    <li>Si el precio (lista 1) está vacío o es 0 → fila descartada.</li>
+                                    <li>Los precios 2-5 son opcionales.</li>
+                                </ul>
+
+                                <h6>IVA:</h6>
+                                <ul>
+                                    <li>Acepta valores entre 0 y 50 (porcentaje).</li>
+                                    <li>Si está vacío o fuera de rango, se asigna <strong>21%</strong> por default.</li>
+                                </ul>
+
+                                <h6>Stock:</h6>
+                                <ul class="mb-0">
+                                    <li>Acepta decimales (para pesables: 1.500 kg).</li>
+                                    <li>Si está vacío, se asigna 0.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 11. ERRORES COMUNES -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prod_c11">
+                                <i class="fas fa-exclamation-triangle text-danger me-2"></i> <strong>11. Errores comunes específicos de Productos</strong>
+                            </button>
+                        </h2>
+                        <div id="prod_c11" class="accordion-collapse collapse" data-bs-parent="#accImpProd">
+                            <div class="accordion-body">
+
+                                <div class="card mb-2"><div class="card-header py-2 bg-light">
+                                    <strong>❓ "Falta código" en muchas filas</strong>
+                                </div><div class="card-body small">
+                                    El detector mapeó mal la columna Código. Andá al paso 2 y verificá. A veces lo confunde con el código de barras o con el nombre.
+                                </div></div>
+
+                                <div class="card mb-2"><div class="card-header py-2 bg-light">
+                                    <strong>❓ "Precio inválido"</strong>
+                                </div><div class="card-body small">
+                                    La columna Precio tiene valores no numéricos (texto, vacío, "consultar", etc.). Limpiá el Excel: solo números o vacío. El sistema acepta formato argentino "1.234,56" sin problema.
+                                </div></div>
+
+                                <div class="card mb-2"><div class="card-header py-2 bg-light">
+                                    <strong>❓ Importé pero los precios no son correctos</strong>
+                                </div><div class="card-body small">
+                                    Verificá si tu Excel viene con precios <strong>con IVA incluido</strong> o <strong>sin IVA (netos)</strong>. El sistema espera precios <strong>SIN IVA</strong> (netos), igual que el costo. Si tu Excel viene con IVA incluido, dividí los precios por 1.21 antes de importar (o por 1.105 para productos al 10.5%).
+                                </div></div>
+
+                                <div class="card mb-2"><div class="card-header py-2 bg-light">
+                                    <strong>❓ Todos los márgenes quedaron iguales (default)</strong>
+                                </div><div class="card-body small">
+                                    El Excel no traía costo, así que el sistema usó el margen default. Si querés márgenes reales, agregá la columna "Costo" al Excel y volvé a importar (después de borrar los importados anteriores).
+                                </div></div>
+
+                                <div class="card mb-0"><div class="card-header py-2 bg-light">
+                                    <strong>❓ Las categorías quedaron desprolijas</strong>
+                                </div><div class="card-body small">
+                                    Las categorías se cargan tal cual vienen en el Excel. Si tenés "BEBIDAS" y "Bebidas" como categorías distintas, hay que ir al ABM y unificar. La próxima vez, antes de importar, unificá la columna en el Excel.
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 12. SOPORTE -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#prod_c12">
+                                <i class="fas fa-headset text-primary me-2"></i> <strong>12. Soporte</strong>
+                            </button>
+                        </h2>
+                        <div id="prod_c12" class="accordion-collapse collapse" data-bs-parent="#accImpProd">
+                            <div class="accordion-body">
+                                <p>Si tenés un Excel rebelde o un caso especial, mandalo y lo revisamos:</p>
+                                <div class="card"><div class="card-body">
+                                    <p class="mb-1"><strong>Pablo Ré</strong> — Desarrollador</p>
+                                    <p class="mb-1"><i class="fas fa-envelope"></i> pablogustavore@gmail.com</p>
+                                    <p class="mb-1"><i class="fab fa-whatsapp text-success"></i> +54 9 3364 537093</p>
+                                    <p class="mb-0"><i class="fas fa-globe"></i> pablore.com.ar</p>
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

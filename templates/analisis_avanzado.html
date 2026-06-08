@@ -1,0 +1,408 @@
+{% extends 'base.html' %}
+{% block title %}Análisis Avanzado{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-4">
+    <h2><i class="fas fa-brain me-2"></i>Análisis Avanzado de Ventas</h2>
+    <div>
+        <button class="btn btn-outline-info me-2" data-bs-toggle="modal" data-bs-target="#modalAyuda">
+            <i class="fas fa-question-circle me-1"></i> Ayuda
+        </button>
+        <button class="btn btn-outline-dark" onclick="window.print()">
+            <i class="fas fa-print me-1"></i> Imprimir
+        </button>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-3" id="tabsAnalisis">
+    <li class="nav-item"><a class="nav-link active" href="#" onclick="mostrarTab('diaSemana')"><i class="fas fa-calendar-week me-1"></i> Día de Semana</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="mostrarTab('sinMovimiento')"><i class="fas fa-box-open me-1"></i> Sin Movimiento</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="mostrarTab('comprobantes')"><i class="fas fa-file-invoice me-1"></i> Por Comprobante</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="mostrarTab('ticketTendencia')"><i class="fas fa-chart-line me-1"></i> Ticket Promedio</a></li>
+</ul>
+
+<div id="tab-diaSemana">
+    <div class="card mb-3"><div class="card-body"><div class="row g-2 align-items-end">
+        <div class="col-md-2"><label class="form-label small fw-bold">Desde</label><input type="date" id="ds_desde" class="form-control form-control-sm"></div>
+        <div class="col-md-2"><label class="form-label small fw-bold">Hasta</label><input type="date" id="ds_hasta" class="form-control form-control-sm"></div>
+        <div class="col-md-2"><button class="btn btn-primary btn-sm w-100" onclick="cargarDiaSemana()"><i class="fas fa-search me-1"></i> Consultar</button></div>
+    </div></div></div>
+    <div id="resultado-diaSemana"><p class="text-muted text-center py-4">Seleccione un período y consulte</p></div>
+</div>
+
+<div id="tab-sinMovimiento" style="display:none">
+    <div class="card mb-3"><div class="card-body"><div class="row g-2 align-items-end">
+        <div class="col-md-2"><label class="form-label small fw-bold">Sin ventas en los últimos</label>
+            <select id="sm_dias" class="form-select form-select-sm">
+                <option value="15">15 días</option><option value="30" selected>30 días</option>
+                <option value="60">60 días</option><option value="90">90 días</option>
+            </select></div>
+        <div class="col-md-3"><label class="form-label small fw-bold">Categoría</label>
+            <select id="sm_categoria" class="form-select form-select-sm">
+                <option value="">Todas</option>
+                {% for cat in categorias %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}
+            </select></div>
+        <div class="col-md-2"><button class="btn btn-primary btn-sm w-100" onclick="cargarSinMovimiento()"><i class="fas fa-search me-1"></i> Consultar</button></div>
+    </div></div></div>
+    <div id="resultado-sinMovimiento"><p class="text-muted text-center py-4">Seleccione el período y consulte</p></div>
+</div>
+
+<div id="tab-comprobantes" style="display:none">
+    <div class="card mb-3"><div class="card-body"><div class="row g-2 align-items-end">
+        <div class="col-md-2"><label class="form-label small fw-bold">Desde</label><input type="date" id="cp_desde" class="form-control form-control-sm"></div>
+        <div class="col-md-2"><label class="form-label small fw-bold">Hasta</label><input type="date" id="cp_hasta" class="form-control form-control-sm"></div>
+        <div class="col-md-2"><button class="btn btn-primary btn-sm w-100" onclick="cargarComprobantes()"><i class="fas fa-search me-1"></i> Consultar</button></div>
+    </div></div></div>
+    <div id="resultado-comprobantes"><p class="text-muted text-center py-4">Seleccione un período y consulte</p></div>
+</div>
+
+<div id="tab-ticketTendencia" style="display:none">
+    <div class="card mb-3"><div class="card-body"><div class="row g-2 align-items-end">
+        <div class="col-md-2"><label class="form-label small fw-bold">Año</label>
+            <select id="tt_ano" class="form-select form-select-sm">
+                {% for y in range(2023, 2027) %}<option value="{{ y }}" {% if y == 2025 %}selected{% endif %}>{{ y }}</option>{% endfor %}
+            </select></div>
+        <div class="col-md-2"><button class="btn btn-primary btn-sm w-100" onclick="cargarTicketTendencia()"><i class="fas fa-search me-1"></i> Consultar</button></div>
+    </div></div></div>
+    <div id="resultado-ticketTendencia"><p class="text-muted text-center py-4">Seleccione el año y consulte</p></div>
+</div>
+
+<!-- ═══ MODAL AYUDA ═══ -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Guía — Análisis Avanzado de Ventas</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-4">
+                    <h6 class="fw-bold text-primary border-bottom pb-2"><i class="fas fa-calendar-week me-2"></i>Día de Semana</h6>
+                    <p class="mb-2">Muestra cuánto se vendió en cada día de la semana dentro del período seleccionado.</p>
+                    <ul class="mb-2">
+                        <li>Seleccioná <strong>Desde</strong> y <strong>Hasta</strong> y presioná <strong>Consultar</strong>.</li>
+                        <li>La barra verde indica el <strong>mejor día de ventas</strong> del período.</li>
+                        <li>La columna <strong>Participación</strong> muestra el porcentaje de ese día sobre el total.</li>
+                    </ul>
+                    <div class="alert alert-light py-2 mb-0">💡 <strong>Tip:</strong> Usalo para decidir en qué días reforzar personal o hacer promociones.</div>
+                </div>
+                <div class="mb-4">
+                    <h6 class="fw-bold text-warning border-bottom pb-2"><i class="fas fa-box-open me-2"></i>Sin Movimiento</h6>
+                    <p class="mb-2">Lista los productos activos que <strong>no tuvieron ninguna venta</strong> en el período indicado.</p>
+                    <ul class="mb-2">
+                        <li>Elegí el período: <strong>15, 30, 60 o 90 días</strong>.</li>
+                        <li>Podés filtrar por <strong>categoría</strong> para analizar por rubro.</li>
+                        <li>El stock en <span class="text-warning fw-bold">amarillo</span> significa que hay mercadería parada.</li>
+                        <li>El stock en <span class="text-danger fw-bold">rojo</span> significa stock en cero.</li>
+                    </ul>
+                    <div class="alert alert-light py-2 mb-0">💡 <strong>Tip:</strong> Productos con stock alto y sin movimiento son candidatos a promoción o descuento.</div>
+                </div>
+                <div class="mb-4">
+                    <h6 class="fw-bold text-success border-bottom pb-2"><i class="fas fa-file-invoice me-2"></i>Por Comprobante</h6>
+                    <p class="mb-2">Desglosa las ventas según el tipo de factura emitida (A, B, C) en el período.</p>
+                    <ul class="mb-2">
+                        <li><span class="badge bg-primary">Factura A</span> — Ventas a Responsables Inscriptos.</li>
+                        <li><span class="badge bg-success">Factura B</span> — Ventas a Consumidores Finales / Monotributistas.</li>
+                        <li><span class="badge bg-warning text-dark">Factura C</span> — Emitida por Monotributistas.</li>
+                        <li>La columna <strong>% del Total</strong> indica la participación de cada tipo sobre el total facturado.</li>
+                    </ul>
+                    <div class="alert alert-light py-2 mb-0">💡 <strong>Tip:</strong> Si el porcentaje de Factura A es alto, tu negocio vende principalmente a empresas.</div>
+                </div>
+                <div class="mb-4">
+                    <h6 class="fw-bold text-info border-bottom pb-2"><i class="fas fa-chart-line me-2"></i>Ticket Promedio (Tendencia)</h6>
+                    <p class="mb-2">Muestra la evolución mes a mes del ticket promedio durante el año elegido.</p>
+                    <ul class="mb-2">
+                        <li>Seleccioná el <strong>año</strong> y presioná <strong>Consultar</strong>.</li>
+                        <li>La columna <strong>vs Promedio</strong> indica si ese mes estuvo por encima (<span class="text-success">▲</span>) o por debajo (<span class="text-danger">▼</span>) del promedio anual.</li>
+                        <li>El mes <span class="badge bg-success">MAX</span> es el de mayor ticket promedio del año.</li>
+                    </ul>
+                    <div class="alert alert-light py-2 mb-0">💡 <strong>Tip:</strong> Si el ticket promedio baja mes a mes, los clientes están comprando menos por visita.</div>
+                </div>
+                <div class="mb-4">
+                    <h6 class="fw-bold text-success border-bottom pb-2"><i class="fas fa-chart-line me-2"></i>Evolución del Margen Mensual</h6>
+                    <p class="mb-2">Muestra cómo evolucionó el <strong>margen de ganancia %</strong> y la <strong>ganancia en pesos</strong> mes a mes.</p>
+                    <ul class="mb-2">
+                        <li>Elegí el período: <strong>6, 12 o 24 meses</strong> hacia atrás desde hoy.</li>
+                        <li>La línea verde (eje izquierdo) muestra el <strong>margen %</strong>.</li>
+                        <li>La línea azul punteada (eje derecho) muestra la <strong>ganancia en pesos</strong>.</li>
+                    </ul>
+                    <div class="alert alert-light py-2 mb-0">💡 <strong>Tip:</strong> Solo se calculan productos con costo cargado. Si el margen parece bajo, verificá los costos en ABM de Productos.</div>
+                </div>
+                <div class="mb-4">
+                    <h6 class="fw-bold text-warning border-bottom pb-2"><i class="fas fa-trophy me-2"></i>Ranking de Clientes</h6>
+                    <p class="mb-2">Muestra los clientes que más compraron en el período, ordenados por total facturado.</p>
+                    <ul class="mb-2">
+                        <li>Filtrá por <strong>Desde / Hasta</strong> y elegí cuántos clientes mostrar (Top 10, 15 o 20).</li>
+                        <li>🥇🥈🥉 marcan los tres mejores clientes del período.</li>
+                        <li>Consumidor Final genérico no aparece en el ranking.</li>
+                    </ul>
+                    <div class="alert alert-light py-2 mb-0">💡 <strong>Tip:</strong> Usalo para identificar tus clientes clave y diseñar estrategias de fidelización.</div>
+                </div>
+                <div class="mb-4">
+                    <h6 class="fw-bold text-info border-bottom pb-2"><i class="fas fa-tags me-2"></i>Ventas por Lista de Precio</h6>
+                    <p class="mb-2">Muestra cuánto se vendió en cada lista de precios (Minorista, Mayorista, Distribuidor, etc.).</p>
+                    <ul class="mb-2">
+                        <li>El gráfico de torta muestra la <strong>participación %</strong> de cada lista sobre el total.</li>
+                        <li>La tabla detalla: cantidad de facturas, clientes distintos, total facturado y % del total.</li>
+                    </ul>
+                    <div class="alert alert-light py-2 mb-0">💡 <strong>Tip:</strong> Si Lista 2 crece, el canal mayorista está ganando peso.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ EVOLUCIÓN DEL MARGEN ═══ -->
+<div class="card mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-chart-line me-2 text-success"></i>Evolución del Margen Mensual</h5>
+        <div class="d-flex gap-2 align-items-center">
+            <select id="em_meses" class="form-select form-select-sm" style="width:auto">
+                <option value="6">Últimos 6 meses</option>
+                <option value="12" selected>Últimos 12 meses</option>
+                <option value="24">Últimos 24 meses</option>
+            </select>
+            <button class="btn btn-sm btn-primary" onclick="cargarEvolucionMargen()">Actualizar</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <canvas id="em_chart" height="100"></canvas>
+        <div id="em_tabla" class="mt-3"></div>
+    </div>
+</div>
+
+<!-- ═══ RANKING DE CLIENTES ═══ -->
+<div class="card mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-trophy me-2 text-warning"></i>Ranking de Clientes por Facturación</h5>
+        <div class="d-flex gap-2 align-items-center">
+            <input type="date" id="rk_desde" class="form-control form-control-sm" style="width:auto">
+            <input type="date" id="rk_hasta" class="form-control form-control-sm" style="width:auto">
+            <select id="rk_limit" class="form-select form-select-sm" style="width:auto">
+                <option value="10">Top 10</option><option value="15" selected>Top 15</option><option value="20">Top 20</option>
+            </select>
+            <button class="btn btn-sm btn-primary" onclick="cargarRankingClientes()">Consultar</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <canvas id="rk_chart" height="120"></canvas>
+        <div id="rk_tabla" class="mt-3"></div>
+    </div>
+</div>
+
+<!-- ═══ VENTAS POR LISTA ═══ -->
+<div class="card mt-4 mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-tags me-2 text-info"></i>Ventas por Lista de Precio</h5>
+        <div class="d-flex gap-2 align-items-center">
+            <input type="date" id="vl_desde" class="form-control form-control-sm" style="width:auto">
+            <input type="date" id="vl_hasta" class="form-control form-control-sm" style="width:auto">
+            <button class="btn btn-sm btn-primary" onclick="cargarVentasPorLista()">Consultar</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-5"><canvas id="vl_chart" height="200"></canvas></div>
+            <div class="col-md-7"><div id="vl_tabla"></div></div>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print { nav, .btn, .nav-tabs { display:none !important; } }
+.barra-dia { height: 22px; border-radius: 4px; background: #0d6efd; transition: width .4s; }
+.barra-dia.top { background: #198754; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+function fmt(v) { return '$' + parseFloat(v||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function pct(v) { return parseFloat(v||0).toFixed(1) + '%'; }
+function setFechasMesActual(desdeId, hastaId) {
+    const hoy = new Date();
+    const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    document.getElementById(desdeId).value = desde.toISOString().split('T')[0];
+    document.getElementById(hastaId).value = hoy.toISOString().split('T')[0];
+}
+function mostrarTab(nombre) {
+    ['diaSemana','sinMovimiento','comprobantes','ticketTendencia'].forEach(t => {
+        document.getElementById('tab-' + t).style.display = t === nombre ? '' : 'none';
+    });
+    document.querySelectorAll('#tabsAnalisis .nav-link').forEach(a => {
+        a.classList.toggle('active', a.textContent.trim().includes(
+            {diaSemana:'Día', sinMovimiento:'Sin', comprobantes:'Comprob', ticketTendencia:'Ticket'}[nombre]
+        ));
+    });
+}
+async function cargarDiaSemana() {
+    const desde = document.getElementById('ds_desde').value;
+    const hasta = document.getElementById('ds_hasta').value;
+    if (!desde || !hasta) { alertSwal('Seleccione el período', 'info'); return; }
+    const res = await fetch(`/api/ventas_por_dia_semana?desde=${desde}&hasta=${hasta}`);
+    const data = await res.json();
+    const el = document.getElementById('resultado-diaSemana');
+    if (!data.success) { el.innerHTML = `<div class="alert alert-danger">${data.error}</div>`; return; }
+    const dias = data.dias;
+    const maxT = Math.max(...dias.map(d => d.total));
+    const iMax = dias.findIndex(d => d.total === maxT);
+    let html = `<div class="card"><div class="card-body p-0"><table class="table table-hover table-sm mb-0"><thead class="table-dark"><tr><th>Día</th><th class="text-end">Tickets</th><th class="text-end">Total</th><th class="text-end">Ticket Prom.</th><th style="width:30%">Participación</th></tr></thead><tbody>`;
+    dias.forEach((d, i) => {
+        const esTop = i === iMax;
+        html += `<tr class="${esTop ? 'table-success' : ''}"><td><strong>${d.dia}</strong>${esTop ? ' <span class="badge bg-success">🏆 Mejor día</span>' : ''}</td><td class="text-end">${d.cantidad}</td><td class="text-end fw-bold">${fmt(d.total)}</td><td class="text-end">${fmt(d.promedio)}</td><td><div class="d-flex align-items-center gap-2"><div style="flex:1"><div class="barra-dia ${esTop?'top':''}" style="width:${d.porcentaje}%"></div></div><small class="text-muted">${pct(d.porcentaje)}</small></div></td></tr>`;
+    });
+    html += `</tbody><tfoot class="table-secondary fw-bold"><tr><td>TOTAL</td><td class="text-end">${dias.reduce((a,d)=>a+d.cantidad,0)}</td><td class="text-end">${fmt(dias.reduce((a,d)=>a+d.total,0))}</td><td></td><td></td></tr></tfoot></table></div></div>`;
+    el.innerHTML = html;
+}
+async function cargarSinMovimiento() {
+    const dias = document.getElementById('sm_dias').value;
+    const cat = document.getElementById('sm_categoria').value;
+    const el = document.getElementById('resultado-sinMovimiento');
+    el.innerHTML = '<p class="text-muted text-center py-3"><i class="fas fa-spinner fa-spin me-2"></i>Buscando...</p>';
+    let url = `/api/productos_sin_movimiento?dias=${dias}`;
+    if (cat) url += `&categoria=${encodeURIComponent(cat)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.success) { el.innerHTML = `<div class="alert alert-danger">${data.error}</div>`; return; }
+    const prods = data.productos;
+    if (!prods.length) { el.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>¡Todos los productos tuvieron movimiento en los últimos ${dias} días!</div>`; return; }
+    let html = `<div class="alert alert-warning mb-3"><i class="fas fa-exclamation-triangle me-2"></i><strong>${prods.length} productos</strong> sin ventas en los últimos <strong>${dias} días</strong></div><div class="card"><div class="card-body p-0"><table class="table table-hover table-sm mb-0"><thead class="table-dark"><tr><th>Código</th><th>Producto</th><th>Categoría</th><th class="text-end">Stock</th><th class="text-end">Precio</th></tr></thead><tbody>`;
+    prods.forEach(p => { html += `<tr><td class="text-muted">${p.codigo}</td><td><strong>${p.nombre}</strong></td><td><span class="badge bg-secondary">${p.categoria}</span></td><td class="text-end ${p.stock > 0 ? 'text-warning' : 'text-danger'} fw-bold">${parseFloat(p.stock).toLocaleString('es-AR')}</td><td class="text-end">${fmt(p.precio)}</td></tr>`; });
+    html += `</tbody></table></div></div>`;
+    el.innerHTML = html;
+}
+async function cargarComprobantes() {
+    const desde = document.getElementById('cp_desde').value;
+    const hasta = document.getElementById('cp_hasta').value;
+    if (!desde || !hasta) { alertSwal('Seleccione el período', 'info'); return; }
+    const res = await fetch(`/api/ventas_por_comprobante?desde=${desde}&hasta=${hasta}`);
+    const data = await res.json();
+    const el = document.getElementById('resultado-comprobantes');
+    if (!data.success) { el.innerHTML = `<div class="alert alert-danger">${data.error}</div>`; return; }
+    const tipos = data.tipos;
+    const colores = { 1:'primary', 6:'success', 11:'warning', 3:'danger', 8:'danger', 13:'danger' };
+    let html = `<div class="row g-3 mb-3">`;
+    tipos.forEach(t => { const col = colores[t.tipo] || 'secondary'; html += `<div class="col-md-4"><div class="card border-0 bg-light text-center py-3"><div class="small text-muted">${t.nombre}</div><div class="fw-bold fs-5 text-${col}">${fmt(t.total)}</div><div class="small text-muted">${t.cantidad} tickets · ${pct(t.porcentaje)}</div></div></div>`; });
+    html += `</div><div class="card"><div class="card-body p-0"><table class="table table-hover table-sm mb-0"><thead class="table-dark"><tr><th>Tipo</th><th class="text-end">Cantidad</th><th class="text-end">Total</th><th class="text-end">Ticket Prom.</th><th class="text-end">% del Total</th></tr></thead><tbody>`;
+    tipos.forEach(t => { const col = colores[t.tipo] || 'secondary'; html += `<tr><td><span class="badge bg-${col}">${t.nombre}</span></td><td class="text-end">${t.cantidad}</td><td class="text-end fw-bold">${fmt(t.total)}</td><td class="text-end">${fmt(t.promedio)}</td><td class="text-end">${pct(t.porcentaje)}</td></tr>`; });
+    html += `<tr class="table-secondary fw-bold"><td>TOTAL</td><td class="text-end">${tipos.reduce((a,t)=>a+t.cantidad,0)}</td><td class="text-end">${fmt(data.total_general)}</td><td></td><td class="text-end">100%</td></tr></tbody></table></div></div>`;
+    el.innerHTML = html;
+}
+async function cargarTicketTendencia() {
+    const ano = document.getElementById('tt_ano').value;
+    const res = await fetch(`/api/ticket_promedio_tendencia?ano=${ano}`);
+    const data = await res.json();
+    const el = document.getElementById('resultado-ticketTendencia');
+    if (!data.success) { el.innerHTML = `<div class="alert alert-danger">${data.error}</div>`; return; }
+    const meses = data.meses;
+    const maxProm = Math.max(...meses.map(m => m.promedio));
+    let html = `<div class="alert alert-info mb-3"><i class="fas fa-info-circle me-2"></i>Ticket promedio anual <strong>${ano}</strong>: <strong>${fmt(data.promedio_anual)}</strong></div><div class="card"><div class="card-body p-0"><table class="table table-hover table-sm mb-0"><thead class="table-dark"><tr><th>Mes</th><th class="text-end">Tickets</th><th class="text-end">Total</th><th class="text-end">Prom. Ticket</th><th class="text-end">Máximo</th><th class="text-end">Mínimo</th><th style="width:20%">vs Promedio</th></tr></thead><tbody>`;
+    meses.forEach(m => {
+        if (!m.cantidad) { html += `<tr class="text-muted"><td>${m.nombre_largo}</td><td colspan="6" class="text-center small">Sin datos</td></tr>`; return; }
+        const diff = m.promedio - data.promedio_anual;
+        const diffPct = data.promedio_anual > 0 ? ((diff / data.promedio_anual) * 100).toFixed(1) : 0;
+        const esMax = m.promedio === maxProm;
+        const color = diff > 0 ? 'text-success' : diff < 0 ? 'text-danger' : '';
+        const icon = diff > 0 ? '▲' : diff < 0 ? '▼' : '─';
+        html += `<tr class="${esMax ? 'table-success' : ''}"><td><strong>${m.nombre_largo}</strong>${esMax ? ' <span class="badge bg-success">MAX</span>' : ''}</td><td class="text-end">${m.cantidad}</td><td class="text-end">${fmt(m.total)}</td><td class="text-end fw-bold">${fmt(m.promedio)}</td><td class="text-end text-success">${fmt(m.maximo)}</td><td class="text-end text-danger">${fmt(m.minimo)}</td><td class="text-end ${color}">${icon} ${Math.abs(diffPct)}%</td></tr>`;
+    });
+    html += `</tbody></table></div></div>`;
+    el.innerHTML = html;
+}
+
+let emChart = null;
+async function cargarEvolucionMargen() {
+    const meses = document.getElementById('em_meses').value;
+    const res = await fetch(`/api/evolucion_margen?meses=${meses}`);
+    const data = await res.json();
+    if (!data.success) return;
+    const d = data.datos;
+    const labels = d.map(x => x.label);
+    const margenes = d.map(x => x.margen);
+    const ganancias = d.map(x => x.ganancia);
+    if (emChart) emChart.destroy();
+    emChart = new Chart(document.getElementById('em_chart'), {
+        type: 'line',
+        data: { labels, datasets: [
+            { label: 'Margen %', data: margenes, borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.1)', fill: true, yAxisID: 'y1', tension: 0.3 },
+            { label: 'Ganancia $', data: ganancias, borderColor: '#0d6efd', backgroundColor: 'transparent', yAxisID: 'y2', tension: 0.3, borderDash: [5,5] }
+        ]},
+        options: { responsive: true, interaction: { mode: 'index' }, scales: {
+            y1: { type: 'linear', position: 'left', title: { display: true, text: 'Margen %' }, ticks: { callback: v => v + '%' } },
+            y2: { type: 'linear', position: 'right', title: { display: true, text: 'Ganancia $' }, grid: { drawOnChartArea: false }, ticks: { callback: v => '$' + v.toLocaleString('es-AR') } }
+        }}
+    });
+    const max = Math.max(...margenes), min = Math.min(...margenes);
+    document.getElementById('em_tabla').innerHTML = `<div class="d-flex gap-3 flex-wrap">
+        <span class="badge bg-success fs-6">Mejor margen: ${max.toFixed(1)}% (${d[margenes.indexOf(max)]?.label})</span>
+        <span class="badge bg-danger fs-6">Menor margen: ${min.toFixed(1)}% (${d[margenes.indexOf(min)]?.label})</span>
+        <span class="badge bg-primary fs-6">Promedio: ${(margenes.reduce((a,b)=>a+b,0)/margenes.length).toFixed(1)}%</span></div>`;
+}
+
+let rkChart = null;
+async function cargarRankingClientes() {
+    const desde = document.getElementById('rk_desde').value;
+    const hasta = document.getElementById('rk_hasta').value;
+    const limit = document.getElementById('rk_limit').value;
+    let url = `/api/ranking_clientes?limit=${limit}`;
+    if (desde) url += `&desde=${desde}`;
+    if (hasta) url += `&hasta=${hasta}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.success) return;
+    const clientes = data.clientes;
+    const labels = clientes.map(c => c.nombre.length > 20 ? c.nombre.substring(0,20)+'...' : c.nombre);
+    const totales = clientes.map(c => c.total);
+    if (rkChart) rkChart.destroy();
+    rkChart = new Chart(document.getElementById('rk_chart'), {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Total facturado', data: totales, backgroundColor: totales.map((_,i) => i===0?'#ffc107':i===1?'#adb5bd':i===2?'#cd7f32':'#0d6efd') }] },
+        options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { callback: v => '$' + v.toLocaleString('es-AR') } } } }
+    });
+    document.getElementById('rk_tabla').innerHTML = `<table class="table table-sm table-hover mt-2"><thead class="table-dark"><tr><th>#</th><th>Cliente</th><th class="text-end">Facturas</th><th class="text-end">Total</th><th class="text-end">Ticket prom.</th></tr></thead><tbody>${clientes.map((c,i) => `<tr><td>${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td><td>${c.nombre}</td><td class="text-end">${c.facturas}</td><td class="text-end fw-bold">${fmt(c.total)}</td><td class="text-end text-muted">${fmt(c.ticket_promedio)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+let vlChart = null;
+async function cargarVentasPorLista() {
+    const desde = document.getElementById('vl_desde').value;
+    const hasta = document.getElementById('vl_hasta').value;
+    let url = '/api/ventas_por_lista';
+    const params = [];
+    if (desde) params.push(`desde=${desde}`);
+    if (hasta) params.push(`hasta=${hasta}`);
+    if (params.length) url += '?' + params.join('&');
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.success) return;
+    const listas = data.listas;
+    if (vlChart) vlChart.destroy();
+    vlChart = new Chart(document.getElementById('vl_chart'), {
+        type: 'doughnut',
+        data: { labels: listas.map(l => l.nombre), datasets: [{ data: listas.map(l => l.total), backgroundColor: listas.map(l => l.color) }] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: ctx => ` $${ctx.raw.toLocaleString('es-AR', {minimumFractionDigits:2})}` } } } }
+    });
+    const totalGeneral = listas.reduce((s,l) => s+l.total, 0);
+    document.getElementById('vl_tabla').innerHTML = `<table class="table table-sm table-hover"><thead class="table-dark"><tr><th>Lista</th><th class="text-end">Facturas</th><th class="text-end">Clientes</th><th class="text-end">Total</th><th class="text-end">% del total</th></tr></thead><tbody>${listas.map(l => `<tr><td><span class="badge" style="background:${l.color}">${l.nombre}</span></td><td class="text-end">${l.facturas}</td><td class="text-end">${l.clientes}</td><td class="text-end fw-bold">${fmt(l.total)}</td><td class="text-end">${totalGeneral > 0 ? (l.total/totalGeneral*100).toFixed(1) : 0}%</td></tr>`).join('')}</tbody></table>`;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    setFechasMesActual('ds_desde','ds_hasta');
+    setFechasMesActual('cp_desde','cp_hasta');
+    const ano = new Date().getFullYear();
+    const sel = document.getElementById('tt_ano');
+    if (sel) [...sel.options].forEach(o => { if (parseInt(o.value) === ano) o.selected = true; });
+    const hoy = new Date();
+    const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0];
+    const hasta = hoy.toISOString().split('T')[0];
+    ['rk_desde','vl_desde'].forEach(id => { const el=document.getElementById(id); if(el) el.value=desde; });
+    ['rk_hasta','vl_hasta'].forEach(id => { const el=document.getElementById(id); if(el) el.value=hasta; });
+    cargarEvolucionMargen();
+    cargarRankingClientes();
+    cargarVentasPorLista();
+});
+</script>
+{% endblock %}

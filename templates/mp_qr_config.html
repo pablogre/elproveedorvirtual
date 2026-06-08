@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}MercadoPago QR — Configuración{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex align-items-center mb-4">
+    <i class="fab fa-cc-mastercard fa-2x text-primary me-3"></i>
+    <div>
+      <h3 class="mb-0">MercadoPago QR</h3>
+      <small class="text-muted">Cobrá con QR dinámico desde el POS y conciliá automático</small>
+    </div>
+  </div>
+
+  <!-- Estado actual -->
+  {% if cfg %}
+    <div class="alert alert-success d-flex align-items-center">
+      <i class="fas fa-check-circle fa-2x me-3"></i>
+      <div>
+        <strong>MercadoPago está configurado</strong><br>
+        <small>
+          Cuenta MP: <code>{{ cfg.user_id_mp or '—' }}</code> ·
+          Ambiente: <strong>{{ cfg.ambiente }}</strong> ·
+          Timeout: {{ cfg.timeout_segundos }} s
+        </small>
+      </div>
+      <button class="btn btn-outline-success ms-auto" onclick="testCredenciales()">
+        <i class="fas fa-flask"></i> Probar credenciales
+      </button>
+    </div>
+  {% else %}
+    <div class="alert alert-warning d-flex align-items-center">
+      <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
+      <div>
+        <strong>Todavía no configurado</strong><br>
+        <small>Conseguí tu access_token en
+          <a href="https://www.mercadopago.com.ar/developers/panel/app" target="_blank">
+            mercadopago.com.ar/developers
+          </a> y pegalo abajo.
+        </small>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Form de credenciales -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5 class="mb-0"><i class="fas fa-key"></i> Credenciales</h5>
+    </div>
+    <div class="card-body">
+      <form id="formMpConfig">
+        <div class="row g-3">
+          <div class="col-md-12">
+            <label class="form-label">Access Token <span class="text-danger">*</span></label>
+            <input type="text" class="form-control font-monospace" id="access_token"
+                   placeholder="APP_USR-..." required>
+            <small class="text-muted">
+              Lo encontrás en MP → Tu Aplicación → Credenciales de producción → "Access token"
+            </small>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Public Key (opcional)</label>
+            <input type="text" class="form-control font-monospace" id="public_key"
+                   placeholder="APP_USR-...">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Ambiente</label>
+            <select class="form-select" id="ambiente">
+              <option value="prod" {% if cfg and cfg.ambiente == 'prod' %}selected{% endif %}>Producción</option>
+              <option value="sandbox" {% if cfg and cfg.ambiente == 'sandbox' %}selected{% endif %}>Sandbox</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Timeout (seg)</label>
+            <input type="number" class="form-control" id="timeout_segundos"
+                   value="{{ cfg.timeout_segundos if cfg else 300 }}" min="60" max="900">
+          </div>
+        </div>
+        <hr>
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-save"></i> Guardar y validar
+        </button>
+        <a href="/mp/pagos" class="btn btn-outline-secondary">
+          <i class="fas fa-list"></i> Ver historial de pagos QR
+        </a>
+      </form>
+    </div>
+  </div>
+
+  <!-- Cómo funciona -->
+  <div class="card border-info">
+    <div class="card-header bg-info text-white">
+      <h6 class="mb-0"><i class="fas fa-info-circle"></i> Cómo funciona</h6>
+    </div>
+    <div class="card-body">
+      <ol class="mb-0">
+        <li>En el cobro, el cajero elige <strong>"QR MercadoPago"</strong>.</li>
+        <li>El sistema muestra un <strong>QR dinámico</strong> con el monto exacto.</li>
+        <li>El cliente lo escanea con <strong>Mercado Pago, Cuenta DNI, Naranja X, Ualá, Brubank</strong> o cualquier billetera con QR interoperable (BCRA Transferencias 3.0).</li>
+        <li>El cliente paga. El POS detecta el pago en 1–2 segundos y cierra la venta automático.</li>
+        <li>El cobro queda registrado con su <code>payment_id</code> para conciliación contra tu reporte MP.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('formMpConfig').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const fd = new FormData();
+  fd.append('access_token', document.getElementById('access_token').value.trim());
+  fd.append('public_key', document.getElementById('public_key').value.trim());
+  fd.append('ambiente', document.getElementById('ambiente').value);
+  fd.append('timeout_segundos', document.getElementById('timeout_segundos').value);
+
+  Swal.fire({title:'Validando credenciales con MercadoPago…', didOpen:()=>Swal.showLoading(), allowOutsideClick:false});
+
+  try {
+    const r = await fetch('/mp/config', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (data.success) {
+      await Swal.fire({icon:'success', title:'¡Listo!', html: data.mensaje, timer:2500});
+      window.location.reload();
+    } else {
+      Swal.fire({icon:'error', title:'Error', text: data.error});
+    }
+  } catch (err) {
+    Swal.fire({icon:'error', title:'Error de red', text: err.message});
+  }
+});
+
+async function testCredenciales() {
+  Swal.fire({title:'Probando…', didOpen:()=>Swal.showLoading(), allowOutsideClick:false});
+  try {
+    const r = await fetch('/mp/test_credenciales', {method:'POST'});
+    const data = await r.json();
+    if (data.success) {
+      Swal.fire({
+        icon:'success',
+        title:'Credenciales OK',
+        html:`Cuenta: <code>${data.user_id_mp}</code><br>Nickname: ${data.nickname||'—'}<br>Site: ${data.site_id||'—'}`
+      });
+    } else {
+      Swal.fire({icon:'error', title:'Error', text: data.error});
+    }
+  } catch (err) {
+    Swal.fire({icon:'error', title:'Error', text: err.message});
+  }
+}
+</script>
+{% endblock %}

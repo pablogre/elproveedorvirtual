@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+
+{% block title %}Importar Proveedores{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between flex-wrap gap-2 pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2 mb-0"><i class="fas fa-truck"></i> Importar Proveedores</h1>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#modalAyudaImportadorProveedores">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+        <a href="{{ url_for('importador.descargar_plantilla', entidad='proveedores') }}" class="btn btn-outline-success">
+            <i class="fas fa-download"></i> Descargar Plantilla
+        </a>
+        <a href="{{ url_for('importador.inicio') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+
+{% if not modulo_disponible %}
+<div class="alert alert-danger">
+    <i class="fas fa-exclamation-triangle"></i>
+    <strong>El módulo de Proveedores no está disponible en esta instalación.</strong>
+    Contactá al administrador del sistema.
+</div>
+{% else %}
+
+<div class="card mb-3" id="paso1">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="fas fa-upload"></i> Paso 1: Subí tu archivo Excel o CSV</h6>
+    </div>
+    <div class="card-body">
+        <div id="dropzone" class="border border-2 border-dashed rounded p-5 text-center"
+             style="border-color: #ccc; background: #f8f9fa; cursor: pointer; transition: all 0.2s;">
+            <i class="fas fa-cloud-upload-alt fa-4x text-primary mb-3 opacity-75"></i>
+            <h5>Arrastrá tu archivo acá o hacé click</h5>
+            <p class="text-muted mb-2">Formatos: <strong>.xlsx, .xls, .csv</strong></p>
+            <input type="file" id="archivo" class="d-none" accept=".xlsx,.xls,.csv">
+            <button type="button" class="btn btn-primary" onclick="document.getElementById('archivo').click()">
+                <i class="fas fa-folder-open"></i> Seleccionar Archivo
+            </button>
+        </div>
+        <div id="archivo_info" class="mt-3" style="display:none;">
+            <div class="alert alert-success mb-0 d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-file-excel"></i>
+                    <strong id="nombre_archivo"></strong>
+                    <span class="text-muted ms-2" id="info_archivo"></span>
+                </div>
+                <button class="btn btn-sm btn-outline-danger" onclick="resetear()">
+                    <i class="fas fa-times"></i> Cambiar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3" id="paso2" style="display:none;">
+    <div class="card-header bg-info text-white">
+        <h6 class="mb-0"><i class="fas fa-exchange-alt"></i> Paso 2: Mapeo de columnas</h6>
+    </div>
+    <div class="card-body">
+        <p class="mb-3">
+            <i class="fas fa-magic text-info"></i>
+            <strong>El sistema detectó automáticamente las columnas.</strong>
+            Revisalas y corregí lo que haga falta. Las marcadas con <span class="text-danger">*</span> son obligatorias.
+        </p>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                    <tr><th style="width: 35%">Campo del sistema</th><th style="width: 65%">Columna del Excel</th></tr>
+                </thead>
+                <tbody>
+                    {% for campo in campos %}
+                    <tr>
+                        <td><strong>{{ campo.label }}</strong>{% if campo.required %} <span class="text-danger">*</span>{% endif %}</td>
+                        <td>
+                            <select class="form-select form-select-sm" id="map_{{ campo.key }}" data-campo="{{ campo.key }}" data-required="{{ '1' if campo.required else '0' }}">
+                                <option value="">— No mapear —</option>
+                            </select>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3" id="paso3" style="display:none;">
+    <div class="card-header bg-warning">
+        <h6 class="mb-0"><i class="fas fa-eye"></i> Paso 3: Vista previa</h6>
+    </div>
+    <div class="card-body">
+        <p class="mb-2">
+            <i class="fas fa-table text-warning"></i>
+            Mostrando las <strong>primeras 10 filas</strong> de un total de
+            <strong id="total_filas">0</strong>.
+        </p>
+        <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+            <table class="table table-sm table-striped">
+                <thead class="table-dark sticky-top"><tr id="preview_headers"></tr></thead>
+                <tbody id="preview_body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3" id="paso4" style="display:none;">
+    <div class="card-header bg-success text-white">
+        <h6 class="mb-0"><i class="fas fa-check"></i> Paso 4: Confirmar e importar</h6>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle"></i>
+            Vas a importar <strong id="cantidad_a_importar">0</strong> proveedores.
+            <br>
+            <small>Los <strong>CUITs duplicados</strong> se saltearán automáticamente. Las filas con errores se descartarán.</small>
+        </div>
+        <div class="d-grid">
+            <button class="btn btn-success btn-lg" onclick="confirmarImportacion()">
+                <i class="fas fa-upload"></i> Sí, importar ahora
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3" id="resultado" style="display:none;">
+    <div class="card-header bg-dark text-white">
+        <h6 class="mb-0"><i class="fas fa-flag-checkered"></i> Resultado de la importación</h6>
+    </div>
+    <div class="card-body" id="resultado_body"></div>
+</div>
+
+{% endif %}
+
+{% include 'importador_proveedores_ayuda.html' %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if modulo_disponible %}
+<script>
+let estadoImportacion = { headers: [], mapeo: {}, sample: [], total: 0, token: null };
+const dropzone = document.getElementById('dropzone');
+const inputArchivo = document.getElementById('archivo');
+
+['dragenter', 'dragover'].forEach(ev => {
+    dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.style.background = '#e3f2fd'; dropzone.style.borderColor = '#2196F3'; });
+});
+['dragleave', 'drop'].forEach(ev => {
+    dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.style.background = '#f8f9fa'; dropzone.style.borderColor = '#ccc'; });
+});
+dropzone.addEventListener('drop', e => { if (e.dataTransfer.files.length > 0) { inputArchivo.files = e.dataTransfer.files; subirArchivo(); } });
+dropzone.addEventListener('click', e => { if (e.target === dropzone || e.target.closest('#dropzone') === dropzone) { if (e.target.tagName !== 'BUTTON') inputArchivo.click(); } });
+inputArchivo.addEventListener('change', subirArchivo);
+
+function subirArchivo() {
+    if (!inputArchivo.files.length) return;
+    const archivo = inputArchivo.files[0];
+    document.getElementById('nombre_archivo').textContent = archivo.name;
+    document.getElementById('info_archivo').textContent = `(${(archivo.size/1024).toFixed(1)} KB)`;
+    document.getElementById('archivo_info').style.display = 'block';
+
+    Swal.fire({ title: 'Procesando archivo...', html: 'Detectando columnas.', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    const fd = new FormData();
+    fd.append('archivo', archivo);
+    fetch('{{ url_for("importador.preview", entidad="proveedores") }}', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            Swal.close();
+            if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
+            estadoImportacion = { headers: d.headers, mapeo: d.mapeo, sample: d.sample, total: d.total_filas, token: d.archivo_token };
+            mostrarMapeo(); mostrarPreview(); actualizarBoton();
+            ['paso2','paso3','paso4'].forEach(id => document.getElementById(id).style.display = '');
+            document.getElementById('paso2').scrollIntoView({behavior:'smooth'});
+        })
+        .catch(err => { Swal.close(); Swal.fire('Error', String(err), 'error'); });
+}
+
+function mostrarMapeo() {
+    document.querySelectorAll('[id^="map_"]').forEach(sel => {
+        sel.innerHTML = '<option value="">— No mapear —</option>';
+        estadoImportacion.headers.forEach((h, i) => {
+            const opt = document.createElement('option');
+            opt.value = i; opt.textContent = `${i+1}. ${h}`;
+            sel.appendChild(opt);
+        });
+        const idx = estadoImportacion.mapeo[sel.dataset.campo];
+        if (idx !== null && idx !== undefined) sel.value = idx;
+        sel.addEventListener('change', () => {
+            estadoImportacion.mapeo[sel.dataset.campo] = sel.value === '' ? null : parseInt(sel.value);
+            mostrarPreview(); actualizarBoton();
+        });
+    });
+}
+
+function mostrarPreview() {
+    document.getElementById('total_filas').textContent = estadoImportacion.total;
+    const headerRow = document.getElementById('preview_headers');
+    const body = document.getElementById('preview_body');
+    headerRow.innerHTML = '<th style="width:50px;">#</th>';
+    estadoImportacion.headers.forEach((h, i) => {
+        const m = Object.entries(estadoImportacion.mapeo).find(([k, v]) => v === i);
+        const th = document.createElement('th');
+        if (m) { th.innerHTML = `${h}<br><small class="text-info">→ ${m[0]}</small>`; th.style.background = '#cfe2ff'; th.style.color = '#084298'; }
+        else { th.innerHTML = `${h}<br><small class="text-muted">(sin mapear)</small>`; }
+        headerRow.appendChild(th);
+    });
+    body.innerHTML = '';
+    estadoImportacion.sample.forEach(row => {
+        const tr = document.createElement('tr');
+        let html = `<td class="text-muted">${row.numero}</td>`;
+        row.valores.forEach(v => { html += `<td>${escapeHTML(v)}</td>`; });
+        tr.innerHTML = html;
+        body.appendChild(tr);
+    });
+}
+
+function actualizarBoton() {
+    const requeridos = document.querySelectorAll('[data-required="1"]');
+    let faltantes = [];
+    requeridos.forEach(sel => { if (!sel.value) faltantes.push(sel.dataset.campo); });
+    const btn = document.querySelector('#paso4 button');
+    document.getElementById('cantidad_a_importar').textContent = estadoImportacion.total;
+    if (faltantes.length > 0) { btn.disabled = true; btn.innerHTML = `<i class="fas fa-ban"></i> Faltan campos obligatorios`; }
+    else { btn.disabled = false; btn.innerHTML = `<i class="fas fa-upload"></i> Sí, importar ahora`; }
+}
+
+function confirmarImportacion() {
+    Swal.fire({
+        title: '¿Confirmar importación?',
+        html: `Vas a importar hasta <strong>${estadoImportacion.total}</strong> proveedores.<br>Los duplicados se saltearán.`,
+        icon: 'question', showCancelButton: true,
+        confirmButtonColor: '#198754', confirmButtonText: 'Sí, importar', cancelButtonText: 'Cancelar'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        Swal.fire({ title: 'Importando...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+        fetch('{{ url_for("importador.confirmar", entidad="proveedores") }}', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ archivo_token: estadoImportacion.token, mapeo: estadoImportacion.mapeo })
+        })
+        .then(r => r.json())
+        .then(d => {
+            Swal.close();
+            if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
+            mostrarResultado(d);
+        })
+        .catch(err => { Swal.close(); Swal.fire('Error', String(err), 'error'); });
+    });
+}
+
+function mostrarResultado(d) {
+    let html = `
+        <div class="row text-center mb-3">
+            <div class="col-md-3"><div class="card border-success"><div class="card-body">
+                <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                <h2 class="text-success">${d.importados}</h2><small>Importados</small>
+            </div></div></div>
+            <div class="col-md-3"><div class="card border-warning"><div class="card-body">
+                <i class="fas fa-clone fa-2x text-warning mb-2"></i>
+                <h2 class="text-warning">${d.duplicados.length}</h2><small>Duplicados (saltados)</small>
+            </div></div></div>
+            <div class="col-md-3"><div class="card border-danger"><div class="card-body">
+                <i class="fas fa-times-circle fa-2x text-danger mb-2"></i>
+                <h2 class="text-danger">${d.errores.length}</h2><small>Errores</small>
+            </div></div></div>
+            <div class="col-md-3"><div class="card border-info"><div class="card-body">
+                <i class="fas fa-info-circle fa-2x text-info mb-2"></i>
+                <h2 class="text-info">${d.advertencias.length}</h2><small>Advertencias</small>
+            </div></div></div>
+        </div>`;
+
+    if (d.duplicados.length > 0) {
+        html += `<details class="mb-2"><summary class="text-warning fw-bold mb-1">Ver duplicados saltados (${d.duplicados.length})</summary><ul class="small mt-2">`;
+        d.duplicados.forEach(x => { html += `<li>Fila ${x.fila}: <strong>${escapeHTML(x.nombre)}</strong> ${x.doc ? '(CUIT ' + x.doc + ')' : ''}</li>`; });
+        html += '</ul></details>';
+    }
+    if (d.errores.length > 0) {
+        html += `<details class="mb-2"><summary class="text-danger fw-bold mb-1">Ver errores (${d.errores.length})</summary><ul class="small mt-2">`;
+        d.errores.forEach(x => { html += `<li>Fila ${x.fila}: ${x.errores.map(escapeHTML).join('; ')}</li>`; });
+        html += '</ul></details>';
+    }
+    if (d.advertencias.length > 0) {
+        html += `<details class="mb-2"><summary class="text-info fw-bold mb-1">Ver advertencias (${d.advertencias.length})</summary><ul class="small mt-2">`;
+        d.advertencias.forEach(x => { html += `<li>Fila ${x.fila} (<strong>${escapeHTML(x.nombre)}</strong>): ${x.advertencias.map(escapeHTML).join('; ')}</li>`; });
+        html += '</ul></details>';
+    }
+
+    html += `<div class="d-flex gap-2 mt-3">
+        <button class="btn btn-primary" onclick="resetear()"><i class="fas fa-redo"></i> Importar otro archivo</button>
+        <a href="/proveedores" class="btn btn-success"><i class="fas fa-truck"></i> Ver Proveedores</a>
+    </div>`;
+    document.getElementById('resultado_body').innerHTML = html;
+    document.getElementById('resultado').style.display = '';
+    document.getElementById('resultado').scrollIntoView({behavior:'smooth'});
+    Swal.fire({
+        icon: d.importados > 0 ? 'success' : 'warning',
+        title: d.importados > 0 ? '¡Importación completa!' : 'Sin proveedores nuevos',
+        html: `<strong>${d.importados}</strong> proveedores importados.<br>${d.duplicados.length} duplicados, ${d.errores.length} errores.`,
+        confirmButtonText: 'Cerrar'
+    });
+}
+
+function resetear() {
+    estadoImportacion = { headers: [], mapeo: {}, sample: [], total: 0, token: null };
+    inputArchivo.value = '';
+    document.getElementById('archivo_info').style.display = 'none';
+    ['paso2','paso3','paso4','resultado'].forEach(id => document.getElementById(id).style.display = 'none');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+function escapeHTML(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+{% endif %}
+{% endblock %}

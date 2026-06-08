@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+*.pyo
+cache/
+*.exe
+*.msi
+*.tmp
+~$*
+test_*.py
+diag_*.py
+dump-*.sql
+*.xls
+*.xlsx
+listas/
+impresora/
+FactuFácil_files/
+app - copia.py
+config_cliente.py
+token_cache.json

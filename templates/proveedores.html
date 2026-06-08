@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+{% block title %}Proveedores{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-4 flex-wrap gap-2">
+    <h2><i class="fas fa-truck me-2"></i>Proveedores</h2>
+    <div>
+        <a href="/pagar_proveedor" class="btn btn-success me-2">
+            <i class="fas fa-hand-holding-dollar me-1"></i> Pagar Proveedor
+        </a>
+        <a href="/pagos_proveedores" class="btn btn-outline-success me-2">
+            <i class="fas fa-receipt me-1"></i> Pagos Emitidos
+        </a>
+        <a href="/ncs_disponibles_compra" class="btn btn-outline-success me-2">
+            <i class="fas fa-link me-1"></i> NCs Disponibles
+        </a>
+        <a href="/facturas_compra" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-file-invoice-dollar me-1"></i> Facturas de Compra
+        </a>
+        <a href="/iva_compras" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-percent me-1"></i> IVA Compras
+        </a>
+        <a href="/cheques_propios" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-money-check me-1"></i> Cheques Propios
+        </a>
+        <a href="/cheques_terceros" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-hand-holding-usd me-1"></i> Cheques Terceros
+        </a>
+        <button class="btn btn-primary" onclick="abrirModalNuevo()">
+            <i class="fas fa-plus me-1"></i> Nuevo Proveedor
+        </button>
+    </div>
+</div>
+
+<!-- Buscador -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="input-group">
+            <span class="input-group-text"><i class="fas fa-search"></i></span>
+            <input type="text" id="buscador" class="form-control" placeholder="Buscar por razón social o CUIT...">
+        </div>
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Razón Social</th>
+                    <th>CUIT</th>
+                    <th>Cond. IVA</th>
+                    <th>Teléfono</th>
+                    <th class="text-end">Saldo Cta Cte</th>
+                    <th class="text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="bodyProveedores">
+                <tr><td colspan="6" class="text-center py-4 text-muted">Cargando...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal Nuevo/Editar -->
+<div class="modal fade" id="modalProveedor" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalProvTitulo"><i class="fas fa-truck me-2"></i>Nuevo Proveedor</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="provId">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">Razón Social <span class="text-danger">*</span></label>
+                        <input type="text" id="razon_social" class="form-control" placeholder="Nombre del proveedor">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">CUIT</label>
+                        <input type="text" id="cuit" class="form-control" placeholder="20-12345678-9">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Condición IVA</label>
+                        <select id="condicion_iva" class="form-select">
+                            <option>Responsable Inscripto</option>
+                            <option>Monotributista</option>
+                            <option>Exento</option>
+                            <option>No Responsable</option>
+                            <option>Consumidor Final</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">Dirección</label>
+                        <input type="text" id="direccion" class="form-control" placeholder="Dirección">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Teléfono</label>
+                        <input type="text" id="telefono" class="form-control" placeholder="Teléfono">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold">Email</label>
+                        <input type="email" id="email" class="form-control" placeholder="email@proveedor.com">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardarProveedor()">
+                    <i class="fas fa-save me-1"></i> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const modalProv = new bootstrap.Modal(document.getElementById('modalProveedor'));
+
+function fmt(v) {
+    return '$' + parseFloat(v).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+async function cargarProveedores(q = '') {
+    const res = await fetch(`/api/proveedores?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    const lista = data.proveedores || [];
+    const tbody = document.getElementById('bodyProveedores');
+    if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">Sin resultados</td></tr>';
+        return;
+    }
+    tbody.innerHTML = lista.map(p => {
+        const saldo = parseFloat(p.saldo || 0);
+        let saldoHtml;
+        if (saldo > 0.005) {
+            saldoHtml = `<span class="text-danger">${fmt(saldo)}</span>`;
+        } else if (saldo < -0.005) {
+            saldoHtml = `<span class="text-success">${fmt(Math.abs(saldo))}<br><small class="fw-normal">a favor</small></span>`;
+        } else {
+            saldoHtml = `<span class="text-muted">${fmt(0)}</span>`;
+        }
+        return `
+        <tr>
+            <td><strong>${p.razon_social}</strong></td>
+            <td class="text-muted">${p.cuit || '-'}</td>
+            <td><span class="badge bg-secondary">${p.condicion_iva}</span></td>
+            <td>${p.telefono || '-'}</td>
+            <td class="text-end fw-bold">${saldoHtml}</td>
+            <td class="text-center">
+                <a href="/pagar_proveedor?proveedor_id=${p.id}" class="btn btn-sm btn-success me-1" title="Pagar">
+                    <i class="fas fa-hand-holding-dollar"></i>
+                </a>
+                <a href="/cta_cte_proveedor/${p.id}" class="btn btn-sm btn-outline-info me-1" title="Cuenta Corriente">
+                    <i class="fas fa-list-alt"></i>
+                </a>
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="editarProveedor(${p.id})" title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="eliminarProveedor(${p.id}, '${p.razon_social.replace(/'/g, "\\'")}')" title="Eliminar">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function abrirModalNuevo() {
+    document.getElementById('modalProvTitulo').innerHTML = '<i class="fas fa-truck me-2"></i>Nuevo Proveedor';
+    document.getElementById('provId').value = '';
+    ['razon_social','cuit','direccion','telefono','email'].forEach(f => document.getElementById(f).value = '');
+    document.getElementById('condicion_iva').value = 'Responsable Inscripto';
+    modalProv.show();
+    setTimeout(() => document.getElementById('razon_social').focus(), 300);
+}
+
+async function editarProveedor(id) {
+    const res = await fetch(`/api/proveedor/${id}`);
+    const data = await res.json();
+    const p = data.proveedor;
+    document.getElementById('modalProvTitulo').innerHTML = '<i class="fas fa-edit me-2"></i>Editar Proveedor';
+    document.getElementById('provId').value = p.id;
+    document.getElementById('razon_social').value = p.razon_social;
+    document.getElementById('cuit').value = p.cuit || '';
+    document.getElementById('condicion_iva').value = p.condicion_iva;
+    document.getElementById('direccion').value = p.direccion || '';
+    document.getElementById('telefono').value = p.telefono || '';
+    document.getElementById('email').value = p.email || '';
+    modalProv.show();
+}
+
+async function guardarProveedor() {
+    const id = document.getElementById('provId').value;
+    const payload = {
+        razon_social:  document.getElementById('razon_social').value.trim(),
+        cuit:          document.getElementById('cuit').value.trim(),
+        condicion_iva: document.getElementById('condicion_iva').value,
+        direccion:     document.getElementById('direccion').value.trim(),
+        telefono:      document.getElementById('telefono').value.trim(),
+        email:         document.getElementById('email').value.trim(),
+    };
+    if (!payload.razon_social) { Swal.fire('Error','La razón social es obligatoria','warning'); return; }
+    const url = id ? `/api/proveedor/${id}/editar` : `/api/proveedor/nuevo`;
+    const res = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (data.success) {
+        modalProv.hide();
+        Swal.fire({ icon:'success', title:'Guardado', timer:1200, timerProgressBar:true, showConfirmButton:false });
+        cargarProveedores();
+    } else {
+        Swal.fire('Error', data.error, 'error');
+    }
+}
+
+async function eliminarProveedor(id, nombre) {
+    const conf = await Swal.fire({
+        title: '¿Eliminar proveedor?',
+        text: nombre,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'No',
+        confirmButtonColor: '#dc3545',
+    });
+    if (!conf.isConfirmed) return;
+    const res = await fetch(`/api/proveedor/${id}/eliminar`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+        Swal.fire({ icon:'success', title:'Eliminado', timer:1200, timerProgressBar:true, showConfirmButton:false });
+        cargarProveedores();
+    } else {
+        Swal.fire('Error', data.error, 'error');
+    }
+}
+
+let timer;
+document.getElementById('buscador').addEventListener('input', function() {
+    clearTimeout(timer);
+    timer = setTimeout(() => cargarProveedores(this.value), 300);
+});
+
+cargarProveedores();
+</script>
+{% endblock %}

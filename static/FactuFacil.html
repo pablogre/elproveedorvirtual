@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FactuFácil · Sistema de Facturación Electrónica</title>
+
+<!-- SEO / Open Graph (para que se vea bien al compartir en IG/WhatsApp) -->
+<meta name="description" content="Sistema POS con facturación electrónica ARCA, IA para leer facturas de compra, stock, cuentas corrientes, cheques y reparto. Pensado para negocios argentinos.">
+<meta property="og:title" content="FactuFácil · Sistema POS con ARCA e IA">
+<meta property="og:description" content="Facturación electrónica, IA para cargar compras, stock, cuentas corrientes y reparto. Todo integrado.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://factufacil.ar/">
+<meta property="og:image" content="https://factufacil.ar/static/VTA_MEN.webp">
+<meta name="twitter:card" content="summary_large_image">
+
+<!-- Performance: preconnect a CDNs -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+
+<!-- Preload de la imagen del hero (LCP) -->
+<link rel="preload" as="image" href="/static/VTA_MEN.webp" fetchpriority="high">
+
+<!-- Fuentes con display=swap para que el texto sea visible ya -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- Font Awesome cargado sin bloquear el render -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+<style>
+:root {
+  --azul: #0d6efd;
+  --azul-dark: #0a58ca;
+  --azul-light: #e8f1ff;
+  --negro: #212529;
+  --gris: #6c757d;
+  --gris-claro: #f8f9fa;
+  --blanco: #ffffff;
+  --verde: #198754;
+  --borde: #dee2e6;
+  --sombra: 0 4px 24px rgba(13,110,253,0.10);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--negro);
+  background: var(--blanco);
+  overflow-x: hidden;
+}
+
+/* ── NAV ── */
+nav {
+  position: fixed; top:0; left:0; right:0; z-index:100;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--borde);
+  padding: 0 2rem;
+  height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-logo {
+  font-size: 1.5rem; font-weight: 300; text-decoration: none; color: var(--negro);
+}
+.nav-logo span { font-weight: 800; color: var(--azul); }
+.nav-links { display: flex; gap: 2rem; list-style: none; }
+.nav-links a { text-decoration: none; color: var(--gris); font-size: .9rem; font-weight: 500; transition: color .2s; }
+.nav-links a:hover { color: var(--azul); }
+.nav-cta {
+  background: var(--azul); color: #fff; padding: .5rem 1.4rem;
+  border-radius: 8px; text-decoration: none; font-size: .9rem; font-weight: 600;
+  transition: background .2s;
+}
+.nav-cta:hover { background: var(--azul-dark); }
+
+/* ── HERO ── */
+.hero {
+  padding: 120px 2rem 80px;
+  background: linear-gradient(135deg, #f0f6ff 0%, #ffffff 60%);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4rem;
+  max-width: 1200px; margin: 0 auto; align-items: center;
+}
+.hero-badge {
+  display: inline-flex; align-items: center; gap: .5rem;
+  background: var(--azul-light); color: var(--azul);
+  padding: .35rem 1rem; border-radius: 20px; font-size: .8rem; font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+.hero h1 {
+  font-size: 3.2rem; line-height: 1.15; font-weight: 300; margin-bottom: 1.2rem;
+}
+.hero h1 strong { font-weight: 800; color: var(--azul); }
+.hero p {
+  font-size: 1.1rem; color: var(--gris); line-height: 1.7; margin-bottom: 2rem;
+}
+.hero-btns { display: flex; gap: 1rem; flex-wrap: wrap; }
+.btn-primary {
+  background: var(--azul); color: #fff; padding: .8rem 2rem;
+  border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 1rem;
+  transition: all .2s; display: flex; align-items: center; gap: .5rem;
+}
+.btn-primary:hover { background: var(--azul-dark); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(13,110,253,.3); }
+.btn-outline {
+  background: transparent; color: var(--azul); padding: .8rem 2rem;
+  border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 1rem;
+  border: 2px solid var(--azul); transition: all .2s;
+}
+.btn-outline:hover { background: var(--azul-light); }
+.hero-img {
+  border-radius: 16px; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(13,110,253,.15);
+  border: 1px solid var(--borde);
+}
+.hero-img img { width: 100%; display: block; }
+
+/* ── SECCIÓN GENÉRICA ── */
+section { padding: 80px 2rem; }
+.container { max-width: 1200px; margin: 0 auto; }
+.section-label {
+  display: inline-flex; align-items: center; gap: .5rem;
+  color: var(--azul); font-weight: 600; font-size: .85rem; letter-spacing: .5px;
+  text-transform: uppercase; margin-bottom: .75rem;
+}
+.section-title { font-size: 2.2rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.2; }
+.section-sub { font-size: 1.05rem; color: var(--gris); max-width: 560px; line-height: 1.7; }
+
+/* ── STATS ── */
+.stats-band {
+  background: var(--negro); color: #fff;
+  padding: 60px 2rem;
+}
+.stats-grid {
+  max-width: 1000px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem; text-align: center;
+}
+.stat-num { font-size: 2.5rem; font-weight: 800; color: var(--azul); }
+.stat-label { font-size: .9rem; color: #adb5bd; margin-top: .25rem; }
+
+/* ── FEATURES GRID ── */
+.features { background: var(--gris-claro); }
+.features-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 3rem;
+}
+.feat-card {
+  background: #fff; border-radius: 14px; padding: 2rem;
+  border: 1px solid var(--borde); transition: all .3s;
+  display: flex; flex-direction: column; gap: .75rem;
+}
+.feat-card:hover { transform: translateY(-4px); box-shadow: var(--sombra); border-color: var(--azul); }
+.feat-icon {
+  width: 48px; height: 48px; border-radius: 12px;
+  background: var(--azul-light); color: var(--azul);
+  display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+}
+.feat-card h3 { font-size: 1.05rem; font-weight: 700; }
+.feat-card p { font-size: .9rem; color: var(--gris); line-height: 1.6; }
+
+/* ── MÓDULOS CON SCREENSHOT ── */
+.modulo {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: center;
+  margin-bottom: 5rem;
+}
+.modulo.reverse { direction: rtl; }
+.modulo.reverse > * { direction: ltr; }
+.modulo-img {
+  border-radius: 14px; overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,.12);
+  border: 1px solid var(--borde);
+}
+.modulo-img img { width: 100%; display: block; }
+.modulo-content { display: flex; flex-direction: column; gap: 1rem; }
+.modulo-content ul { list-style: none; display: flex; flex-direction: column; gap: .6rem; }
+.modulo-content ul li {
+  display: flex; align-items: flex-start; gap: .75rem;
+  font-size: .95rem; color: var(--gris); line-height: 1.5;
+}
+.modulo-content ul li i { color: var(--azul); margin-top: 2px; font-size: .9rem; }
+
+/* ── COMPRAS ── */
+.compras-cards {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 3rem;
+}
+.compras-card {
+  background: #fff; border-radius: 14px; padding: 1.75rem;
+  border: 1px solid var(--borde);
+}
+.compras-card i { font-size: 1.8rem; color: var(--azul); margin-bottom: 1rem; display: block; }
+.compras-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: .5rem; }
+.compras-card p { font-size: .875rem; color: var(--gris); line-height: 1.6; }
+
+/* ── PRICING ── */
+.pricing-section { background: var(--gris-claro); }
+.pricing-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 3rem;
+}
+.price-card {
+  background: #fff; border-radius: 16px; padding: 2rem;
+  border: 1px solid var(--borde); position: relative; overflow: hidden;
+}
+.price-card.featured {
+  border-color: var(--azul); border-width: 2px;
+  box-shadow: 0 8px 32px rgba(13,110,253,.15);
+}
+.price-badge {
+  position: absolute; top: 1rem; right: 1rem;
+  background: var(--azul); color: #fff; font-size: .75rem; font-weight: 700;
+  padding: .25rem .75rem; border-radius: 20px;
+}
+.price-name { font-size: 1.1rem; font-weight: 700; margin-bottom: .5rem; }
+.price-amount { font-size: 2.5rem; font-weight: 800; color: var(--azul); margin: .75rem 0; }
+.price-amount span { font-size: 1rem; font-weight: 400; color: var(--gris); }
+.price-features { list-style: none; margin: 1.5rem 0; display: flex; flex-direction: column; gap: .6rem; }
+.price-features li { display: flex; align-items: center; gap: .6rem; font-size: .9rem; color: var(--gris); }
+.price-features li i { color: var(--verde); font-size: .85rem; }
+
+/* ── SECCIÓN CONTADORES ── */
+.contadores-section {
+  background: linear-gradient(180deg, #f8f9fa 0%, #e8f1ff 100%);
+  padding: 100px 2rem;
+  position: relative;
+  overflow: hidden;
+}
+.contadores-container {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.contadores-intro {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+.contadores-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  background: #0a58ca;
+  color: #fff;
+  padding: .5rem 1.2rem;
+  border-radius: 20px;
+  font-size: .85rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  letter-spacing: .5px;
+}
+.contadores-intro h2 {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: #212529;
+  margin-bottom: 1rem;
+  line-height: 1.2;
+}
+.contadores-intro h2 span {
+  color: #0a58ca;
+}
+.contadores-intro p {
+  font-size: 1.05rem;
+  color: #495057;
+  max-width: 700px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+.contadores-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+.contadores-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(10, 88, 202, 0.08);
+  transition: all .3s;
+  border: 1px solid rgba(10, 88, 202, 0.1);
+}
+.contadores-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px rgba(10, 88, 202, 0.15);
+  border-color: rgba(10, 88, 202, 0.3);
+}
+.contadores-card i {
+  font-size: 2.3rem;
+  color: #0a58ca;
+  margin-bottom: 1rem;
+  display: block;
+}
+.contadores-card h4 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #212529;
+  margin-bottom: .6rem;
+}
+.contadores-card p {
+  font-size: .9rem;
+  color: #6c757d;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.contadores-cta {
+  text-align: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.contadores-cta .btn-primary {
+  background: #0a58ca;
+  color: #fff;
+  padding: 1rem 2.5rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+  transition: all .2s;
+  box-shadow: 0 6px 18px rgba(10, 88, 202, 0.3);
+}
+.contadores-cta .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(10, 88, 202, 0.4);
+  background: #084aa0;
+}
+.contadores-cta .btn-outline {
+  background: transparent;
+  color: #0a58ca;
+  padding: 1rem 2.5rem;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 1.05rem;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .6rem;
+  border: 2px solid #0a58ca;
+  transition: all .2s;
+}
+.contadores-cta .btn-outline:hover {
+  background: #0a58ca;
+  color: #fff;
+}
+
+/* ── ARCA BAND ── */
+.arca-band {
+  background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+  color: #fff; text-align: center; padding: 80px 2rem;
+}
+.arca-band h2 { font-size: 2.2rem; font-weight: 700; margin-bottom: 1rem; }
+.arca-band p { font-size: 1.05rem; opacity: .85; max-width: 600px; margin: 0 auto 2rem; line-height: 1.7; }
+.arca-pills { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 2.5rem; }
+.arca-pill {
+  background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.3);
+  color: #fff; padding: .5rem 1.2rem; border-radius: 20px; font-size: .875rem; font-weight: 500;
+}
+.btn-white {
+  background: #fff; color: var(--azul); padding: .8rem 2.5rem;
+  border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 1rem;
+  transition: all .2s; display: inline-block;
+}
+.btn-white:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+
+/* ── SECCIÓN IA (destacada) ── */
+.ai-section {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #312e81 100%);
+  color: #fff;
+  padding: 100px 2rem;
+  position: relative;
+  overflow: hidden;
+}
+.ai-section::before {
+  content: '';
+  position: absolute;
+  top: -50%; right: -20%;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+.ai-section::after {
+  content: '';
+  position: absolute;
+  bottom: -50%; left: -10%;
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.ai-wrap {
+  max-width: 1200px; margin: 0 auto;
+  position: relative; z-index: 1;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: center;
+}
+.ai-badge-ia {
+  display: inline-flex; align-items: center; gap: .5rem;
+  background: rgba(139,92,246,.18); color: #c4b5fd;
+  padding: .4rem 1.1rem; border-radius: 20px;
+  font-size: .8rem; font-weight: 700; letter-spacing: .5px;
+  border: 1px solid rgba(139,92,246,.3);
+  margin-bottom: 1.5rem; text-transform: uppercase;
+}
+.ai-section h2 {
+  font-size: 2.8rem; font-weight: 300; line-height: 1.15; margin-bottom: 1.2rem;
+}
+.ai-section h2 strong {
+  font-weight: 800;
+  background: linear-gradient(90deg, #a78bfa, #60a5fa);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.ai-section > .ai-wrap > div > p {
+  font-size: 1.1rem; line-height: 1.75; opacity: .85; margin-bottom: 1.8rem;
+}
+.ai-check-list { list-style: none; padding: 0; margin: 0 0 2rem; }
+.ai-check-list li {
+  display: flex; align-items: start; gap: .8rem;
+  padding: .6rem 0; border-bottom: 1px solid rgba(255,255,255,.08);
+  font-size: .98rem; line-height: 1.5;
+}
+.ai-check-list li:last-child { border-bottom: none; }
+.ai-check-list li i {
+  color: #a78bfa; font-size: 1.1rem; margin-top: 3px; flex-shrink: 0;
+}
+.ai-demo-card {
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 16px;
+  padding: 2rem;
+  backdrop-filter: blur(12px);
+  position: relative;
+}
+.ai-demo-card::before {
+  content: '';
+  position: absolute; inset: -1px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(167,139,250,.4), rgba(96,165,250,.2));
+  z-index: -1;
+  filter: blur(20px); opacity: .6;
+}
+.ai-flow-item {
+  display: flex; align-items: center; gap: 1rem;
+  padding: 1rem; margin-bottom: .75rem;
+  background: rgba(255,255,255,.05);
+  border-left: 3px solid #a78bfa;
+  border-radius: 8px;
+  font-size: .92rem;
+}
+.ai-flow-item:last-child { margin-bottom: 0; border-left-color: #60a5fa; }
+.ai-flow-num {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, #a78bfa, #60a5fa);
+  color: #fff; font-weight: 700;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.ai-tech-pills {
+  display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.5rem;
+}
+.ai-tech-pill {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.15);
+  color: #e2e8f0;
+  padding: .4rem 1rem;
+  border-radius: 20px;
+  font-size: .82rem;
+  font-weight: 500;
+}
+.ai-tech-pill i { color: #a78bfa; margin-right: .3rem; }
+@media (max-width: 900px) {
+  .ai-section { padding: 60px 1.5rem; }
+  .ai-wrap { grid-template-columns: 1fr; gap: 2.5rem; }
+  .ai-section h2 { font-size: 2rem; }
+}
+
+/* ── FOOTER ── */
+footer {
+  background: var(--negro); color: #adb5bd; padding: 60px 2rem 30px;
+}
+.footer-grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 3rem; margin-bottom: 3rem; }
+.footer-brand { display: flex; flex-direction: column; gap: 1rem; }
+.footer-logo { font-size: 1.6rem; font-weight: 300; color: #fff; }
+.footer-logo span { font-weight: 800; color: var(--azul); }
+.footer-brand p { font-size: .875rem; line-height: 1.7; }
+.footer-col h4 { color: #fff; font-weight: 600; margin-bottom: 1rem; font-size: .95rem; }
+.footer-col ul { list-style: none; display: flex; flex-direction: column; gap: .5rem; }
+.footer-col ul li a { color: #adb5bd; text-decoration: none; font-size: .875rem; transition: color .2s; }
+.footer-col ul li a:hover { color: var(--azul); }
+.footer-bottom { max-width: 1200px; margin: 0 auto; border-top: 1px solid #343a40; padding-top: 1.5rem; display: flex; justify-content: space-between; align-items: center; font-size: .8rem; }
+.footer-bottom a { color: var(--azul); text-decoration: none; }
+
+/* ── RESPONSIVE ── */
+.nav-hamburger {
+  display: none; flex-direction: column; gap: 5px; cursor: pointer;
+  background: none; border: none; padding: .4rem;
+}
+.nav-hamburger span {
+  display: block; width: 26px; height: 2px;
+  background: var(--negro); border-radius: 2px; transition: all .3s;
+}
+.nav-hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.nav-hamburger.open span:nth-child(2) { opacity: 0; }
+.nav-hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+@media (max-width: 768px) {
+  .hero { grid-template-columns: 1fr; padding: 100px 1.5rem 60px; gap: 2rem; }
+  .hero h1 { font-size: 2.2rem; }
+  .hero-img { display: none; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .features-grid { grid-template-columns: 1fr; }
+  .modulo, .modulo.reverse { grid-template-columns: 1fr; direction: ltr; }
+  .compras-cards, .pricing-grid { grid-template-columns: 1fr; }
+  .footer-grid { grid-template-columns: 1fr; }
+  .nav-hamburger { display: flex; }
+  .nav-cta { display: none; }
+  nav { flex-wrap: wrap; height: auto; padding: .75rem 1.5rem; gap: .5rem; }
+  .nav-links {
+    display: none; flex-direction: column; width: 100%;
+    gap: 0; list-style: none;
+    border-top: 1px solid var(--borde); padding-top: .5rem;
+  }
+  .nav-links.open { display: flex; }
+  .nav-links li a {
+    font-size: 1rem; padding: .75rem 0; color: var(--negro);
+    border-bottom: 1px solid var(--borde); display: block;
+  }
+  .nav-btn-demo {
+    display: block; width: 100%; margin-top: .75rem; padding: .75rem;
+    background: var(--azul); color: #fff; border-radius: 8px;
+    font-weight: 600; text-align: center; text-decoration: none; font-size: 1rem;
+  }
+}
+
+/* ── ANIMACIONES ── */
+.fade-in { opacity: 0; transform: translateY(20px); transition: opacity .6s ease, transform .6s ease; }
+.fade-in.visible { opacity: 1; transform: none; }
+</style>
+<script>
+function toggleMenu() {
+  document.getElementById('navLinks').classList.toggle('open');
+  document.getElementById('hamburger').classList.toggle('open');
+}
+function cerrarMenu() {
+  document.getElementById('navLinks').classList.remove('open');
+  document.getElementById('hamburger').classList.remove('open');
+}
+</script>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">Factu<span>Fácil</span></a>
+  <ul class="nav-links" id="navLinks">
+    <li><a href="#ia" onclick="cerrarMenu()">IA</a></li>
+    <li><a href="#facturacion" onclick="cerrarMenu()">Facturación</a></li>
+    <li><a href="#estadisticas" onclick="cerrarMenu()">Estadísticas</a></li>
+    <li><a href="#productos" onclick="cerrarMenu()">Productos</a></li>
+    <li><a href="#compras" onclick="cerrarMenu()">Compras</a></li>
+    <li><a href="#contadores" onclick="cerrarMenu()">Contadores</a></li>
+    <li><a href="#contacto" onclick="cerrarMenu()">Contacto</a></li>
+    <li><a href="/login" class="nav-btn-demo">Solicitar Demo</a></li>
+  </ul>
+  <a href="/login" class="nav-cta">Solicitar Demo</a>
+  <button class="nav-hamburger" id="hamburger" onclick="toggleMenu()">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- HERO -->
+<div style="background: linear-gradient(135deg, #f0f6ff 0%, #ffffff 60%); padding-top: 64px;">
+  <div class="hero">
+    <div>
+      <div class="hero-badge fade-in">
+        <i class="fas fa-bolt"></i> Ahora con Inteligencia Artificial · Integrado con ARCA
+      </div>
+      <h1 class="fade-in">El sistema POS que hace<br><strong>tu negocio más fácil</strong></h1>
+      <p class="fade-in">Facturación electrónica ARCA, lectura de facturas con Inteligencia Artificial, ciclo completo de compras, stock, cuentas corrientes, cheques, pedidos online y reparto. Un sistema pensado para negocios argentinos.</p>
+      <div class="hero-btns fade-in">
+        <a href="/login" class="btn-primary"><i class="fas fa-rocket"></i> Solicitar Demo</a>
+        <a href="#estadisticas" class="btn-outline">Ver el sistema</a>
+      </div>
+    </div>
+    <div class="hero-img fade-in">
+      <img src="/static/VTA_MEN.webp" alt="Estadísticas de Ventas FactuFácil" fetchpriority="high" decoding="async">
+    </div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats-band">
+  <div class="stats-grid">
+    <div class="fade-in">
+      <div class="stat-num">100%</div>
+      <div class="stat-label">Compatible con ARCA</div>
+    </div>
+    <div class="fade-in">
+      <div class="stat-num">+20</div>
+      <div class="stat-label">Módulos integrados</div>
+    </div>
+    <div class="fade-in">
+      <div class="stat-num">A · B · C</div>
+      <div class="stat-label">Facturas electrónicas</div>
+    </div>
+    <div class="fade-in">
+      <div class="stat-num">24/7</div>
+      <div class="stat-label">Disponible en la nube</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ SECCIÓN DESTACADA: INTELIGENCIA ARTIFICIAL ═══════════ -->
+<section class="ai-section" id="ia">
+  <div class="ai-wrap">
+    <div class="fade-in">
+      <div class="ai-badge-ia"><i class="fas fa-sparkles"></i> Novedad · Inteligencia Artificial</div>
+      <h2>Cargá facturas de compra con una <strong>foto</strong>.</h2>
+      <p>FactuFácil ahora incorpora Inteligencia Artificial para que dejes de tipear facturas. Sacale una foto con el celular o subí el PDF, y en segundos el sistema reconoce todos los datos: proveedor, CAE, alícuotas de IVA, percepciones, items, cantidades y precios.</p>
+      <ul class="ai-check-list">
+        <li><i class="fas fa-check-circle"></i> <span><strong>Reconoce facturas A, B y C</strong> argentinas, con coma decimal, kg, percepciones IVA/IIBB/Ganancias.</span></li>
+        <li><i class="fas fa-check-circle"></i> <span><strong>Detecta proveedor automáticamente</strong> por razón social y lo matchea con tu base.</span></li>
+        <li><i class="fas fa-check-circle"></i> <span><strong>Vincula productos</strong> por código de proveedor; los que no encuentra quedan marcados para revisar.</span></li>
+        <li><i class="fas fa-check-circle"></i> <span><strong>Calcula los totales por alícuota</strong> y los compara con los que vienen en la factura para avisarte si hay diferencias.</span></li>
+        <li><i class="fas fa-check-circle"></i> <span><strong>Funciona con foto del celular o PDF</strong> del portal de ARCA. Admite JPG, PNG, WebP y PDF.</span></li>
+      </ul>
+      <div class="ai-tech-pills">
+        <span class="ai-tech-pill"><i class="fas fa-eye"></i> Visión por IA</span>
+        <span class="ai-tech-pill"><i class="fas fa-language"></i> Entiende Argentina</span>
+        <span class="ai-tech-pill"><i class="fas fa-bolt"></i> 10-20 segundos</span>
+        <span class="ai-tech-pill"><i class="fas fa-shield-alt"></i> Siempre revisás vos</span>
+      </div>
+    </div>
+    <div class="ai-demo-card fade-in">
+      <div style="display:flex; align-items:center; gap:.8rem; margin-bottom:1.2rem; padding-bottom:1rem; border-bottom:1px solid rgba(255,255,255,.1);">
+        <div style="width:40px; height:40px; background:linear-gradient(135deg,#a78bfa,#60a5fa); border-radius:10px; display:flex; align-items:center; justify-content:center;">
+          <i class="fas fa-magic" style="color:#fff; font-size:1.1rem;"></i>
+        </div>
+        <div>
+          <div style="font-weight:700; font-size:1.05rem;">Cómo funciona</div>
+          <div style="font-size:.82rem; opacity:.7;">Del papel a la base de datos</div>
+        </div>
+      </div>
+      <div class="ai-flow-item">
+        <div class="ai-flow-num">1</div>
+        <div><strong>Sacás una foto</strong><br><span style="opacity:.7; font-size:.88rem;">O subís el PDF del proveedor.</span></div>
+      </div>
+      <div class="ai-flow-item">
+        <div class="ai-flow-num">2</div>
+        <div><strong>La IA la lee</strong><br><span style="opacity:.7; font-size:.88rem;">Extrae cabecera, items y percepciones.</span></div>
+      </div>
+      <div class="ai-flow-item">
+        <div class="ai-flow-num">3</div>
+        <div><strong>Revisás y ajustás</strong><br><span style="opacity:.7; font-size:.88rem;">El sistema marca diferencias y productos sin vincular.</span></div>
+      </div>
+      <div class="ai-flow-item">
+        <div class="ai-flow-num">4</div>
+        <div><strong>Guardás</strong><br><span style="opacity:.7; font-size:.88rem;">Stock, costos, precios y libro IVA se actualizan solos.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="facturacion">
+  <div class="container">
+    <div class="section-label fade-in"><i class="fas fa-star"></i> Todo lo que necesitás</div>
+    <h2 class="section-title fade-in">Un sistema completo para<br>tu negocio</h2>
+    <p class="section-sub fade-in">Desde la venta hasta la factura electrónica, pasando por stock, clientes y reportes. FactuFácil cubre cada aspecto de tu operación.</p>
+    <div class="features-grid">
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-file-invoice"></i></div>
+        <h3>Facturación Electrónica</h3>
+        <p>Facturas A, B y C con autorización ARCA en tiempo real. CAE automático, código QR y notas de crédito incluidas.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-cash-register"></i></div>
+        <h3>Punto de Venta</h3>
+        <p>Ventas rápidas con búsqueda por código o nombre, acceso rápido a productos frecuentes, y múltiples medios de pago en una sola operación.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-boxes"></i></div>
+        <h3>Control de Stock</h3>
+        <p>Stock en tiempo real, alertas de stock bajo, ajustes manuales, soporte para productos pesables y lectura de códigos de balanza.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-clipboard-list"></i></div>
+        <h3>Cuentas Corrientes</h3>
+        <p>Vendé fiado y controlá la deuda de cada cliente. Cobrá parcial o totalmente y registrá cada movimiento con trazabilidad completa.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-tags"></i></div>
+        <h3>Combos y Ofertas</h3>
+        <p>Armá combos de productos con precio especial y configurá ofertas por volumen. El sistema calcula el precio automáticamente al vender.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-users"></i></div>
+        <h3>Gestión de Clientes</h3>
+        <p>Base de clientes con condición de IVA, historial de compras, tipos de precio personalizados (minorista/mayorista) y saldos.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-print"></i></div>
+        <h3>Impresión Térmica</h3>
+        <p>Compatible con EPSON TM-m30II y TM-T20III. Tickets automáticos al finalizar la venta con toda la información requerida.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-credit-card"></i></div>
+        <h3>Medios de Pago Mixtos</h3>
+        <p>Efectivo, débito, crédito, Mercado Pago y cuenta corriente. Podés combinar medios en una misma venta con cálculo de vuelto.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-shield-alt"></i></div>
+        <h3>Usuarios y Permisos</h3>
+        <p>Roles de administrador y operador. Múltiples puntos de venta por usuario para negocios con varias cajas facturando en paralelo.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-truck-loading"></i></div>
+        <h3>Remitos</h3>
+        <p>Documentos de entrega con tu propia numeración. Impresión térmica, vinculación a facturas y trazabilidad completa desde la venta a la entrega.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-map-marked-alt"></i></div>
+        <h3>Zonas de Reparto</h3>
+        <p>Asigná clientes a zonas geográficas, planificá el reparto diario con drag-and-drop y generá PDFs por zona para el repartidor.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-shopping-cart"></i></div>
+        <h3>Pedidos Online</h3>
+        <p>Tus clientes hacen pedidos desde su celular. Llegan a tu panel, los revisás, facturás y entregás. Integrado con el sistema de precios y stock.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-money-check"></i></div>
+        <h3>Gestión de Cheques</h3>
+        <p>Cheques propios y de terceros. Seguimiento de estado (cartera, depositado, cobrado, rechazado), endosos y vinculación con pagos de proveedores.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-balance-scale"></i></div>
+        <h3>Multi-Punto de Venta</h3>
+        <p>Varias cajas facturando al mismo tiempo, cada una con su numerador propio de ARCA. Ideal para negocios con varias personas atendiendo.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-tag"></i></div>
+        <h3>Carteles de Precios</h3>
+        <p>Generá carteles de precios en PDF para imprimir en el local. Ideal para destacar ofertas, productos nuevos o actualizaciones de lista.</p>
+      </div>
+      <div class="feat-card fade-in">
+        <div class="feat-icon"><i class="fas fa-file-excel"></i></div>
+        <h3>Importar Excel</h3>
+        <p>Cargá tu catálogo de productos desde una planilla Excel. Creación masiva y actualización de precios, costos y stock en lotes.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MÓDULO: ESTADÍSTICAS -->
+<section id="estadisticas">
+  <div class="container">
+    <div class="section-label fade-in"><i class="fas fa-chart-line"></i> Inteligencia de negocio</div>
+    <h2 class="section-title fade-in">Estadísticas que te ayudan<br>a tomar mejores decisiones</h2>
+
+    <div class="modulo fade-in" style="margin-top: 3rem;">
+      <div class="modulo-img">
+        <img src="/static/VTA_MEN.webp" alt="Estadísticas de ventas mensuales" loading="lazy" decoding="async">
+      </div>
+      <div class="modulo-content">
+        <h3 style="font-size:1.4rem; font-weight:700;">Ventas Mensuales en tiempo real</h3>
+        <p style="color:var(--gris); line-height:1.7;">Visualizá la evolución de tu facturación mes a mes, los productos más vendidos y el crecimiento respecto al año anterior.</p>
+        <ul>
+          <li><i class="fas fa-check-circle"></i> Gráfico de evolución mensual interactivo</li>
+          <li><i class="fas fa-check-circle"></i> Top productos del período seleccionado</li>
+          <li><i class="fas fa-check-circle"></i> Comparativa vs año anterior con % de variación</li>
+          <li><i class="fas fa-check-circle"></i> Totales de ventas y facturación acumulada</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="modulo reverse fade-in">
+      <div class="modulo-img">
+        <img src="/static/ANALISIS_VTAS.webp" alt="Análisis avanzado de ventas" loading="lazy" decoding="async">
+      </div>
+      <div class="modulo-content">
+        <h3 style="font-size:1.4rem; font-weight:700;">Análisis Avanzado de Ventas</h3>
+        <p style="color:var(--gris); line-height:1.7;">Analizá tus datos desde múltiples ángulos: por día de la semana, por comprobante, ticket promedio mensual y productos sin movimiento.</p>
+        <ul>
+          <li><i class="fas fa-check-circle"></i> Evolución del margen mensual con gráfico dual</li>
+          <li><i class="fas fa-check-circle"></i> Ticket promedio por mes con máximo y mínimo</li>
+          <li><i class="fas fa-check-circle"></i> Indicadores de mejor/peor margen del período</li>
+          <li><i class="fas fa-check-circle"></i> Detección de productos sin movimiento</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="modulo fade-in">
+      <div class="modulo-img">
+        <img src="/static/RANKING.webp" alt="Ranking de clientes" loading="lazy" decoding="async">
+      </div>
+      <div class="modulo-content">
+        <h3 style="font-size:1.4rem; font-weight:700;">Ranking de Clientes por Facturación</h3>
+        <p style="color:var(--gris); line-height:1.7;">Identificá tus clientes más valiosos con un ranking visual. Filtrá por período y definí el Top N para enfocarte en los que más importan.</p>
+        <ul>
+          <li><i class="fas fa-check-circle"></i> Top 5, 10, 15 o 20 clientes configurables</li>
+          <li><i class="fas fa-check-circle"></i> Gráfico de barras horizontal comparativo</li>
+          <li><i class="fas fa-check-circle"></i> Destacados oro, plata y bronce automáticamente</li>
+          <li><i class="fas fa-check-circle"></i> Filtro por rango de fechas personalizado</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="modulo reverse fade-in">
+      <div class="modulo-img">
+        <img src="/static/MARGEN_PROD.webp" alt="Margen de ganancia por producto" loading="lazy" decoding="async">
+      </div>
+      <div class="modulo-content">
+        <h3 style="font-size:1.4rem; font-weight:700;">Margen de Ganancia por Producto</h3>
+        <p style="color:var(--gris); line-height:1.7;">Conocé exactamente cuánto ganás con cada producto. Detectá los que tienen bajo margen y tomá decisiones de precio con datos reales.</p>
+        <ul>
+          <li><i class="fas fa-check-circle"></i> Ingreso, costo y ganancia por producto</li>
+          <li><i class="fas fa-check-circle"></i> Barra visual de distribución costo/margen</li>
+          <li><i class="fas fa-check-circle"></i> Filtro por categoría y ordenamiento flexible</li>
+          <li><i class="fas fa-check-circle"></i> Margen general del período en porcentaje</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="modulo fade-in">
+      <div class="modulo-img">
+        <img src="/static/VTA_PROD.webp" alt="Reporte de ventas por producto" loading="lazy" decoding="async">
+      </div>
+      <div class="modulo-content">
+        <h3 style="font-size:1.4rem; font-weight:700;">Reporte de Ventas por Producto</h3>
+        <p style="color:var(--gris); line-height:1.7;">Reportes detallados con exportación a PDF, Excel y CSV. Todos los productos vendidos con cantidades, precios y participación en el total.</p>
+        <ul>
+          <li><i class="fas fa-check-circle"></i> Exportación PDF, Excel y CSV</li>
+          <li><i class="fas fa-check-circle"></i> Cantidad vendida y % del total por producto</li>
+          <li><i class="fas fa-check-circle"></i> Detalle completo de facturas autorizadas y pendientes</li>
+          <li><i class="fas fa-check-circle"></i> Combos convertidos a unidades reales del producto base</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="modulo reverse fade-in">
+      <div class="modulo-img">
+        <img src="/static/TICKET_PROM.webp" alt="Ticket promedio" loading="lazy" decoding="async">
+      </div>
+      <div class="modulo-content">
+        <h3 style="font-size:1.4rem; font-weight:700;">Ticket Promedio Anual</h3>
+        <p style="color:var(--gris); line-height:1.7;">Seguí la evolución del ticket promedio mes a mes. Identificá los meses de mejor rendimiento y las tendencias de crecimiento.</p>
+        <ul>
+          <li><i class="fas fa-check-circle"></i> Ticket promedio mensual y anual</li>
+          <li><i class="fas fa-check-circle"></i> Máximo y mínimo ticket del mes</li>
+          <li><i class="fas fa-check-circle"></i> Variación porcentual respecto al promedio anual</li>
+          <li><i class="fas fa-check-circle"></i> Badge MAX automático al mes más alto</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MÓDULO: MEDIOS DE PAGO -->
+<section style="background: var(--gris-claro);" id="pagos">
+  <div class="container">
+    <div class="section-label fade-in"><i class="fas fa-credit-card"></i> Control financiero</div>
+    <h2 class="section-title fade-in">Reporte de Medios de Pago</h2>
+    <div class="modulo fade-in" style="margin-top: 2rem;">
+      <div class="modulo-img">
+        <img src="/static/MEDIOS_DE_PAGO.webp" alt="Reporte medios de pago" loading="lazy" decoding="async">
+      </div>
+      <div class="modulo-content">
+        <p style="color:var(--gris); line-height:1.7;">Sabé exactamente cómo cobró tu negocio cada día. Distribución visual de efectivo, débito, crédito y Mercado Pago con totales y porcentajes.</p>
+        <ul>
+          <li><i class="fas fa-check-circle"></i> Distribución visual por medio de pago</li>
+          <li><i class="fas fa-check-circle"></i> Total de transacciones y promedio por operación</li>
+          <li><i class="fas fa-check-circle"></i> Filtro por rango de fechas con botón "Hoy"</li>
+          <li><i class="fas fa-check-circle"></i> Datos en tiempo real, siempre actualizados</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MÓDULO: CTA CTE -->
+<section>
+  <div class="container">
+    <div class="section-label fade-in"><i class="fas fa-clipboard-list"></i> Fiado bajo control</div>
+    <h2 class="section-title fade-in">Cuentas Corrientes de Clientes</h2>
+    <div class="modulo reverse fade-in" style="margin-top: 2rem;">
+      <div class="modulo-img">
+        <img src="/static/CTA_CTE.webp" alt="Cuentas corrientes" loading="lazy" decoding="async">
+      </div>
+      <div class="modulo-content">
+        <p style="color:var(--gris); line-height:1.7;">Gestioná el fiado de manera profesional. Cada cliente tiene su historial de deuda, pagos parciales y saldo pendiente con fecha y hora de cada operación.</p>
+        <ul>
+          <li><i class="fas fa-check-circle"></i> Saldo pendiente y total cobrado por cliente</li>
+          <li><i class="fas fa-check-circle"></i> Historial detallado de movimientos</li>
+          <li><i class="fas fa-check-circle"></i> Exportación PDF y Excel para cobranzas</li>
+          <li><i class="fas fa-check-circle"></i> Cobro integrado al flujo de venta</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MÓDULO: COMBOS Y VOLUMEN -->
+<section style="background: var(--gris-claro);" id="productos">
+  <div class="container">
+    <div class="section-label fade-in"><i class="fas fa-tags"></i> Estrategias de precio</div>
+    <h2 class="section-title fade-in">Combos y Ofertas por Volumen</h2>
+    <div class="modulo fade-in" style="margin-top: 2rem;">
+      <div class="modulo-img">
+        <img src="/static/COMBOS.webp" alt="Gestión de combos" loading="lazy" decoding="async">
+      </div>
+      <div class="modulo-content">
+        <h3 style="font-size:1.2rem; font-weight:700;">Combos y Ofertas especiales</h3>
+        <p style="color:var(--gris); line-height:1.7;">Creá combos de múltiples productos con precio especial. El stock se descuenta automáticamente de los productos base al venderse.</p>
+        <ul>
+          <li><i class="fas fa-check-circle"></i> Combos de hasta 3 productos base diferentes</li>
+          <li><i class="fas fa-check-circle"></i> Descuento automático calculado y mostrado</li>
+          <li><i class="fas fa-check-circle"></i> Stock en tiempo real de los productos base</li>
+          <li><i class="fas fa-check-circle"></i> Activar/desactivar combos instantáneamente</li>
+        </ul>
+      </div>
+    </div>
+    <div class="modulo reverse fade-in" style="margin-top: 3rem;">
+      <div class="modulo-img">
+        <img src="/static/VOLUMEN.webp" alt="Ofertas por volumen" loading="lazy" decoding="async">
+      </div>
+      <div class="modulo-content">
+        <h3 style="font-size:1.2rem; font-weight:700;">Ofertas por Volumen</h3>
+        <p style="color:var(--gris); line-height:1.7;">Configurá precios especiales cuando el cliente compra cierta cantidad mínima. El sistema aplica el precio automáticamente al alcanzar el umbral.</p>
+        <ul>
+          <li><i class="fas fa-check-circle"></i> Precio especial por cantidad mínima</li>
+          <li><i class="fas fa-check-circle"></i> Múltiples tramos por producto</li>
+          <li><i class="fas fa-check-circle"></i> Descuento promedio y ahorro total visibles</li>
+          <li><i class="fas fa-check-circle"></i> Activación/desactivación por oferta individual</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPRAS -->
+<section id="compras">
+  <div class="container">
+    <div class="section-label fade-in"><i class="fas fa-truck"></i> Ciclo completo de compras</div>
+    <h2 class="section-title fade-in">Proveedores, OCs y Facturas de Compra</h2>
+    <p class="section-sub fade-in">Desde la sugerencia automática de qué comprar hasta el pago al proveedor, pasando por la OC, la recepción de mercadería y la factura — todo conectado, sin duplicar stock ni cargar información dos veces.</p>
+    <div class="compras-cards">
+      <div class="compras-card fade-in">
+        <i class="fas fa-lightbulb"></i>
+        <h3>Sugerencia de Compra</h3>
+        <p>El sistema analiza tus ventas y te dice qué comprar, cuánto y a qué proveedor. Niveles de urgencia según stock mínimo y días de cobertura.</p>
+      </div>
+      <div class="compras-card fade-in">
+        <i class="fas fa-clipboard-list"></i>
+        <h3>Órdenes de Compra</h3>
+        <p>Generá la OC desde la sugerencia o manualmente. Enviala al proveedor por email con PDF adjunto automático. Seguimiento por estados.</p>
+      </div>
+      <div class="compras-card fade-in">
+        <i class="fas fa-boxes-stacked"></i>
+        <h3>Recepción de Mercadería</h3>
+        <p>Registrá la llegada de la mercadería (total o parcial). El stock se suma automáticamente. Varias recepciones por OC si el proveedor entrega en remesas.</p>
+      </div>
+      <div class="compras-card fade-in">
+        <i class="fas fa-file-invoice-dollar"></i>
+        <h3>Facturas de Compra</h3>
+        <p>Generá la factura desde la OC recibida con un click. Stock no se duplica, costos y precios de venta se recalculan automáticamente según márgenes.</p>
+      </div>
+      <div class="compras-card fade-in">
+        <i class="fas fa-percent"></i>
+        <h3>IVA Compras</h3>
+        <p>Libro de IVA Compras automático. Totales por alícuota, base imponible y crédito fiscal del período seleccionado. Listo para presentar.</p>
+      </div>
+      <div class="compras-card fade-in">
+        <i class="fas fa-hand-holding-dollar"></i>
+        <h3>Cta Cte Proveedores</h3>
+        <p>Saldo por proveedor, imputación de pagos a facturas específicas, pagos anticipados, historial completo de movimientos y recibos emitidos.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHEQUES -->
+<section style="background: var(--gris-claro);" id="cheques">
+  <div class="container">
+    <div class="section-label fade-in"><i class="fas fa-money-check"></i> Gestión financiera</div>
+    <h2 class="section-title fade-in">Gestión de Cheques</h2>
+    <p class="section-sub fade-in">Cheques propios y de terceros, con seguimiento completo de estados y trazabilidad.</p>
+    <div class="compras-cards">
+      <div class="compras-card fade-in">
+        <i class="fas fa-money-check-alt"></i>
+        <h3>Cheques Propios</h3>
+        <p>Emisión, seguimiento y conciliación de los cheques que entregás. Estados: emitido, entregado, cobrado, rechazado. Vinculación con pagos a proveedores.</p>
+      </div>
+      <div class="compras-card fade-in">
+        <i class="fas fa-hand-holding-usd"></i>
+        <h3>Cheques de Terceros</h3>
+        <p>Los cheques que recibís de clientes. Cartera, endoso (para pagar con ellos a tus proveedores), depósito en cuenta y seguimiento hasta el cobro.</p>
+      </div>
+      <div class="compras-card fade-in">
+        <i class="fas fa-history"></i>
+        <h3>Trazabilidad</h3>
+        <p>Cada cheque tiene historial completo: quién lo emitió, quién lo recibió, si se endosó, cuándo se depositó. Alertas de cheques próximos a vencer.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LOGÍSTICA: REMITOS, PEDIDOS ONLINE Y REPARTO -->
+<section id="logistica">
+  <div class="container">
+    <div class="section-label fade-in"><i class="fas fa-truck"></i> Logística y entrega</div>
+    <h2 class="section-title fade-in">De la venta a la puerta del cliente</h2>
+    <p class="section-sub fade-in">Pedidos online, remitos, zonas de reparto y planificación de rutas diarias. Todo integrado al mismo sistema.</p>
+    <div class="compras-cards">
+      <div class="compras-card fade-in">
+        <i class="fas fa-shopping-cart"></i>
+        <h3>Pedidos Online</h3>
+        <p>Tus clientes arman pedidos desde su celular con tu catálogo y sus precios de lista. Te llegan a un panel donde los revisás, facturás y entregás.</p>
+      </div>
+      <div class="compras-card fade-in">
+        <i class="fas fa-truck-loading"></i>
+        <h3>Remitos</h3>
+        <p>Documento de entrega con numeración propia (PV-Nº), impresión térmica o PDF, vinculado a la factura. Para cuando facturás en oficina y entregás en el domicilio.</p>
+      </div>
+      <div class="compras-card fade-in">
+        <i class="fas fa-map-marked-alt"></i>
+        <h3>Zonas de Reparto</h3>
+        <p>Agrupá clientes por zona geográfica con colores distintivos. Cada cliente pertenece a su zona y al planificar el reparto se agrupan automáticamente.</p>
+      </div>
+      <div class="compras-card fade-in">
+        <i class="fas fa-route"></i>
+        <h3>Armar Reparto</h3>
+        <p>Pantalla drag-and-drop para ordenar las entregas del día. Generá el PDF del recorrido por zona para darle al repartidor y seguí el avance.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PARA CONTADORES -->
+<section class="contadores-section" id="contadores">
+  <div class="contadores-container">
+    <div class="contadores-intro fade-in">
+      <div class="contadores-badge">
+        <i class="fas fa-user-tie"></i> Para Contadores
+      </div>
+      <h2>Tu contador también va a <span>amar FactuFácil</span></h2>
+      <p>Libros IVA, exportación a aplicativos ARCA, percepciones discriminadas y todo lo que necesita para cerrar el mes sin llamadas a las 10 de la noche. Pasale esta ficha y que lo evalúe él mismo.</p>
+    </div>
+
+    <div class="contadores-grid fade-in">
+      <div class="contadores-card">
+        <i class="fas fa-book"></i>
+        <h4>Libros IVA Ventas y Compras</h4>
+        <p>Descarga directa en Excel y CSV con subtotales por tipo, percepciones discriminadas y filtros por período, cliente o proveedor.</p>
+      </div>
+      <div class="contadores-card">
+        <i class="fas fa-file-archive"></i>
+        <h4>Exportación a aplicativos ARCA</h4>
+        <p>Genera los 4 archivos TXT del Régimen Informativo RG 3685 (CITI) en formato ANSI listos para importar al SIAP.</p>
+      </div>
+      <div class="contadores-card">
+        <i class="fas fa-shield-alt"></i>
+        <h4>Control y trazabilidad</h4>
+        <p>Auditoría silenciosa de anulaciones, cambios de precio, NC, CAE vencidos. Todo queda registrado sin molestar al operador.</p>
+      </div>
+      <div class="contadores-card">
+        <i class="fas fa-envelope"></i>
+        <h4>Envío directo por mail o WhatsApp</h4>
+        <p>En cualquier momento del mes el dueño te puede mandar el libro IVA completo por WhatsApp. Un click y está.</p>
+      </div>
+    </div>
+
+    <div class="contadores-cta fade-in">
+      <a href="/static/FactuFacil_para_Contadores.pdf" class="btn-primary" download target="_blank">
+        <i class="fas fa-file-pdf"></i> Descargar ficha técnica (PDF)
+      </a>
+      <a href="https://wa.me/5493364032924?text=Hola%20Pablo%2C%20soy%20contador%20y%20quiero%20saber%20m%C3%A1s%20de%20FactuF%C3%A1cil"
+         class="btn-outline" target="_blank">
+        <i class="fab fa-whatsapp"></i> Tengo preguntas
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ARCA -->
+<div class="arca-band fade-in">
+  <h2>Integrado 100% con ARCA</h2>
+  <p>Facturación electrónica oficial con autorización en tiempo real, código QR válido, notas de crédito y manejo de contingencias. Cumplís con toda la normativa vigente sin complicaciones.</p>
+  <div class="arca-pills">
+    <span class="arca-pill"><i class="fas fa-check"></i> CAE automático</span>
+    <span class="arca-pill"><i class="fas fa-check"></i> Código QR ARCA</span>
+    <span class="arca-pill"><i class="fas fa-check"></i> Facturas A, B y C</span>
+    <span class="arca-pill"><i class="fas fa-check"></i> Notas de crédito</span>
+    <span class="arca-pill"><i class="fas fa-check"></i> Token automático</span>
+    <span class="arca-pill"><i class="fas fa-check"></i> Contingencia offline</span>
+  </div>
+  <a href="/login" class="btn-white">Solicitar una demostración</a>
+</div>
+
+<!-- FOOTER -->
+<footer id="contacto">
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div class="footer-logo">Factu<span>Fácil</span></div>
+      <p>Sistema de Facturación Electrónica · ARCA<br>Pensado para negocios argentinos.</p>
+      <div style="display:flex; gap:.75rem; margin-top:.5rem;">
+        <a href="https://instagram.com/factufacil.ar" target="_blank" style="color:#adb5bd; font-size:1.2rem;"><i class="fab fa-instagram"></i></a>
+        <a href="/login" target="_blank" style="color:#adb5bd; font-size:1.2rem;"><i class="fas fa-globe"></i></a>
+      </div>
+    </div>
+    <div class="footer-col">
+      <h4>Sistema</h4>
+      <ul>
+        <li><a href="#ia">Inteligencia Artificial</a></li>
+        <li><a href="#facturacion">Facturación electrónica</a></li>
+        <li><a href="#estadisticas">Estadísticas</a></li>
+        <li><a href="#productos">Combos y ofertas</a></li>
+        <li><a href="#compras">Compras y Proveedores</a></li>
+        <li><a href="#cheques">Cheques</a></li>
+        <li><a href="#logistica">Logística y Reparto</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Contacto</h4>
+      <ul>
+        <li><a href="https://wa.me/5493364032924"><i class="fab fa-whatsapp"></i> +54 9 3364 03-2924</a></li>
+        <li><span style="color:#adb5bd"><i class="fas fa-envelope"></i> pablogustavore&#64;gmail&#46;com</span></li>
+        <li><a href="/login"><i class="fas fa-globe"></i> factufacil.ar</a></li>
+        <li><a href="https://pablore.com.ar">Desarrollado por Pablo G. Ré</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 FactuFácil · Todos los derechos reservados</span>
+    <a href="https://pablore.com.ar" target="_blank">Desarrollado por Pablo G. Ré</a>
+  </div>
+</footer>
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.1 });
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

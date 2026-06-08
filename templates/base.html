@@ -1,0 +1,677 @@
+<!-- templates/base.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}FactuFacil{% endblock %}</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}" rel="stylesheet">
+    <script src="{{ url_for('static', filename='vendor/sweetalert2/sweetalert2.all.min.js') }}"></script>
+    <style>
+        /* ========== SIDEBAR ========== */
+        .sidebar {
+            height: 100vh;
+            max-height: 100vh;
+            background-color: #343a40;
+            width: 260px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            overflow-y: auto;
+            overflow-x: hidden;
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar::-webkit-scrollbar { width: 6px; }
+        .sidebar::-webkit-scrollbar-track { background: #2a2f34; }
+        .sidebar::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+
+        /* Items del sidebar */
+        .sidebar a {
+            color: #ced4da;
+            text-decoration: none;
+            padding: 8px 15px;
+            display: block;
+            font-size: 0.9rem;
+            transition: all 0.15s ease;
+        }
+        .sidebar a:hover {
+            background-color: #495057;
+            color: #fff;
+        }
+        .sidebar a.active {
+            background-color: #0d6efd;
+            color: #fff;
+        }
+
+        /* Botones de grupo (secciones colapsables) */
+        .sidebar .nav-group-btn {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            background-color: #2a3035;          /* fondo levemente más oscuro que la sidebar */
+            border: none;
+            border-left: 3px solid transparent; /* barra lateral que se pinta al expandir */
+            color: #ffffff;                     /* texto blanco bien legible */
+            text-align: left;
+            padding: 11px 15px;
+            font-size: 0.85rem;                 /* un poco más grande */
+            text-transform: uppercase;
+            letter-spacing: 1px;                /* más espaciado tipo "header" */
+            font-weight: 700;                   /* bold */
+            cursor: pointer;
+            margin-top: 2px;                    /* separación entre grupos */
+            transition: all 0.2s ease;
+        }
+        .sidebar .nav-group-btn:hover {
+            color: #fff;
+            background-color: #3d444a;
+            border-left-color: #6c757d;
+        }
+        /* Cuando el grupo está expandido: destacarlo con color azul */
+        .sidebar .nav-group-btn[aria-expanded="true"] {
+            background-color: #1e2428;
+            border-left-color: #0d6efd;
+            color: #4dabf7;                     /* texto en celeste cuando está abierto */
+        }
+        .sidebar .nav-group-btn .chevron {
+            font-size: 0.7rem;
+            transition: transform 0.2s ease;
+            opacity: 0.8;
+        }
+        .sidebar .nav-group-btn[aria-expanded="true"] .chevron {
+            transform: rotate(90deg);
+        }
+
+        /* Items dentro de un grupo (sub-items) */
+        .sidebar .nav-sub {
+            background-color: #2a2f34;
+        }
+        .sidebar .nav-sub a {
+            padding-left: 35px;
+            font-size: 0.85rem;
+        }
+        .sidebar .nav-sub a i {
+            width: 18px;
+            text-align: center;
+            margin-right: 6px;
+            font-size: 0.85rem;
+            color: #8e969f;
+        }
+        .sidebar .nav-sub a:hover i {
+            color: #fff;
+        }
+
+        /* Separador discreto dentro de un grupo del sidebar */
+        .sidebar .nav-sub .sidebar-sep {
+            height: 1px;
+            background: #4a5056;
+            margin: 6px 20px;
+        }
+
+        /* Dashboard (fuera de grupo) */
+        .sidebar .nav-dashboard {
+            border-bottom: 1px solid #4a5056;
+            margin-bottom: 8px;
+        }
+        .sidebar .nav-dashboard a {
+            font-weight: 600;
+            color: #fff;
+            padding: 12px 15px;
+        }
+        .sidebar .nav-dashboard a i {
+            width: 20px;
+            text-align: center;
+            margin-right: 8px;
+        }
+
+        /* Logo header */
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #4a5056;
+            background: #2a2f34;
+        }
+
+        /* Footer con usuario */
+        .sidebar-footer {
+            padding: 15px;
+            border-top: 1px solid #4a5056;
+            margin-top: 15px;
+        }
+
+        /* ========== CONTENT ========== */
+        .content {
+            margin-left: 260px;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        /* ========== MOBILE TOPBAR ========== */
+        .mobile-topbar {
+            display: none;
+            background: #343a40;
+            color: white;
+            padding: 10px 15px;
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .mobile-topbar .btn-hamburger {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            padding: 4px 10px;
+            cursor: pointer;
+        }
+        .mobile-topbar .mobile-title {
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        /* ========== OVERLAY (oscurecer fondo en mobile cuando sidebar está abierto) ========== */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+
+        /* ========== RESPONSIVE MOBILE ========== */
+        @media (max-width: 991px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .sidebar.open {
+                transform: translateX(0);
+                box-shadow: 4px 0 20px rgba(0,0,0,0.3);
+            }
+            .content {
+                margin-left: 0;
+                padding: 15px;
+            }
+            .mobile-topbar {
+                display: flex;
+                align-items: center;
+            }
+            .sidebar-overlay.open {
+                display: block;
+            }
+        }
+
+        /* Developer info */
+        .developer-info {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 15px;
+            text-align: center;
+            border: 1px solid #dee2e6;
+        }
+        .developer-info img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            transition: transform 0.3s ease;
+        }
+        .developer-info img:hover { transform: scale(1.05); }
+
+        /* Impresión: ocultar sidebar y topbar */
+        @media print {
+            .sidebar, .mobile-topbar, .sidebar-overlay { display: none !important; }
+            .content { margin-left: 0 !important; }
+        }
+    </style>
+</head>
+<script src="{{ url_for('static', filename='vendor/jquery/jquery.min.js') }}"></script>
+<body>
+    <!-- ============================================================ -->
+    <!-- BANNER DE ADVERTENCIA DE MORA -->
+    <!-- ============================================================ -->
+    {% if config.LICENCIA_INFO and config.LICENCIA_INFO.tipo_bloqueo == 'mora' and session.user_id %}
+    <div id="banner-mora" style="
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 9999;
+        background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        padding: 12px 20px;
+        text-align: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        font-family: 'Segoe UI', Arial, sans-serif;
+        border-bottom: 3px solid #f5576c;
+    ">
+        <div style="max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; font-size: 14px;">
+            <span style="font-size: 20px;">⚠️</span>
+            <strong style="color: #d63031;">MANTENIMIENTO VENCIDO</strong>
+            <span style="color: #2d3436;">|</span>
+            <span style="color: #2d3436;">Su período de mantenimiento se encuentra vencido. Contacte:</span>
+            <a href="/cdn-cgi/l/email-protection#daa1a1fab9b5b4bcb3bdf49693999f9499939b8593949c95f4b9b5b4aebbb9aeb5f4bfb7bbb3b6faa7a7" style="color: #0984e3; text-decoration: none; font-weight: 600; padding: 4px 10px; background: white; border-radius: 5px; transition: all 0.3s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">
+                📧 Email
+            </a>
+            <a href="https://wa.me/{{ config.LICENCIA_INFO.contacto.telefono.replace('+', '').replace(' ', '').replace('-', '') }}"
+               target="_blank"
+               style="color: #00b894; text-decoration: none; font-weight: 600; padding: 4px 10px; background: white; border-radius: 5px; transition: all 0.3s;"
+               onmouseover="this.style.background='#f0f0f0'"
+               onmouseout="this.style.background='white'">
+                📱 WhatsApp
+            </a>
+            <button onclick="document.getElementById('banner-mora').style.display='none';document.getElementById('banner-mora-spacer').style.display='none';"
+                    style="background: none; border: none; color: #636e72; font-size: 20px; cursor: pointer; padding: 0 5px;"
+                    title="Cerrar (se volverá a mostrar al recargar)">
+                ✕
+            </button>
+        </div>
+    </div>
+    <div id="banner-mora-spacer" style="height: 50px;"></div>
+    {% endif %}
+
+    {% if session.user_id %}
+
+    <!-- ========== TOPBAR MOBILE (solo visible en mobile/tablet) ========== -->
+    <div class="mobile-topbar">
+        <button class="btn-hamburger" onclick="toggleSidebar()" aria-label="Abrir menú">
+            <i class="fas fa-bars"></i>
+        </button>
+        <span class="mobile-title">FactuFácil</span>
+    </div>
+
+    <!-- ========== OVERLAY MOBILE ========== -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <!-- ========== SIDEBAR ========== -->
+    <nav class="sidebar" id="sidebar">
+        <!-- Logo -->
+        <div class="sidebar-header">
+            <a href="https://www.pablore.com.ar/" target="_blank" class="d-block" style="text-decoration: none;">
+                <svg width="200" height="60" viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg" class="img-fluid">
+                    <defs>
+                        <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#FCD34D;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#F59E0B;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <rect width="200" height="60" rx="8" ry="8" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+                    <g transform="translate(15, 15)">
+                        <rect x="0" y="0" width="24" height="30" rx="2" ry="2" fill="url(#iconGradient)" stroke="#e2e8f0" stroke-width="1"/>
+                        <line x1="4" y1="8" x2="20" y2="8" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                        <line x1="4" y1="12" x2="16" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                        <line x1="4" y1="16" x2="18" y2="16" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                        <line x1="4" y1="20" x2="14" y2="20" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                        <circle cx="20" cy="6" r="6" fill="#10B981" stroke="white" stroke-width="1"/>
+                        <path d="M17 6 L19 8 L23 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    </g>
+                    <text x="55" y="25" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="300" fill="#212529">
+                        Factu<tspan font-weight="700" fill="#0d6efd">Fácil</tspan>
+                    </text>
+                    <text x="55" y="40" font-family="'Segoe UI', Arial, sans-serif" font-size="10" fill="#212529">
+                        Sistema de Facturación
+                    </text>
+                </svg>
+            </a>
+        </div>
+
+        <!-- Dashboard (siempre visible, sin grupo) -->
+        <div class="nav-dashboard">
+            <a href="{{ url_for('index') }}">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+            </a>
+        </div>
+
+        <!-- ========== GRUPO: VENTAS ========== -->
+        <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#grupoVentas" aria-expanded="true">
+            <span><i class="fas fa-cash-register me-2"></i>Ventas</span>
+            <i class="fas fa-chevron-right chevron"></i>
+        </button>
+        <div class="collapse show nav-sub" id="grupoVentas">
+            <a href="{{ url_for('nueva_venta') }}"><i class="fas fa-cash-register"></i> Nueva Venta</a>
+            <a href="{{ url_for('facturas') }}"><i class="fas fa-file-invoice"></i> Facturas</a>
+            <a href="{{ url_for('presupuestos.listado') }}"><i class="fas fa-file-alt"></i> Presupuestos</a>
+            <a href="/notas_credito"><i class="fas fa-file-invoice"></i> Notas de Crédito</a>
+            {% if session.get('rol') == 'admin' or session.get('puede_liquidar') %}
+            <a href="/liquidaciones" style="color:#c5b3ff;"><i class="fas fa-handshake"></i> Liquidaciones</a>
+            {% endif %}
+        </div>
+
+        <!-- ========== GRUPO: CAJA ========== -->
+        <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#grupoCaja" aria-expanded="false">
+            <span><i class="fas fa-cash-register me-2"></i>Caja</span>
+            <i class="fas fa-chevron-right chevron"></i>
+        </button>
+        <div class="collapse nav-sub" id="grupoCaja">
+            <a href="/caja-multipv"><i class="fas fa-cash-register"></i> Mi Caja</a>
+            <a href="/caja-multipv#tab-gastos" onclick="setTimeout(()=>document.getElementById('gastos-tab-multipv')?.click(),300)"><i class="fas fa-money-bill-alt"></i> Gastos y Egresos</a>
+            {% if session.get('rol') == 'admin' %}
+            <a href="/caja-multipv#tab-transferencias" onclick="setTimeout(()=>document.getElementById('transferencias-tab')?.click(),300)"><i class="fas fa-exchange-alt"></i> Transferencias</a>
+            <a href="/caja-multipv#tab-resumen" onclick="setTimeout(()=>document.getElementById('resumen-tab')?.click(),300)"><i class="fas fa-chart-pie"></i> Resumen Consolidado</a>
+            {% endif %}
+        </div>
+
+        <!-- ========== GRUPO: LOGÍSTICA ========== -->
+        <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#grupoLogistica" aria-expanded="false">
+            <span><i class="fas fa-truck me-2"></i>Logística</span>
+            <i class="fas fa-chevron-right chevron"></i>
+        </button>
+        <div class="collapse nav-sub" id="grupoLogistica">
+            <a href="{{ url_for('remitos.listado') }}"><i class="fas fa-truck-loading"></i> Remitos</a>
+            <a href="/admin/pedidos"><i class="fas fa-shopping-cart"></i> Pedidos Online</a>
+            <a href="{{ url_for('zonas.listado') }}"><i class="fas fa-map-marked-alt"></i> Zonas de Reparto</a>
+            <a href="{{ url_for('reparto.pantalla') }}"><i class="fas fa-truck"></i> Armar Reparto</a>
+        </div>
+
+        <!-- ========== GRUPO: PRODUCTOS ========== -->
+        <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#grupoProductos" aria-expanded="false">
+            <span><i class="fas fa-box me-2"></i>Productos</span>
+            <i class="fas fa-chevron-right chevron"></i>
+        </button>
+        <div class="collapse nav-sub" id="grupoProductos">
+            <a href="{{ url_for('productos') }}"><i class="fas fa-box"></i> Productos</a>
+            <a href="{{ url_for('categorias.listado') }}"><i class="fas fa-tags"></i> Categorías</a>
+            <a href="{{ url_for('combos') }}"><i class="fas fa-tags"></i> Combos y Ofertas</a>
+            <a href="/ofertas_volumen"><i class="fas fa-tags"></i> Ofertas por Volumen</a>
+            <a href="{{ url_for('carteles_precios') }}"><i class="fas fa-tags"></i> Carteles de Precios</a>
+            <a href="{{ url_for('vista_qr_escaner') }}"><i class="fas fa-qrcode"></i> QR del Escáner</a>
+            <a href="{{ url_for('importar_productos_vista') }}"><i class="fas fa-file-excel"></i> Importar Excel</a>
+        </div>
+
+        <!-- ========== GRUPO: CLIENTES ========== -->
+        <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#grupoClientes" aria-expanded="false">
+            <span><i class="fas fa-users me-2"></i>Clientes</span>
+            <i class="fas fa-chevron-right chevron"></i>
+        </button>
+        <div class="collapse nav-sub" id="grupoClientes">
+            <a href="{{ url_for('clientes') }}"><i class="fas fa-users"></i> Clientes</a>
+            <a href="/vendedores"><i class="fas fa-user-tie"></i> Vendedores</a>
+            <a href="/deuda_clientes"><i class="fas fa-file-invoice-dollar"></i> Deuda por Cliente</a>
+            <a href="/pagos_a_cuenta_disponibles"><i class="fas fa-link"></i> Pagos a Cuenta Disponibles <small class="text-muted">(imputar)</small></a>
+        </div>
+
+        <!-- ========== GRUPO: COMPRAS ========== -->
+        <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#grupoCompras" aria-expanded="false">
+            <span><i class="fas fa-shopping-basket me-2"></i>Compras</span>
+            <i class="fas fa-chevron-right chevron"></i>
+        </button>
+        <div class="collapse nav-sub" id="grupoCompras">
+            <a href="/proveedores"><i class="fas fa-truck"></i> Proveedores</a>
+            <a href="/ordenes_compra"><i class="fas fa-clipboard-list"></i> Órdenes de Compra</a>
+            <a href="/pagar_proveedor"><i class="fas fa-hand-holding-dollar"></i> Pagar Proveedor</a>
+            <a href="/pagos_proveedores"><i class="fas fa-receipt"></i> Pagos Emitidos</a>
+            <a href="/ncs_disponibles_compra"><i class="fas fa-link"></i> NCs Disponibles <small class="text-muted">(imputar)</small></a>
+            <a href="/facturas_compra"><i class="fas fa-file-invoice-dollar"></i> Gastos y Servicios <small class="text-muted">(Libro IVA)</small></a>
+            <a href="{{ url_for('compras.listado') }}"><i class="fas fa-boxes"></i> Compras de Mercadería <small class="text-muted">(Stock + Costos)</small></a>
+            <a href="/iva_compras"><i class="fas fa-percent"></i> IVA Compras</a>
+            <a href="{{ url_for('compras.codigos_proveedor') }}"><i class="fas fa-cog"></i> Códigos de Proveedor</a>
+            <a href="{{ url_for('sugerencia_compra.listado') }}"><i class="fas fa-lightbulb"></i> Sugerencia de Compra</a>
+            <a href="{{ url_for('compras.actualizacion_masiva_costos') }}"><i class="fas fa-percent"></i> Actualización Masiva de Costos</a>
+        </div>
+
+        <!-- ========== GRUPO: CHEQUES ========== -->
+        <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#grupoCheques" aria-expanded="false">
+            <span><i class="fas fa-money-check me-2"></i>Cheques</span>
+            <i class="fas fa-chevron-right chevron"></i>
+        </button>
+        <div class="collapse nav-sub" id="grupoCheques">
+            <a href="/cheques_propios"><i class="fas fa-money-check"></i> Cheques Propios</a>
+            <a href="/cheques_terceros"><i class="fas fa-hand-holding-usd"></i> Cheques de Terceros</a>
+        </div>
+
+        <!-- ========== GRUPO: REPORTES ========== -->
+        <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#grupoReportes" aria-expanded="false">
+            <span><i class="fas fa-chart-bar me-2"></i>Reportes</span>
+            <i class="fas fa-chevron-right chevron"></i>
+        </button>
+        <div class="collapse nav-sub" id="grupoReportes">
+            {% if session.get('rol') == 'admin' %}
+            <a href="/iva_ventas"><i class="fas fa-file-invoice-dollar"></i> IVA Ventas</a>
+            <a href="/reporte_ventas"><i class="fas fa-chart-bar"></i> Ventas por Producto</a>
+            <a href="/reportes#medios-pago" onclick="setTimeout(()=>document.getElementById('medios-pago-tab')?.click(),300)"><i class="fas fa-credit-card"></i> Medios de Pago</a>
+            <a href="/margen_productos"><i class="fas fa-chart-line"></i> Margen por Producto</a>
+            <a href="{{ url_for('estadisticas') }}"><i class="fas fa-chart-bar"></i> Estadísticas de Ventas</a>
+            <a href="/analisis_avanzado"><i class="fas fa-brain"></i> Análisis Avanzado</a>
+            <a href="/stock_audit"><i class="fas fa-clipboard-check"></i> Auditoría de Stock</a>
+            <a href="{{ url_for('reporte_saldos_clientes') }}"><i class="fas fa-balance-scale"></i> Saldos de Clientes</a>
+            <div class="sidebar-sep"></div>
+            <a href="{{ url_for('puente_contable.pantalla') }}" title="Exportar asientos contables para tu contador">
+                <i class="fas fa-file-excel"></i> Puente con tu Contador
+            </a>
+            <a href="{{ url_for('static', filename='FactuFacil_para_Contadores.pdf') }}" target="_blank" title="Ficha técnica para el contador">
+                <i class="fas fa-user-tie"></i> PDF para Contadores
+            </a>
+            {% endif %}
+        </div>
+
+        <!-- ========== GRUPO: SISTEMA ========== -->
+        <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#grupoSistema" aria-expanded="false">
+            <span><i class="fas fa-cog me-2"></i>Sistema</span>
+            <i class="fas fa-chevron-right chevron"></i>
+        </button>
+        <div class="collapse nav-sub" id="grupoSistema">
+            <a href="/ayuda_ventas"><i class="fas fa-question-circle"></i> Ayuda - Ventas</a>
+            <a href="/usuarios"><i class="fas fa-users"></i> Usuarios</a>
+            {% if session.get('rol') == 'admin' %}
+            <a href="{{ url_for('importador.inicio') }}" title="Importar clientes y productos desde Excel"><i class="fas fa-file-import"></i> Importador de Datos</a>
+            <a href="/mp/config"><i class="fab fa-cc-mastercard"></i> MercadoPago QR</a>
+            <a href="/auditoria_cancelaciones"><i class="fas fa-eye"></i> Auditoría Cancelaciones</a>
+            {% endif %}
+            <a class="text-warning" href="{{ url_for('cambiar_usuario') }}"><i class="fas fa-user-switch"></i> Cambiar Usuario</a>
+            <a class="text-danger" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a>
+        </div>
+
+        <!-- ========== FOOTER ========== -->
+        <div class="sidebar-footer">
+            <small class="text-muted d-block">Usuario: <strong class="text-white">{{ session.nombre }}</strong></small>
+            <div class="developer-info">
+                <small class="text-muted d-block mb-1">Desarrollado por:</small>
+                <a href="https://www.pablore.com.ar/" target="_blank" style="text-decoration: none;">
+                    <img src="{{ url_for('static', filename='developer-logo.png') }}"
+                         alt="Pablo Ré - Full-Stack Developer"
+                         class="img-fluid">
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ========== MAIN CONTENT ========== -->
+    <main class="content">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    {% else %}
+        {% block login_content %}{% endblock %}
+    {% endif %}
+
+    <!-- ========== SCRIPTS ========== -->
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
+    <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+
+    <script>
+        // ========== MOBILE SIDEBAR TOGGLE ==========
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (sidebar) sidebar.classList.toggle('open');
+            if (overlay) overlay.classList.toggle('open');
+        }
+
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (sidebar) sidebar.classList.remove('open');
+            if (overlay) overlay.classList.remove('open');
+        }
+
+        // Cerrar sidebar al clickear un link en mobile
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebarLinks = document.querySelectorAll('.sidebar a[href]');
+            sidebarLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    if (window.innerWidth <= 991) {
+                        closeSidebar();
+                    }
+                });
+            });
+
+            // Marcar el link activo según la URL actual
+            const currentPath = window.location.pathname;
+            sidebarLinks.forEach(link => {
+                const href = link.getAttribute('href');
+                if (href && href !== '/' && currentPath.startsWith(href)) {
+                    link.classList.add('active');
+                    // Abrir el grupo que contiene el link activo
+                    const parentCollapse = link.closest('.collapse');
+                    if (parentCollapse && !parentCollapse.classList.contains('show')) {
+                        parentCollapse.classList.add('show');
+                        const btn = document.querySelector(`[data-bs-target="#${parentCollapse.id}"]`);
+                        if (btn) btn.setAttribute('aria-expanded', 'true');
+                    }
+                } else if (href === '/' && currentPath === '/') {
+                    link.classList.add('active');
+                }
+            });
+
+            // Guardar/restaurar estado de grupos colapsables en localStorage
+            const groupButtons = document.querySelectorAll('.nav-group-btn[data-bs-target]');
+            groupButtons.forEach(btn => {
+                const target = btn.getAttribute('data-bs-target');
+                const estadoGuardado = localStorage.getItem('sidebar_' + target);
+                if (estadoGuardado === 'open') {
+                    const el = document.querySelector(target);
+                    if (el && !el.classList.contains('show')) {
+                        el.classList.add('show');
+                        btn.setAttribute('aria-expanded', 'true');
+                    }
+                } else if (estadoGuardado === 'closed') {
+                    const el = document.querySelector(target);
+                    if (el && el.classList.contains('show')) {
+                        el.classList.remove('show');
+                        btn.setAttribute('aria-expanded', 'false');
+                    }
+                }
+                btn.addEventListener('click', function() {
+                    setTimeout(() => {
+                        const el = document.querySelector(target);
+                        if (el) {
+                            localStorage.setItem('sidebar_' + target,
+                                el.classList.contains('show') ? 'open' : 'closed');
+                        }
+                    }, 400);
+                });
+            });
+        });
+    </script>
+    
+    <!-- ════════════════════════════════════════════════════════════════════
+         HELPERS GLOBALES SweetAlert2 (UX unificada en toda la app)
+         ════════════════════════════════════════════════════════════════════
+         USO:
+           toast('Guardado')                          → toast verde 2.5s arriba dcha
+           toast('Error', 'error')                    → toast rojo 4s
+           alertSwal('Mensaje')                       → modal info
+           alertSwal('Error grave', 'error')          → modal error
+           if (await confirmSwal('¿Eliminar?')) {...} → confirm rojo destructivo
+           if (await confirmSwal('¿Seguir?', '', 'info')) → confirm azul
+    -->
+    <script>
+    (function() {
+        if (typeof Swal === 'undefined') {
+            console.warn('SweetAlert2 no está cargado, helpers desactivados');
+            return;
+        }
+        
+        window.toast = function(message, icon) {
+            icon = icon || 'success';
+            // Calcular tiempo según contenido: longer messages get more time
+            // Mínimo 4s para que se pueda leer. Errores duran más.
+            const charsExtra = Math.max(0, (message || '').length - 30) * 50;
+            let duracion = 4000 + charsExtra;
+            if (icon === 'error') duracion = Math.max(duracion, 6000);
+            if (duracion > 10000) duracion = 10000;  // tope superior
+            
+            return Swal.fire({
+                toast: true, position: 'top-end',
+                showConfirmButton: false,
+                timer: duracion,
+                timerProgressBar: true,
+                icon: icon, title: message,
+                didOpen: (toast) => {
+                    // Pausar al pasar el mouse encima
+                    toast.addEventListener('mouseenter', Swal.stopTimer);
+                    toast.addEventListener('mouseleave', Swal.resumeTimer);
+                }
+            });
+        };
+        
+        window.alertSwal = function(message, icon, title) {
+            icon = icon || 'info';
+            const opts = {
+                icon: icon,
+                title: title || (icon === 'error' ? 'Error' : icon === 'warning' ? 'Atención' : icon === 'success' ? 'Listo' : 'Aviso'),
+                confirmButtonText: 'Entendido'
+            };
+            if (typeof message === 'string' && (message.includes('<') || message.includes('&lt;'))) {
+                opts.html = message;
+            } else {
+                opts.text = message;
+            }
+            return Swal.fire(opts);
+        };
+        
+        window.confirmSwal = async function(title, text, icon, opts) {
+            icon = icon || 'warning';
+            opts = opts || {};
+            const config = {
+                title: title || '¿Confirmar?',
+                text: text || '',
+                icon: icon,
+                showCancelButton: true,
+                confirmButtonText: opts.confirmText || 'Sí, confirmar',
+                cancelButtonText: opts.cancelText || 'Cancelar',
+                confirmButtonColor: opts.confirmColor || (icon === 'warning' || icon === 'error' ? '#dc3545' : '#0d6efd'),
+                cancelButtonColor: '#6c757d',
+                reverseButtons: true
+            };
+            if (text && (text.includes('<') || text.includes('&lt;'))) {
+                config.html = text;
+                delete config.text;
+            }
+            const r = await Swal.fire(config);
+            return r.isConfirmed;
+        };
+        
+        window.loadingSwal = function(title) {
+            Swal.fire({
+                title: title || 'Procesando...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => Swal.showLoading()
+            });
+        };
+        
+        window.closeLoadingSwal = function() { Swal.close(); };
+    })();
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,360 @@
+{% extends 'base.html' %}
+{% block title %}Zonas de Reparto{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3">
+    <h2>
+        <i class="fas fa-map-marked-alt me-2"></i>Zonas de Reparto
+        <button class="btn btn-sm btn-outline-info ms-2" data-bs-toggle="modal" data-bs-target="#modalAyuda" title="Ver ayuda">
+            <i class="fas fa-question-circle me-1"></i> Ayuda
+        </button>
+    </h2>
+    <button class="btn btn-primary" onclick="abrirNueva()">
+        <i class="fas fa-plus me-1"></i> Nueva Zona
+    </button>
+</div>
+
+<div class="alert alert-info small">
+    <i class="fas fa-info-circle me-1"></i>
+    Las zonas sirven para agrupar clientes por ubicación geográfica y después organizar el reparto.
+    Si es tu primera vez acá, clickeá el botón <strong>"Ayuda"</strong> para entender el sistema completo.
+</div>
+
+<!-- Tabla de zonas -->
+<div class="card">
+    <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-list me-2"></i>Zonas configuradas</span>
+        <span id="contador" class="badge bg-secondary">0</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width:60px">Orden</th>
+                        <th>Zona</th>
+                        <th>Descripción</th>
+                        <th class="text-center" style="width:100px">Color</th>
+                        <th class="text-center" style="width:110px">Clientes</th>
+                        <th class="text-center" style="width:100px">Estado</th>
+                        <th class="text-center" style="width:140px">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tbl">
+                    <tr><td colspan="7" class="text-center text-muted py-3">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nueva / Editar -->
+<div class="modal fade" id="modalZona" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalTitulo"><i class="fas fa-plus me-2"></i>Nueva Zona</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="zId">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Nombre *</label>
+                    <input type="text" id="zNombre" class="form-control" maxlength="60" placeholder="Ej: Centro, Norte, Zona Rural...">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Descripción</label>
+                    <input type="text" id="zDescripcion" class="form-control" maxlength="255" placeholder="Ej: Incluye micro-centro y alrededores">
+                </div>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Color del badge</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="color" id="zColor"
+                                   class="form-control form-control-color"
+                                   value="#0d6efd"
+                                   style="width: 60px; height: 50px; cursor: pointer;"
+                                   title="Hacé click para elegir un color">
+                            <button type="button" class="btn btn-outline-secondary btn-sm flex-grow-1"
+                                    onclick="document.getElementById('zColor').click();"
+                                    style="height: 50px;">
+                                <i class="fas fa-palette me-1"></i> Click para elegir color
+                            </button>
+                        </div>
+                        <small class="text-muted">
+                            <span id="zPreview" class="badge" style="background:#0d6efd">Ejemplo</span>
+                            <span class="ms-2">Código: <code id="zColorTexto">#0d6efd</code></span>
+                        </small>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Orden de reparto</label>
+                        <input type="number" id="zOrden" class="form-control" value="0" min="0">
+                        <small class="text-muted">Menor primero. Útil para ordenar el recorrido del camión.</small>
+                    </div>
+                </div>
+                <div class="form-check mt-3">
+                    <input type="checkbox" id="zActivo" class="form-check-input" checked>
+                    <label class="form-check-label" for="zActivo">Zona activa (visible en los dropdowns)</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardar()"><i class="fas fa-save me-1"></i> Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Ayuda -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Cómo funciona el sistema de Zonas de Reparto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="text-info fw-bold"><i class="fas fa-lightbulb me-1"></i> ¿Qué es una zona y para qué sirve?</h6>
+                <p>Una zona es un agrupamiento geográfico de clientes que te sirve para <strong>organizar el reparto</strong> de mercadería. Ejemplos típicos: <em>Centro</em>, <em>Norte</em>, <em>Zona Rural</em>, <em>Barrio Las Flores</em>, <em>Microcentro Oeste</em>.</p>
+                <p>Cuando asignás una zona a cada cliente, el sistema puede después:</p>
+                <ul>
+                    <li>Mostrarte todos los remitos pendientes <strong>agrupados por zona</strong></li>
+                    <li>Mostrarte los pedidos online <strong>filtrados por zona</strong></li>
+                    <li>Imprimir la zona en cada remito y factura para que el repartidor la vea</li>
+                    <li>En la próxima entrega del módulo, armar automáticamente la <strong>hoja de ruta del camión</strong> por zona</li>
+                </ul>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-cog me-1"></i> Cómo configurar las zonas</h6>
+                <ol>
+                    <li><strong>Identificá tus zonas reales de reparto.</strong> Por ejemplo: ¿cómo dividís actualmente el día? ¿Por barrios? ¿Por cuadrantes? ¿Por cercanía al depósito?</li>
+                    <li><strong>Click en "Nueva Zona"</strong> y cargá cada una con:
+                        <ul>
+                            <li><strong>Nombre</strong>: corto y descriptivo (ej: "Centro", "Norte", "Pueblo 1")</li>
+                            <li><strong>Descripción</strong> (opcional): para recordarte qué abarca (ej: "Desde Pellegrini hasta la estación")</li>
+                            <li><strong>Color</strong>: para identificarla visualmente. Ponele colores distintos a zonas limítrofes para distinguirlas fácil.</li>
+                            <li><strong>Orden de reparto</strong>: número que determina en qué orden vas a recorrerlas. Por ejemplo, si siempre salís del depósito hacia el centro y después a la periferia: Centro=1, Norte=2, Rural=3.</li>
+                        </ul>
+                    </li>
+                    <li>Activá <strong>"Zona activa"</strong> para que aparezca en los dropdowns al crear clientes/remitos/pedidos.</li>
+                </ol>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-user-tag me-1"></i> Cómo asignar zonas a los clientes</h6>
+                <p>Una vez que tenés las zonas creadas, andá al módulo de <strong>Clientes</strong>. En el formulario de cada cliente aparece un dropdown nuevo <strong>"Zona de reparto"</strong>.</p>
+                <p><strong>Formas de asignar</strong>:</p>
+                <ul>
+                    <li><strong>Uno por uno</strong>: editás cada cliente y le ponés la zona. Es lo más preciso pero lleva tiempo.</li>
+                    <li><strong>Masivo por dirección</strong>: si todos tus clientes de "Av. Pellegrini" son de "Centro", podés asignar la zona a todos los que tengan esa palabra en la dirección. (Ver herramienta más abajo.)</li>
+                    <li><strong>Dejar sin zona</strong>: la zona es opcional. Los clientes sin zona asignada van a aparecer en un grupo "Sin zona" en los listados.</li>
+                </ul>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-truck me-1"></i> Cómo se usa la zona en el día a día</h6>
+                <ul>
+                    <li><strong>Al crear un remito</strong>: el sistema copia automáticamente la zona del cliente. Podés cambiarla en ese remito puntual si ese día va a otro lugar.</li>
+                    <li><strong>Al crear un pedido online</strong>: ídem, hereda la zona del cliente.</li>
+                    <li><strong>En los listados</strong>: al lado del nombre del cliente vas a ver un badge de colores con la zona, y podés filtrar por zona.</li>
+                    <li><strong>En la impresión térmica</strong> (remito y factura): aparece una línea <code>ZONA: NOMBRE</code> que ayuda al repartidor a encontrar el comprobante correcto en su pila.</li>
+                </ul>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-shopping-cart me-1"></i> Integración con pedidos online</h6>
+                <p>El módulo de <strong>pedidos online</strong> también está integrado con zonas:</p>
+                <ul>
+                    <li>Cuando un cliente hace un pedido desde la web, el sistema <strong>hereda automáticamente</strong> la zona que tenga asignada.</li>
+                    <li>En el panel <strong>"Administración de Pedidos"</strong> (<code>/admin/pedidos</code>) vas a poder filtrar los pedidos por zona.</li>
+                    <li>Esto te permite, por ejemplo, preparar primero todos los pedidos de la zona que sale primero al reparto, dejando los otros para después.</li>
+                    <li>Si el cliente <strong>no tiene zona asignada</strong>, el pedido queda "Sin zona" y podés asignarla manualmente editando el pedido o el cliente.</li>
+                    <li>Los pedidos con <strong>tipo de entrega "Retiro"</strong> no van al reparto aunque tengan zona (el cliente los retira en el local).</li>
+                </ul>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-calendar-day me-1"></i> Armado del reparto del día (próxima entrega)</h6>
+                <p>En la segunda entrega de este módulo se agrega una pantalla <strong>"Armar reparto"</strong> donde vas a poder:</p>
+                <ul>
+                    <li>Ver todos los <strong>remitos pendientes</strong> y <strong>pedidos "listos"</strong> (no los de retiro) agrupados por zona</li>
+                    <li>Ver totales por zona (cantidad de comprobantes y suma en $) para saber cuánto sale cada camión</li>
+                    <li>Seleccionar qué zonas salen al reparto ese día</li>
+                    <li>Imprimir una <strong>planilla del camión</strong> (formato A4) con la hoja de ruta ordenada por zona, incluyendo cliente, dirección, teléfono, número de comprobante, total y espacio para firma de recibido</li>
+                    <li>Marcar zonas como "<strong>en reparto hoy</strong>" para que no aparezcan duplicadas si volvés a abrir la pantalla</li>
+                    <li>Ver en una solapa aparte "<strong>En reparto hoy</strong>" todo lo que ya está asignado al camión</li>
+                    <li>Si el chofer vuelve <strong>sin entregar algo</strong>, volver a marcarlo como "pendiente" para mandarlo al día siguiente (un click)</li>
+                    <li>Ya está preparada la base: las tablas <code>remito</code> y <code>pedido</code> tienen la columna <code>en_reparto_fecha</code> lista desde esta primera entrega</li>
+                </ul>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-palette me-1"></i> Consejos para elegir colores</h6>
+                <ul>
+                    <li>Usá <strong>colores muy diferentes</strong> entre zonas limítrofes (ej: azul y naranja), no tonos parecidos (azul claro y azul oscuro).</li>
+                    <li>Evitá el <strong>rojo intenso</strong> para zonas muy usadas — es mejor reservarlo para cosas de alerta.</li>
+                    <li>Si tenés muchas zonas (más de 5-6), agrupalas por colores: todas las del norte en tonos verdes, todas del sur en tonos rojos/naranjas, etc.</li>
+                </ul>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-exclamation-triangle me-1"></i> Cosas importantes que tenés que saber</h6>
+                <ul class="mb-0">
+                    <li>Si <strong>eliminás una zona</strong> que ya estaba asignada, esos clientes/remitos/pedidos <strong>no se borran</strong>: quedan con "Sin zona" y podés reasignarlos después. El sistema te va a avisar cuántos registros afecta antes de confirmar.</li>
+                    <li>Si <strong>desactivás una zona</strong> (en vez de eliminarla), deja de aparecer en los dropdowns para nuevas asignaciones, pero los registros viejos que ya la tienen siguen mostrándola. Es más seguro que eliminar si simplemente ya no la usás.</li>
+                    <li>El <strong>orden de reparto</strong> no es obligatorio respetarlo — el chofer puede hacer el recorrido que quiera. Pero el sistema usa ese número para mostrar las zonas en un orden consistente en los listados y en la planilla del camión.</li>
+                    <li><strong>La zona en remitos y pedidos es independiente de la del cliente</strong>: si cambiás la zona de un cliente ya registrado, los remitos/pedidos viejos siguen con la zona que tenían. Solo los nuevos heredarán la zona nueva del cliente.</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const ES_ADMIN = {{ 'true' if es_admin else 'false' }};
+
+function cargar() {
+    fetch('/zonas/api/listar')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('contador').textContent = data.length;
+            if (!data.length) {
+                document.getElementById('tbl').innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">No hay zonas cargadas. Creá la primera con el botón "Nueva Zona".</td></tr>';
+                return;
+            }
+            document.getElementById('tbl').innerHTML = data.map(z => `
+                <tr class="${!z.activo ? 'table-secondary' : ''}">
+                    <td class="text-center">${z.orden_reparto}</td>
+                    <td><span class="badge" style="background:${z.color}">${escapeHtml(z.nombre)}</span></td>
+                    <td class="text-muted small">${escapeHtml(z.descripcion)}</td>
+                    <td class="text-center"><code>${z.color}</code></td>
+                    <td class="text-center"><span class="badge bg-info">${z.clientes_count}</span></td>
+                    <td class="text-center">${z.activo ? '<span class="badge bg-success">Activa</span>' : '<span class="badge bg-secondary">Inactiva</span>'}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary" onclick='editar(${JSON.stringify(z)})' title="Editar"><i class="fas fa-edit"></i></button>
+                        ${ES_ADMIN ? `<button class="btn btn-sm btn-outline-danger" onclick="eliminar(${z.id}, '${z.nombre.replace(/'/g, "\\'")}')" title="Eliminar"><i class="fas fa-trash"></i></button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        });
+}
+
+function escapeHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function abrirNueva() {
+    document.getElementById('modalTitulo').innerHTML = '<i class="fas fa-plus me-2"></i>Nueva Zona';
+    document.getElementById('zId').value = '';
+    document.getElementById('zNombre').value = '';
+    document.getElementById('zDescripcion').value = '';
+    setColor('#0d6efd');
+    document.getElementById('zOrden').value = '0';
+    document.getElementById('zActivo').checked = true;
+    new bootstrap.Modal(document.getElementById('modalZona')).show();
+    setTimeout(() => document.getElementById('zNombre').focus(), 300);
+}
+
+function editar(z) {
+    document.getElementById('modalTitulo').innerHTML = '<i class="fas fa-edit me-2"></i>Editar Zona';
+    document.getElementById('zId').value = z.id;
+    document.getElementById('zNombre').value = z.nombre;
+    document.getElementById('zDescripcion').value = z.descripcion;
+    setColor(z.color);
+    document.getElementById('zOrden').value = z.orden_reparto;
+    document.getElementById('zActivo').checked = z.activo;
+    new bootstrap.Modal(document.getElementById('modalZona')).show();
+}
+
+// Helper para setear color en el picker + preview + código visible
+function setColor(hex) {
+    document.getElementById('zColor').value = hex;
+    document.getElementById('zColorTexto').textContent = hex;
+    document.getElementById('zPreview').style.background = hex;
+}
+
+// Cuando cambia el color picker, actualizar preview y código visible
+document.getElementById('zColor').addEventListener('input', function() {
+    setColor(this.value);
+});
+
+function guardar() {
+    const payload = {
+        id: document.getElementById('zId').value || null,
+        nombre: document.getElementById('zNombre').value.trim(),
+        descripcion: document.getElementById('zDescripcion').value.trim(),
+        color: document.getElementById('zColor').value,
+        orden_reparto: parseInt(document.getElementById('zOrden').value) || 0,
+        activo: document.getElementById('zActivo').checked
+    };
+    if (!payload.nombre) {
+        Swal.fire('Atención', 'El nombre es obligatorio', 'warning');
+        return;
+    }
+
+    fetch('/zonas/api/guardar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { Swal.fire('Error', data.error, 'error'); return; }
+        bootstrap.Modal.getInstance(document.getElementById('modalZona')).hide();
+        Swal.fire({icon:'success', title:'Zona guardada', timer:1500, showConfirmButton:false, timerProgressBar:true});
+        cargar();
+    });
+}
+
+function eliminar(id, nombre, forzar = false) {
+    const mensaje = forzar
+        ? '¿Confirmás eliminar la zona "' + nombre + '"? Los clientes asignados quedarán sin zona.'
+        : '¿Eliminar la zona "' + nombre + '"?';
+
+    Swal.fire({
+        title: mensaje,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        confirmButtonText: forzar ? 'Sí, eliminar igual' : 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        fetch(`/zonas/api/eliminar/${id}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({forzar})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.requiere_confirmacion) {
+                Swal.fire({
+                    title: 'Zona con clientes asignados',
+                    html: `Esta zona tiene <strong>${data.clientes_afectados}</strong> cliente(s) asignado(s).<br><br>Si la eliminás, esos clientes quedarán <strong>sin zona</strong>.<br>Igual podés reasignarlos después.`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    confirmButtonText: 'Sí, eliminar igual',
+                    cancelButtonText: 'Cancelar'
+                }).then(r2 => {
+                    if (r2.isConfirmed) eliminar(id, nombre, true);
+                });
+                return;
+            }
+            if (data.error) { Swal.fire('Error', data.error, 'error'); return; }
+            Swal.fire({icon:'success', title:'Zona eliminada', timer:1500, showConfirmButton:false, timerProgressBar:true});
+            cargar();
+        });
+    });
+}
+
+cargar();
+</script>
+{% endblock %}

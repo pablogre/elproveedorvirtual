@@ -1,0 +1,225 @@
+<!-- Modal de Ayuda - Modulo Presupuestos (incluir con include de Jinja) -->
+<div class="modal fade" id="modalAyudaPresupuestos" tabindex="-1" aria-labelledby="modalAyudaPresupuestosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalAyudaPresupuestosLabel">
+                    <i class="fas fa-question-circle"></i> ¿Cómo funcionan los Presupuestos?
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-0">
+
+                <div class="accordion" id="accordionAyudaPresupuestos">
+
+                    <!-- ========== 1. QUÉ ES ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_que_es">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#c_que_es" aria-expanded="true" aria-controls="c_que_es">
+                                <i class="fas fa-info-circle text-info me-2"></i> <strong>1. ¿Qué es un Presupuesto?</strong>
+                            </button>
+                        </h2>
+                        <div id="c_que_es" class="accordion-collapse collapse show" aria-labelledby="hd_que_es" data-bs-parent="#accordionAyudaPresupuestos">
+                            <div class="accordion-body">
+                                <p>Un <strong>Presupuesto</strong> es una <strong>cotización</strong> que le pasás a un cliente <em>antes</em> de venderle.</p>
+                                <p class="mb-2"><strong>Ejemplo real:</strong></p>
+                                <div class="bg-light p-2 rounded mb-3">
+                                    <em>El cliente pregunta: "¿cuánto me sale llevarme 50kg de asado y 20 chorizos?"<br>
+                                    Vos armás un presupuesto con esos productos, se lo mandás, y el cliente decide si compra o no.</em>
+                                </div>
+
+                                <p class="mb-2 text-success"><strong>✅ Lo que un presupuesto SÍ hace:</strong></p>
+                                <ul class="mb-3">
+                                    <li>Guarda qué productos, cantidades y precios le cotizaste</li>
+                                    <li>Le pone un número propio (tipo <code>PRES-00001-00000001</code>) para referenciarlo</li>
+                                    <li>Te permite hacer seguimiento: aceptado, rechazado, pendiente, vencido</li>
+                                </ul>
+
+                                <p class="mb-2 text-danger"><strong>❌ Lo que un presupuesto NO hace:</strong></p>
+                                <ul class="mb-0">
+                                    <li><strong>No descuenta stock</strong> — ni uno solo</li>
+                                    <li><strong>No va a ARCA/AFIP</strong> — no es un comprobante fiscal</li>
+                                    <li><strong>No suma al IVA Ventas</strong> — no figura en el libro IVA</li>
+                                    <li><strong>No genera deuda en cuenta corriente</strong></li>
+                                </ul>
+                                <div class="alert alert-warning mt-3 mb-0">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <strong>Recién cuando lo CONVERTÍS A FACTURA pasa a ser una venta real.</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 2. FLUJO PASO A PASO ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_flujo">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_flujo" aria-expanded="false">
+                                <i class="fas fa-route text-primary me-2"></i> <strong>2. Flujo paso a paso</strong>
+                            </button>
+                        </h2>
+                        <div id="c_flujo" class="accordion-collapse collapse" aria-labelledby="hd_flujo" data-bs-parent="#accordionAyudaPresupuestos">
+                            <div class="accordion-body">
+
+                                <div class="mb-3">
+                                    <h6><span class="badge bg-secondary">1</span> Crear</h6>
+                                    <p class="ms-4 mb-1">Click en <strong>"Nuevo Presupuesto"</strong>. Elegís cliente, días de vigencia (default <strong>15</strong>), y cargás los productos con cantidad y precio. Guardás.</p>
+                                    <p class="ms-4"><small>→ Queda en estado <span class="badge bg-secondary">BORRADOR</span></small></p>
+                                </div>
+
+                                <div class="mb-3">
+                                    <h6><span class="badge bg-secondary">2</span> Enviar al cliente</h6>
+                                    <p class="ms-4 mb-1">Imprimís el presupuesto (botón Imprimir) o le sacás foto a la pantalla y se lo mandás por WhatsApp/email.</p>
+                                    <p class="ms-4">Después click en <strong>"Marcar como Enviado"</strong>.</p>
+                                    <p class="ms-4"><small>→ Pasa a <span class="badge bg-info">ENVIADO</span></small></p>
+                                </div>
+
+                                <div class="mb-3">
+                                    <h6><span class="badge bg-secondary">3</span> El cliente responde</h6>
+                                    <ul class="ms-4">
+                                        <li>👍 "Dale, lo tomo" → click <strong>"Marcar como Aceptado"</strong> → <span class="badge bg-success">ACEPTADO</span></li>
+                                        <li>👎 "Es mucho, no lo tomo" → click <strong>"Marcar como Rechazado"</strong> → <span class="badge bg-danger">RECHAZADO</span></li>
+                                        <li>🤐 No contesta y pasan los días de validez → se marca solo como <span class="badge bg-warning text-dark">VENCIDO</span></li>
+                                    </ul>
+                                </div>
+
+                                <div class="mb-0">
+                                    <h6><span class="badge bg-secondary">4</span> Convertir a factura</h6>
+                                    <p class="ms-4 mb-1">Una vez en <span class="badge bg-success">ACEPTADO</span>, se habilita el botón <strong>"Convertir a Factura"</strong>.</p>
+                                    <div class="alert alert-info mt-2 mb-0 ms-4 py-2">
+                                        <small><i class="fas fa-tools"></i> <strong>Ojo:</strong> esta función todavía está en desarrollo. Te avisa "próximamente" si la tocás. Se habilita en la próxima actualización.</small>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 3. ESTADOS ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_estados">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_estados" aria-expanded="false">
+                                <i class="fas fa-flag text-warning me-2"></i> <strong>3. Los 6 estados de un presupuesto</strong>
+                            </button>
+                        </h2>
+                        <div id="c_estados" class="accordion-collapse collapse" aria-labelledby="hd_estados" data-bs-parent="#accordionAyudaPresupuestos">
+                            <div class="accordion-body p-0">
+                                <table class="table table-sm mb-0">
+                                    <thead class="table-light">
+                                        <tr><th>Estado</th><th>Qué significa</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td><span class="badge bg-secondary">BORRADOR</span></td><td>Recién creado. No se mandó al cliente todavía.</td></tr>
+                                        <tr><td><span class="badge bg-info">ENVIADO</span></td><td>Ya se lo mandaste al cliente. Esperando respuesta.</td></tr>
+                                        <tr><td><span class="badge bg-success">ACEPTADO</span></td><td>El cliente aprobó la cotización. Listo para facturar.</td></tr>
+                                        <tr><td><span class="badge bg-danger">RECHAZADO</span></td><td>El cliente no aprobó. Queda como registro histórico.</td></tr>
+                                        <tr><td><span class="badge bg-warning text-dark">VENCIDO</span></td><td>Pasó la fecha de validez sin respuesta. Se marca automático.</td></tr>
+                                        <tr><td><span class="badge bg-primary">CONVERTIDO</span></td><td>Ya se facturó. No se puede modificar ni borrar.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 4. IMPORTANTE ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_importante">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_importante" aria-expanded="false">
+                                <i class="fas fa-exclamation-triangle text-danger me-2"></i> <strong>4. Cosas importantes (LEER)</strong>
+                            </button>
+                        </h2>
+                        <div id="c_importante" class="accordion-collapse collapse" aria-labelledby="hd_importante" data-bs-parent="#accordionAyudaPresupuestos">
+                            <div class="accordion-body">
+
+                                <div class="mb-3">
+                                    <h6>🔒 Los precios quedan "congelados"</h6>
+                                    <p class="ms-4 small mb-0">Si cotizás un producto a <strong>$100</strong> y después lo cambiás en el maestro a <strong>$120</strong>, el presupuesto sigue mostrando <strong>$100</strong>. Es a propósito — el cliente firmó ese precio.</p>
+                                </div>
+
+                                <div class="mb-3">
+                                    <h6>📦 No se descuenta stock</h6>
+                                    <p class="ms-4 small mb-0">El stock solo se descuenta cuando se factura. Podés tener 10 presupuestos activos del mismo producto sin problema.</p>
+                                </div>
+
+                                <div class="mb-3">
+                                    <h6>💰 Precios SIN IVA (netos)</h6>
+                                    <p class="ms-4 small mb-0">Los precios que cargás son netos. El sistema calcula el IVA aparte según la alícuota que tenga cada producto.</p>
+                                </div>
+
+                                <div class="mb-3">
+                                    <h6>🗑️ CONVERTIDO no se puede borrar</h6>
+                                    <p class="ms-4 small mb-0">Un presupuesto ya convertido a factura queda bloqueado. Es por trazabilidad — la factura ya existe y el presupuesto es su origen.</p>
+                                </div>
+
+                                <div class="mb-0">
+                                    <h6>⏰ Validez default: 15 días</h6>
+                                    <p class="ms-4 small mb-0">Se puede cambiar al crear el presupuesto: mínimo 1 día, máximo 365. Pasada la fecha, el estado cambia solo a VENCIDO.</p>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 5. PREGUNTAS FRECUENTES ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_faq">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_faq" aria-expanded="false">
+                                <i class="fas fa-question text-success me-2"></i> <strong>5. Preguntas frecuentes</strong>
+                            </button>
+                        </h2>
+                        <div id="c_faq" class="accordion-collapse collapse" aria-labelledby="hd_faq" data-bs-parent="#accordionAyudaPresupuestos">
+                            <div class="accordion-body">
+
+                                <p class="mb-1"><strong>¿Puedo modificar un presupuesto ya guardado?</strong></p>
+                                <p class="small text-muted mb-3">Por ahora no se puede editar desde la interfaz. Si necesitás cambiarlo, borralo (si todavía no está CONVERTIDO) y hacés uno nuevo. La edición de borradores se agrega en una próxima iteración.</p>
+
+                                <p class="mb-1"><strong>¿Qué pasa si el cliente acepta un presupuesto vencido?</strong></p>
+                                <p class="small text-muted mb-3">No hay drama. Le hacés click en "Marcar como Aceptado" igual. El sistema no te lo impide. Los precios quedan como los cotizaste originalmente.</p>
+
+                                <p class="mb-1"><strong>¿Cómo lo imprimo en "bonito"?</strong></p>
+                                <p class="small text-muted mb-3">Por ahora usás el botón <strong>Imprimir</strong> dentro de la pantalla "Ver", que abre el diálogo del navegador (Ctrl+P). En próximas iteraciones se agrega impresión dedicada (PDF A4 o térmica con la leyenda "PRESUPUESTO — No válido como factura").</p>
+
+                                <p class="mb-1"><strong>¿Por qué "Convertir a Factura" me aparece desactivado?</strong></p>
+                                <p class="small text-muted mb-3">Solo se puede convertir un presupuesto en estado <span class="badge bg-success">ACEPTADO</span>. Si está en otro estado (Borrador, Enviado, etc.), primero marcalo como Aceptado.</p>
+
+                                <p class="mb-1"><strong>¿La conversión a factura ya anda?</strong></p>
+                                <p class="small text-muted mb-3">Todavía no — está en desarrollo. El botón muestra "próximamente" por ahora. Es la próxima feature que se habilita.</p>
+
+                                <p class="mb-1"><strong>¿Puedo tener varios presupuestos abiertos para el mismo cliente?</strong></p>
+                                <p class="small text-muted mb-3">Sí, todos los que quieras. No hay restricción.</p>
+
+                                <p class="mb-1"><strong>¿Se cobra algo cuando el cliente acepta?</strong></p>
+                                <p class="small text-muted mb-0">No. Un presupuesto ACEPTADO sigue siendo un presupuesto, no genera deuda ni movimiento de stock. Recién cuando lo CONVERTÍS A FACTURA se genera la venta real (y la deuda en cta cte si corresponde).</p>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 6. CONSEJOS ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_consejos">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_consejos" aria-expanded="false">
+                                <i class="fas fa-lightbulb text-warning me-2"></i> <strong>6. Consejos prácticos</strong>
+                            </button>
+                        </h2>
+                        <div id="c_consejos" class="accordion-collapse collapse" aria-labelledby="hd_consejos" data-bs-parent="#accordionAyudaPresupuestos">
+                            <div class="accordion-body">
+                                <ul class="mb-0">
+                                    <li class="mb-2">Poné <strong>observaciones claras</strong>: condiciones de pago ("50% al firmar, 50% contra entrega"), plazo de entrega, validez extendida, aclaraciones técnicas.</li>
+                                    <li class="mb-2">Usá los <strong>filtros del listado por estado "Aceptado"</strong> para ver qué tenés pendiente de facturar.</li>
+                                    <li class="mb-2">Marcá los estados <strong>a medida que pasan las cosas</strong> — te sirve para seguimiento y para saber qué clientes compran y cuáles solo cotizan.</li>
+                                    <li class="mb-0">Si el cliente te negocia un descuento, hacé un <strong>presupuesto nuevo</strong> con el precio acordado. Los precios quedan trazados en cada presupuesto.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

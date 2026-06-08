@@ -1,0 +1,850 @@
+{% extends 'base.html' %}
+{% block title %}Actualización Masiva de Costos{% endblock %}
+
+{% block content %}
+<style>
+    .wizard-steps {
+        display: flex; justify-content: space-between; margin: 30px 0 40px;
+        position: relative; padding: 0 20px;
+    }
+    .wizard-steps::before {
+        content: ''; position: absolute; top: 25px; left: 60px; right: 60px;
+        height: 3px; background: #dee2e6; z-index: 0;
+    }
+    .step { position: relative; z-index: 1; text-align: center; flex: 1; }
+    .step-circle {
+        width: 50px; height: 50px; border-radius: 50%;
+        background: #dee2e6; color: #6c757d;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.3em; font-weight: bold;
+        margin: 0 auto 8px; transition: all 0.3s;
+    }
+    .step.active .step-circle { background: #0d6efd; color: white; box-shadow: 0 0 0 4px rgba(13,110,253,0.2); }
+    .step.completed .step-circle { background: #198754; color: white; }
+    .step-label { font-size: 0.85em; color: #6c757d; }
+    .step.active .step-label { color: #0d6efd; font-weight: bold; }
+    .step.completed .step-label { color: #198754; }
+    .panel-paso { display: none; }
+    .panel-paso.activo { display: block; animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .delta-positivo { color: #dc3545; font-weight: bold; }
+    .delta-negativo { color: #198754; font-weight: bold; }
+    .badge-categoria { background: #e7f1ff; color: #0d6efd; }
+    .badge-proveedor { background: #fff3cd; color: #664d03; }
+    .resumen-card {
+        background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%);
+        color: white; padding: 25px; border-radius: 12px;
+        text-align: center; margin-bottom: 20px;
+    }
+    .resumen-card .display-4 { font-weight: bold; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mt-3 mb-2">
+    <h2>
+        <i class="fas fa-percent text-primary me-2"></i>Actualización Masiva de Costos
+        <button class="btn btn-sm btn-outline-info ms-2" data-bs-toggle="modal" data-bs-target="#modalAyuda" title="Ver ayuda">
+            <i class="fas fa-question-circle me-1"></i> Ayuda
+        </button>
+    </h2>
+    <a href="{{ url_for('compras.listado') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i> Volver a Compras
+    </a>
+</div>
+
+<div class="alert alert-info py-2 small">
+    <i class="fas fa-info-circle"></i>
+    Subió la lista de un proveedor o querés ajustar márgenes por categoría sin entrar producto por producto. Esta pantalla te lo resuelve en 3 pasos. <a href="#" data-bs-toggle="modal" data-bs-target="#modalAyuda">Ver guía completa</a>.
+</div>
+
+<!-- ===================== STEPS ===================== -->
+<div class="wizard-steps">
+    <div class="step active" id="step-1">
+        <div class="step-circle">1</div>
+        <div class="step-label">Filtrar productos</div>
+    </div>
+    <div class="step" id="step-2">
+        <div class="step-circle">2</div>
+        <div class="step-label">Configurar cambio</div>
+    </div>
+    <div class="step" id="step-3">
+        <div class="step-circle">3</div>
+        <div class="step-label">Preview y aplicar</div>
+    </div>
+</div>
+
+<!-- ===================== PASO 1: FILTROS ===================== -->
+<div class="panel-paso activo" id="panel-1">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-filter me-2"></i><strong>Paso 1: ¿A qué productos aplicar el cambio?</strong>
+        </div>
+        <div class="card-body">
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Proveedor</label>
+                    <select class="form-select" id="filtroProveedor">
+                        <option value="">— Todos los proveedores —</option>
+                        {% for p in proveedores %}
+                        <option value="{{ p.id }}">{{ p.razon_social }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle"></i>
+                        Si elegís un proveedor, se filtra por la <strong>última factura de compra</strong> de cada producto a ese proveedor.
+                    </small>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Categoría</label>
+                    <select class="form-select" id="filtroCategoria">
+                        <option value="">— Todas las categorías —</option>
+                        {% for c in categorias %}
+                        <option value="{{ c.categoria }}">{{ c.categoria }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="soloActivos" checked>
+                        <label class="form-check-label" for="soloActivos">
+                            Solo productos activos
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 text-end">
+                <button class="btn btn-primary btn-lg" onclick="paso1Buscar()">
+                    <i class="fas fa-search me-1"></i> Buscar productos →
+                </button>
+            </div>
+
+            <div id="resultadoPaso1" class="mt-4" style="display:none;">
+                <hr>
+                <div class="alert alert-success py-2">
+                    <i class="fas fa-check-circle"></i>
+                    <strong><span id="cantEncontrados">0</span> productos</strong> encontrados con esos filtros.
+                </div>
+                <div class="text-end">
+                    <button class="btn btn-success" onclick="irAPaso(2)" id="btnIrPaso2">
+                        Continuar al paso 2 →
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- ===================== PASO 2: CONFIGURAR CAMBIO ===================== -->
+<div class="panel-paso" id="panel-2">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-sliders-h me-2"></i><strong>Paso 2: ¿Qué cambio aplicamos?</strong>
+        </div>
+        <div class="card-body">
+
+            <div class="resumen-card">
+                <div class="display-4" id="cantSeleccionados">0</div>
+                <div>productos seleccionados</div>
+            </div>
+
+            <label class="form-label fw-bold">Tipo de operación</label>
+            <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                    <input type="radio" class="btn-check" name="tipoOp" id="opAumento" value="aumento" checked>
+                    <label class="btn btn-outline-danger w-100" for="opAumento">
+                        <i class="fas fa-arrow-up"></i> Aumento %
+                    </label>
+                </div>
+                <div class="col-md-4">
+                    <input type="radio" class="btn-check" name="tipoOp" id="opDescuento" value="descuento">
+                    <label class="btn btn-outline-success w-100" for="opDescuento">
+                        <i class="fas fa-arrow-down"></i> Descuento %
+                    </label>
+                </div>
+                <div class="col-md-4">
+                    <input type="radio" class="btn-check" name="tipoOp" id="opAbsoluto" value="absoluto">
+                    <label class="btn btn-outline-primary w-100" for="opAbsoluto">
+                        <i class="fas fa-equals"></i> Costo absoluto $
+                    </label>
+                </div>
+            </div>
+
+            <label class="form-label fw-bold mt-2">Valor</label>
+            <div class="input-group input-group-lg">
+                <span class="input-group-text" id="prefijoValor">+</span>
+                <input type="number" class="form-control" id="valorCambio" placeholder="12" step="0.01">
+                <span class="input-group-text" id="sufijoValor">%</span>
+            </div>
+            <small class="text-muted" id="ayudaValor">Ej: 12 = aumento del 12%</small>
+
+            <div class="mt-4 d-flex justify-content-between">
+                <button class="btn btn-outline-secondary" onclick="irAPaso(1)">
+                    ← Volver al paso 1
+                </button>
+                <button class="btn btn-primary btn-lg" onclick="paso2Calcular()">
+                    Ver preview →
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- ===================== PASO 3: PREVIEW ===================== -->
+<div class="panel-paso" id="panel-3">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <i class="fas fa-eye me-2"></i><strong>Paso 3: Preview del cambio antes de aplicar</strong>
+        </div>
+        <div class="card-body">
+
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <div class="card text-center bg-light">
+                        <div class="card-body py-2">
+                            <small class="text-muted">Productos</small>
+                            <h4 class="mb-0" id="totProductos">0</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center bg-light">
+                        <div class="card-body py-2">
+                            <small class="text-muted">Costo prom. actual</small>
+                            <h4 class="mb-0 text-primary" id="totCostoActual">$0,00</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center bg-light">
+                        <div class="card-body py-2">
+                            <small class="text-muted">Costo prom. nuevo</small>
+                            <h4 class="mb-0 text-success" id="totCostoNuevo">$0,00</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center bg-light">
+                        <div class="card-body py-2">
+                            <small class="text-muted">Variación promedio</small>
+                            <h4 class="mb-0" id="totDelta">+0,00%</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-info py-2 d-flex align-items-center">
+                <div class="form-check form-switch me-3">
+                    <input class="form-check-input" type="checkbox" id="recalcularPrecios" checked role="switch" style="transform: scale(1.4);">
+                    <label class="form-check-label fw-bold ms-2" for="recalcularPrecios">
+                        Recalcular las 5 listas de precios automáticamente
+                    </label>
+                </div>
+            </div>
+            <small class="text-muted d-block mb-3">
+                <i class="fas fa-info-circle"></i>
+                Si tildás esta opción, además de actualizar el costo se recalculan los 5 precios de venta usando los márgenes actuales de cada producto. Si no, solo se cambia el costo (los precios quedan congelados).
+            </small>
+
+            <div class="table-responsive" style="max-height: 450px;">
+                <table class="table table-sm table-hover">
+                    <thead class="table-dark sticky-top">
+                        <tr>
+                            <th>Código</th>
+                            <th>Producto</th>
+                            <th>Categoría</th>
+                            <th>Proveedor</th>
+                            <th class="text-end">Stock</th>
+                            <th class="text-end">Costo actual</th>
+                            <th class="text-end">→ Costo nuevo</th>
+                            <th class="text-end">Δ$</th>
+                            <th class="text-end">Δ%</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaPreview"></tbody>
+                </table>
+            </div>
+
+            <div class="mt-4 d-flex justify-content-between">
+                <button class="btn btn-outline-secondary" onclick="irAPaso(2)">
+                    ← Volver al paso 2
+                </button>
+                <button class="btn btn-success btn-lg" onclick="aplicarCambios()" id="btnAplicar">
+                    <i class="fas fa-check-circle me-1"></i> <span id="lblBtnAplicar">Aplicar cambios</span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+<!-- =============================================================== -->
+<!-- ============== MODAL AYUDA EXHAUSTIVO ========================== -->
+<!-- =============================================================== -->
+<div class="modal fade" id="modalAyuda" tabindex="-1" aria-labelledby="modalAyudaLabel">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalAyudaLabel">
+                    <i class="fas fa-question-circle me-2"></i>Manual completo — Actualización Masiva de Costos
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <div class="alert alert-light border mb-3">
+                    <strong><i class="fas fa-list-ul me-1"></i> Contenido</strong><br>
+                    <small>
+                        1. ¿Qué hace este módulo? · 2. Cuándo conviene usarlo ·
+                        3. Cómo se identifica el proveedor de cada producto · 4. Los 3 tipos de operación ·
+                        5. El switch "Recalcular precios" · 6. Combos: por qué no se actualizan ·
+                        7. Snapshot al histórico (cómo revertir) · 8. Errores comunes · 9. Preguntas frecuentes
+                    </small>
+                </div>
+
+                <div class="accordion" id="accordionAyudaActMasiva">
+
+                    <!-- ========== 1. ¿QUÉ HACE? ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#cm1">
+                                <i class="fas fa-lightbulb text-warning me-2"></i> <strong>1. ¿Qué hace este módulo?</strong>
+                            </button>
+                        </h2>
+                        <div id="cm1" class="accordion-collapse collapse show" data-bs-parent="#accordionAyudaActMasiva">
+                            <div class="accordion-body">
+                                <p>Te permite aplicar un <strong>cambio de costo</strong> a muchos productos a la vez, sin entrar producto por producto desde el ABM. Lo hacés en 3 pasos:</p>
+                                <ol>
+                                    <li><strong>Filtrar</strong>: elegís a qué productos aplicar el cambio (por proveedor, categoría, etc).</li>
+                                    <li><strong>Configurar</strong>: elegís si es un aumento %, descuento % o costo absoluto.</li>
+                                    <li><strong>Preview y aplicar</strong>: ves la tabla con costo actual → costo nuevo de cada producto, decidís si querés también recalcular los precios de venta, y aplicás.</li>
+                                </ol>
+
+                                <div class="alert alert-success py-2 mb-0 small">
+                                    <strong><i class="fas fa-shield-alt"></i> Tranquilidad:</strong>
+                                    antes de cada actualización se guarda un <strong>snapshot completo</strong> del producto en el histórico de costos. Si te equivocaste, los datos viejos quedan registrados para poder revertir.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 2. CUÁNDO USARLO ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cm2">
+                                <i class="fas fa-calendar-check text-primary me-2"></i> <strong>2. Cuándo conviene usarlo</strong>
+                            </button>
+                        </h2>
+                        <div id="cm2" class="accordion-collapse collapse" data-bs-parent="#accordionAyudaActMasiva">
+                            <div class="accordion-body">
+                                <h6 class="fw-bold">Casos típicos:</h6>
+                                <ul>
+                                    <li><strong>Aumento de proveedor</strong>: te llamó tu proveedor un lunes y te dice "subió todo 12% desde hoy". Aplicás +12% a todos los productos de ese proveedor en un click.</li>
+                                    <li><strong>Ajuste por categoría</strong>: querés que toda la categoría "Bebidas" tenga +5% de costo (porque incluiste un costo de logística adicional, por ejemplo).</li>
+                                    <li><strong>Liquidación</strong>: querés bajar -15% el costo de todos los productos de una categoría para liquidar stock viejo.</li>
+                                    <li><strong>Blanqueo</strong>: querés dejar el costo de un grupo de productos en un valor fijo (ej. $1.500), independiente del costo histórico.</li>
+                                </ul>
+                                <h6 class="fw-bold mt-3">Cuándo NO usarlo:</h6>
+                                <ul class="mb-0">
+                                    <li><i class="fas fa-times text-danger"></i> Si querés actualizar <strong>1 o 2 productos puntuales</strong>: andá al ABM directamente, es más rápido.</li>
+                                    <li><i class="fas fa-times text-danger"></i> Si te llegó una <strong>factura de compra</strong>: usá el módulo "Compras de Mercadería". Esa factura ya actualiza costos automáticamente.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 3. CÓMO SE IDENTIFICA EL PROVEEDOR ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cm3">
+                                <i class="fas fa-user-tag text-success me-2"></i> <strong>3. Cómo se identifica el proveedor de cada producto</strong>
+                            </button>
+                        </h2>
+                        <div id="cm3" class="accordion-collapse collapse" data-bs-parent="#accordionAyudaActMasiva">
+                            <div class="accordion-body">
+                                <div class="alert alert-info py-2 small mb-3">
+                                    <strong><i class="fas fa-info-circle"></i> Importante:</strong>
+                                    el sistema NO tiene un campo "proveedor" en el producto. Para saber a qué proveedor pertenece cada producto, el sistema mira el <strong>historial de compras</strong>.
+                                </div>
+
+                                <h6 class="fw-bold">¿Cómo funciona?</h6>
+                                <p>Cuando filtrás por un proveedor en el paso 1, el sistema te muestra los productos cuya <strong>última factura de compra</strong> fue a ese proveedor.</p>
+
+                                <div class="bg-light p-3 rounded border mb-3">
+                                    <strong>Ejemplo:</strong>
+                                    <ul class="mb-0 small">
+                                        <li>Yerba Rosamonte: última compra fue a SCHIRO el 15/04 → si filtrás por SCHIRO, aparece.</li>
+                                        <li>Aceite Cocinero: última compra fue a La Anónima el 20/04 → si filtrás por SCHIRO, NO aparece.</li>
+                                        <li>Galletitas Manón: nunca le compraste a nadie (recién la diste de alta) → no aparece en ningún filtro de proveedor.</li>
+                                    </ul>
+                                </div>
+
+                                <h6 class="fw-bold mt-3">Implicancias prácticas</h6>
+                                <ul class="mb-0">
+                                    <li>Para que un producto aparezca filtrando por proveedor X, tiene que existir <strong>al menos una factura cargada</strong> en "Compras de Mercadería" donde figure ese producto comprado a X.</li>
+                                    <li>Si compraste un producto a varios proveedores en el tiempo, el sistema lo asocia siempre al <strong>último</strong> proveedor (el de la factura más reciente).</li>
+                                    <li>Si dejás el filtro de proveedor vacío ("Todos los proveedores"), aparecen <strong>todos los productos</strong>, incluyendo los que nunca fueron comprados.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 4. TIPOS DE OPERACIÓN ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cm4">
+                                <i class="fas fa-calculator text-primary me-2"></i> <strong>4. Los 3 tipos de operación</strong>
+                            </button>
+                        </h2>
+                        <div id="cm4" class="accordion-collapse collapse" data-bs-parent="#accordionAyudaActMasiva">
+                            <div class="accordion-body">
+                                <h6 class="fw-bold"><i class="fas fa-arrow-up text-danger"></i> Aumento %</h6>
+                                <p>Multiplica el costo actual por (1 + valor/100).</p>
+                                <div class="bg-light p-2 rounded border mb-2 small">
+                                    <strong>Ejemplo:</strong> Aceite Cocinero $1.234,56 + 12% → 1234,56 × 1,12 = <strong>$1.382,71</strong>
+                                </div>
+
+                                <h6 class="fw-bold mt-3"><i class="fas fa-arrow-down text-success"></i> Descuento %</h6>
+                                <p>Multiplica el costo actual por (1 − valor/100).</p>
+                                <div class="bg-light p-2 rounded border mb-2 small">
+                                    <strong>Ejemplo:</strong> Aceite Cocinero $1.234,56 − 5% → 1234,56 × 0,95 = <strong>$1.172,83</strong>
+                                </div>
+                                <small class="text-muted">El descuento debe ser menor a 100% (sino el costo quedaría en $0 o negativo).</small>
+
+                                <h6 class="fw-bold mt-3"><i class="fas fa-equals text-primary"></i> Costo absoluto $</h6>
+                                <p>Le pone el mismo costo fijo a todos los productos seleccionados, ignorando el costo actual.</p>
+                                <div class="bg-light p-2 rounded border mb-2 small">
+                                    <strong>Ejemplo:</strong> 50 productos seleccionados con costos diversos → todos quedan en $1.500 de costo.
+                                </div>
+                                <div class="alert alert-warning py-2 mb-0 small">
+                                    <strong><i class="fas fa-exclamation-triangle"></i> Cuidado con el absoluto:</strong>
+                                    es la opción <em>menos común</em>. Solo tiene sentido si todos los productos seleccionados deberían tener el mismo costo (ej. una categoría con productos de costo similar). Si los productos tienen costos muy distintos, vas a generar un desastre. <strong>Revisá bien el preview antes de aplicar.</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 5. RECALCULAR PRECIOS ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cm5">
+                                <i class="fas fa-tags text-info me-2"></i> <strong>5. El switch "Recalcular las 5 listas de precios"</strong>
+                            </button>
+                        </h2>
+                        <div id="cm5" class="accordion-collapse collapse" data-bs-parent="#accordionAyudaActMasiva">
+                            <div class="accordion-body">
+                                <p>En el paso 3 hay un switch <strong>"Recalcular las 5 listas de precios automáticamente"</strong>. Esto define qué pasa con tus precios de venta cuando se actualiza el costo.</p>
+
+                                <h6 class="fw-bold"><i class="fas fa-toggle-on text-success"></i> Si está ACTIVADO (recomendado)</h6>
+                                <p>Para cada producto, las 5 listas de precios se recalculan así:</p>
+                                <div class="bg-light p-2 rounded border mb-2">
+                                    <code>Precio nuevo = Costo nuevo × (1 + Margen/100)</code>
+                                </div>
+                                <p>Usa el margen <strong>actual</strong> de cada producto (margen, margen2, margen3, margen4, margen5).</p>
+                                <div class="alert alert-light py-2 small">
+                                    <strong>Ejemplo:</strong> Aceite Cocinero costo nuevo $1.382,71. Margen Lista 1 = 30%, Margen Lista 2 = 25%, etc.<br>
+                                    → Precio 1 = 1382,71 × 1,30 = <strong>$1.797,52</strong><br>
+                                    → Precio 2 = 1382,71 × 1,25 = <strong>$1.728,39</strong>
+                                </div>
+                                <small class="text-muted"><strong>Importante:</strong> si un producto tiene Margen 3 = NULL (no cargado), Precio 3 NO se toca, queda con su valor anterior.</small>
+
+                                <h6 class="fw-bold mt-3"><i class="fas fa-toggle-off text-danger"></i> Si está DESACTIVADO</h6>
+                                <p>Solo se actualiza el costo. Los precios de venta quedan congelados con sus valores actuales.</p>
+                                <h6 class="fw-bold mt-2">¿Cuándo desactivarlo?</h6>
+                                <ul class="mb-0">
+                                    <li>Cuando tenés <strong>ofertas vigentes</strong> que no querés tocar.</li>
+                                    <li>Cuando querés <strong>absorber el aumento</strong> sin trasladarlo al cliente final por un tiempo.</li>
+                                    <li>Cuando vas a actualizar precios manualmente con otro criterio.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 6. COMBOS ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cm6">
+                                <i class="fas fa-cubes text-secondary me-2"></i> <strong>6. Combos: por qué no se actualizan</strong>
+                            </button>
+                        </h2>
+                        <div id="cm6" class="accordion-collapse collapse" data-bs-parent="#accordionAyudaActMasiva">
+                            <div class="accordion-body">
+                                <p>El sistema <strong>nunca</strong> actualiza productos de tipo combo en una actualización masiva. Esto es a propósito.</p>
+                                <h6 class="fw-bold">¿Por qué?</h6>
+                                <p>El costo de un combo se calcula a partir del costo de sus productos base. Si el sistema actualizara directamente el costo de un combo, después se "pisaría" cuando se recalcula desde los productos base, generando inconsistencias.</p>
+                                <h6 class="fw-bold">Entonces ¿cómo se actualizan los combos?</h6>
+                                <p>Indirectamente: cuando aplicás esta actualización masiva a los <strong>productos base</strong>, el costo de los combos que los contienen se recalcula automáticamente la próxima vez que se vendan o consulten.</p>
+                                <div class="alert alert-light py-2 mb-0 small">
+                                    <strong>Ejemplo:</strong> tenés un combo "Pack desayuno" = 1 yerba + 1 paquete de galletitas + 1 leche. Si aplicás +12% a todos los productos del proveedor SCHIRO, los productos base se actualizan, y el costo del combo refleja el aumento automáticamente.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 7. SNAPSHOT / REVERTIR ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cm7">
+                                <i class="fas fa-history text-secondary me-2"></i> <strong>7. Snapshot al histórico — cómo revertir</strong>
+                            </button>
+                        </h2>
+                        <div id="cm7" class="accordion-collapse collapse" data-bs-parent="#accordionAyudaActMasiva">
+                            <div class="accordion-body">
+                                <h6 class="fw-bold">Qué se guarda</h6>
+                                <p>Antes de aplicar el cambio a cada producto, el sistema guarda un snapshot completo en el histórico de costos:</p>
+                                <ul>
+                                    <li>Costo anterior y costo nuevo</li>
+                                    <li>Los 5 márgenes anteriores</li>
+                                    <li>Los 5 precios anteriores</li>
+                                    <li>Stock al momento del cambio</li>
+                                    <li>Usuario que hizo el cambio</li>
+                                    <li>Fecha y hora exactas</li>
+                                    <li>Motivo: <code>actualizacion_masiva</code></li>
+                                </ul>
+
+                                <h6 class="fw-bold mt-3">Cómo revertir</h6>
+                                <p>El sistema <strong>no tiene un botón "deshacer"</strong> para esta operación, pero los datos históricos están todos registrados. Si necesitás revertir:</p>
+                                <ol>
+                                    <li>Andá a <strong>Estadísticas → Histórico de Costos</strong> y filtrá por motivo "actualizacion_masiva" + fecha.</li>
+                                    <li>Vas a ver la lista de todos los productos modificados con sus valores anteriores.</li>
+                                    <li>Por cada producto, podés volver al ABM y restaurar manualmente costo y precios.</li>
+                                </ol>
+                                <div class="alert alert-warning py-2 mb-0 small">
+                                    <strong><i class="fas fa-exclamation-triangle"></i> Importante:</strong>
+                                    revertir manualmente es tedioso si afectaste 200 productos. Por eso <strong>siempre revisá el preview con cuidado antes de apretar "Aplicar"</strong>.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 8. ERRORES COMUNES ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cm8">
+                                <i class="fas fa-exclamation-triangle text-warning me-2"></i> <strong>8. Errores comunes y soluciones</strong>
+                            </button>
+                        </h2>
+                        <div id="cm8" class="accordion-collapse collapse" data-bs-parent="#accordionAyudaActMasiva">
+                            <div class="accordion-body">
+
+                                <div class="card mb-2 border-warning">
+                                    <div class="card-header py-2 bg-warning bg-opacity-25">
+                                        <strong>"Sin productos con esos filtros"</strong>
+                                    </div>
+                                    <div class="card-body py-2 small">
+                                        Si filtraste por un proveedor pero no aparecen productos, puede ser que <strong>nunca cargaste una factura de compra</strong> a ese proveedor en "Compras de Mercadería". Acordate que el sistema deduce el proveedor de cada producto a partir del historial de compras (ver sección 3). <strong>Solución:</strong> cargá primero alguna factura de compra a ese proveedor, o sacá el filtro de proveedor para ver todos los productos.
+                                    </div>
+                                </div>
+
+                                <div class="card mb-2 border-warning">
+                                    <div class="card-header py-2 bg-warning bg-opacity-25">
+                                        <strong>"Ingresá un valor válido"</strong>
+                                    </div>
+                                    <div class="card-body py-2 small">
+                                        El campo "Valor" está vacío o tiene un número inválido. <strong>Solución:</strong> ingresá un número positivo. Para descuentos, el valor debe ser menor a 100.
+                                    </div>
+                                </div>
+
+                                <div class="card mb-2 border-danger">
+                                    <div class="card-header py-2 bg-danger bg-opacity-25">
+                                        <strong>"Costo nuevo sería &lt;= 0, omitido"</strong>
+                                    </div>
+                                    <div class="card-body py-2 small">
+                                        El cambio que pediste resulta en costo cero o negativo (típicamente con descuentos muy grandes). Ese producto se omite automáticamente. <strong>Solución:</strong> bajá el % de descuento o usá costo absoluto.
+                                    </div>
+                                </div>
+
+                                <div class="card mb-2 border-danger">
+                                    <div class="card-header py-2 bg-danger bg-opacity-25">
+                                        <strong>"Máximo 2000 productos por operación"</strong>
+                                    </div>
+                                    <div class="card-body py-2 small">
+                                        Por seguridad y performance, el sistema limita la operación a 2000 productos por vez. <strong>Solución:</strong> aplicá el cambio en tandas (ej. primera tanda por categoría A, segunda por categoría B).
+                                    </div>
+                                </div>
+
+                                <div class="card mb-0 border-warning">
+                                    <div class="card-header py-2 bg-warning bg-opacity-25">
+                                        <strong>"Apliqué el cambio pero los precios no se modificaron"</strong>
+                                    </div>
+                                    <div class="card-body py-2 small">
+                                        Probablemente desactivaste el switch "Recalcular precios" sin querer, o los productos tienen márgenes en NULL. <strong>Solución:</strong> revisá si tildaste el switch en el paso 3, y revisá los márgenes de los productos en el ABM.
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 9. FAQ ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cm9">
+                                <i class="fas fa-question text-info me-2"></i> <strong>9. Preguntas frecuentes</strong>
+                            </button>
+                        </h2>
+                        <div id="cm9" class="accordion-collapse collapse" data-bs-parent="#accordionAyudaActMasiva">
+                            <div class="accordion-body">
+
+                                <p class="mb-1"><strong>¿Puedo deshacer una actualización masiva con un click?</strong></p>
+                                <p class="small text-muted mb-3">No hay botón de "deshacer" automático. Pero todos los valores anteriores quedan en el histórico de costos para revisión manual. Por eso es clave revisar el preview antes de aplicar.</p>
+
+                                <p class="mb-1"><strong>¿Cuántos productos puedo actualizar a la vez?</strong></p>
+                                <p class="small text-muted mb-3">Hasta 2000 productos por operación. Si tu maestro es más grande, hacelo en tandas filtrando por categoría o proveedor.</p>
+
+                                <p class="mb-1"><strong>¿Esto modifica el stock?</strong></p>
+                                <p class="small text-muted mb-3">No. Esta operación SOLO toca costo y, si tildás el switch, las 5 listas de precios. El stock no se mueve.</p>
+
+                                <p class="mb-1"><strong>¿Afecta a los presupuestos ya emitidos?</strong></p>
+                                <p class="small text-muted mb-3">No. Los presupuestos guardan los precios al momento de emitirse, no toman el precio actual del producto. Lo mismo con las facturas ya emitidas.</p>
+
+                                <p class="mb-1"><strong>¿Qué pasa con los productos que están en oferta?</strong></p>
+                                <p class="small text-muted mb-3">Si tenés ofertas configuradas (en el módulo de ofertas), el costo se actualiza igual. La oferta sigue vigente con su porcentaje configurado, pero aplicado sobre el nuevo costo. Si querés "proteger" un producto en oferta, conviene desactivar el switch "Recalcular precios" o filtrar para que ese producto no entre.</p>
+
+                                <p class="mb-1"><strong>¿Por qué no me aparece un producto que sí compré a ese proveedor?</strong></p>
+                                <p class="small text-muted mb-3">Porque <strong>la última</strong> factura de ese producto fue a otro proveedor. El sistema asocia cada producto al proveedor de su última compra. Si comprás Yerba a SCHIRO 50 veces y después una vez a La Anónima, queda asociada a La Anónima hasta que vuelvas a comprarle a SCHIRO. Ver sección 3.</p>
+
+                                <p class="mb-1"><strong>¿Combos se actualizan?</strong></p>
+                                <p class="small text-muted mb-3">No, nunca. Los combos se actualizan indirectamente cuando se actualizan sus productos base. Ver sección 6.</p>
+
+                                <p class="mb-1"><strong>¿Quién puede usar este módulo?</strong></p>
+                                <p class="small text-muted mb-0">Solo usuarios con rol "admin". Otros usuarios ven mensaje de "Acceso denegado".</p>
+
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="alert alert-success mt-3 mb-0 py-2 small">
+                    <strong><i class="fas fa-lightbulb"></i> Tip final:</strong>
+                    siempre <strong>revisá el preview con calma</strong> antes de apretar "Aplicar". Si tenés dudas con muchos productos, hacelo en tandas chicas (ej. primero 1 categoría) y verificá los resultados antes de seguir.
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+let productosFiltrados = [];
+let cambiosCalculados = [];
+
+function fmt(n) {
+    return '$' + Number(n || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function fmtStock(n) {
+    return Number(n || 0).toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 3});
+}
+
+// ============== PASO 1: FILTRAR ==============
+async function paso1Buscar() {
+    const proveedor_id = document.getElementById('filtroProveedor').value || null;
+    const categoria = document.getElementById('filtroCategoria').value || '';
+    const solo_activos = document.getElementById('soloActivos').checked;
+
+    document.getElementById('btnIrPaso2').disabled = true;
+    document.getElementById('resultadoPaso1').style.display = 'none';
+
+    try {
+        const r = await fetch('/compras/api/actualizacion_masiva/buscar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({proveedor_id, categoria, solo_activos})
+        });
+        const data = await r.json();
+        if (!r.ok) {
+            Swal.fire({icon: 'error', title: 'Error', text: data.error || 'No se pudo buscar'});
+            return;
+        }
+
+        productosFiltrados = data.productos || [];
+        document.getElementById('cantEncontrados').textContent = productosFiltrados.length;
+        document.getElementById('cantSeleccionados').textContent = productosFiltrados.length;
+        document.getElementById('totProductos').textContent = productosFiltrados.length;
+        document.getElementById('lblBtnAplicar').textContent = `Aplicar cambios a ${productosFiltrados.length} productos`;
+        document.getElementById('resultadoPaso1').style.display = 'block';
+
+        if (productosFiltrados.length === 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Sin productos',
+                html: 'Con esos filtros no hay productos.<br>' +
+                      '<small class="text-muted">Si filtraste por proveedor, recordá que solo aparecen productos que ya le compraste alguna vez (existe una factura en "Compras de Mercadería"). Probá quitando el filtro de proveedor o cargando primero alguna compra.</small>'
+            });
+        } else {
+            document.getElementById('btnIrPaso2').disabled = false;
+        }
+    } catch (err) {
+        Swal.fire({icon: 'error', title: 'Error de red', text: String(err)});
+    }
+}
+
+// ============== PASO 2: CONFIGURAR ==============
+function actualizarPrefijoValor() {
+    const tipo = document.querySelector('input[name="tipoOp"]:checked').value;
+    const prefijo = document.getElementById('prefijoValor');
+    const sufijo = document.getElementById('sufijoValor');
+    const ayuda = document.getElementById('ayudaValor');
+    if (tipo === 'aumento') {
+        prefijo.textContent = '+'; sufijo.textContent = '%';
+        ayuda.textContent = 'Ej: 12 = aumento del 12%';
+    } else if (tipo === 'descuento') {
+        prefijo.textContent = '−'; sufijo.textContent = '%';
+        ayuda.textContent = 'Ej: 5 = descuento del 5% (debe ser menor a 100)';
+    } else {
+        prefijo.textContent = '$'; sufijo.textContent = '';
+        ayuda.textContent = 'Ej: 1500 = todos los productos quedan a $1500 de costo';
+    }
+}
+document.querySelectorAll('input[name="tipoOp"]').forEach(r => r.addEventListener('change', actualizarPrefijoValor));
+
+function paso2Calcular() {
+    const valor = parseFloat(document.getElementById('valorCambio').value);
+    if (!valor || valor <= 0) {
+        Swal.fire({icon: 'warning', title: 'Ingresá un valor válido', text: 'El valor debe ser mayor a 0.'});
+        return;
+    }
+    const tipo = document.querySelector('input[name="tipoOp"]:checked').value;
+    if (tipo === 'descuento' && valor >= 100) {
+        Swal.fire({icon: 'warning', title: 'Descuento inválido', text: 'El descuento debe ser menor a 100%.'});
+        return;
+    }
+
+    cambiosCalculados = productosFiltrados.map(p => {
+        let costoNuevo;
+        if (tipo === 'aumento') costoNuevo = p.costo * (1 + valor / 100);
+        else if (tipo === 'descuento') costoNuevo = p.costo * (1 - valor / 100);
+        else costoNuevo = valor;
+        const delta = costoNuevo - p.costo;
+        const deltaPct = p.costo > 0 ? (delta / p.costo) * 100 : 0;
+        return {...p, costoNuevo, delta, deltaPct};
+    });
+
+    // Promedios
+    const promActual = cambiosCalculados.reduce((s, p) => s + p.costo, 0) / cambiosCalculados.length;
+    const promNuevo = cambiosCalculados.reduce((s, p) => s + p.costoNuevo, 0) / cambiosCalculados.length;
+    const promDelta = promActual > 0 ? ((promNuevo - promActual) / promActual) * 100 : 0;
+
+    document.getElementById('totCostoActual').textContent = fmt(promActual);
+    document.getElementById('totCostoNuevo').textContent = fmt(promNuevo);
+    const elDelta = document.getElementById('totDelta');
+    elDelta.textContent = (promDelta >= 0 ? '+' : '') + promDelta.toFixed(2) + '%';
+    elDelta.className = 'mb-0 ' + (promDelta >= 0 ? 'delta-positivo' : 'delta-negativo');
+
+    // Tabla
+    const tbody = document.getElementById('tablaPreview');
+    tbody.innerHTML = cambiosCalculados.map(p => `
+        <tr>
+            <td><code>${p.codigo}</code></td>
+            <td>${p.nombre}</td>
+            <td>${p.categoria ? `<span class="badge badge-categoria">${p.categoria}</span>` : ''}</td>
+            <td>${p.proveedor_nombre ? `<span class="badge badge-proveedor">${p.proveedor_nombre}</span>` : '<span class="text-muted small">sin asignar</span>'}</td>
+            <td class="text-end">${fmtStock(p.stock)}</td>
+            <td class="text-end">${fmt(p.costo)}</td>
+            <td class="text-end fw-bold text-primary">${fmt(p.costoNuevo)}</td>
+            <td class="text-end ${p.delta >= 0 ? 'delta-positivo' : 'delta-negativo'}">${p.delta >= 0 ? '+' : ''}${fmt(p.delta).replace('$','$')}</td>
+            <td class="text-end ${p.deltaPct >= 0 ? 'delta-positivo' : 'delta-negativo'}">${p.deltaPct >= 0 ? '+' : ''}${p.deltaPct.toFixed(2)}%</td>
+        </tr>
+    `).join('');
+
+    irAPaso(3);
+}
+
+// ============== NAVEGACIÓN ==============
+function irAPaso(n) {
+    document.querySelectorAll('.panel-paso').forEach(p => p.classList.remove('activo'));
+    document.getElementById(`panel-${n}`).classList.add('activo');
+    document.querySelectorAll('.step').forEach((s, i) => {
+        s.classList.remove('active', 'completed');
+        if (i + 1 < n) s.classList.add('completed');
+        if (i + 1 === n) s.classList.add('active');
+    });
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+// ============== APLICAR ==============
+async function aplicarCambios() {
+    const recalcular = document.getElementById('recalcularPrecios').checked;
+    const tipo = document.querySelector('input[name="tipoOp"]:checked').value;
+    const valor = parseFloat(document.getElementById('valorCambio').value);
+    const tipoTexto = tipo === 'aumento' ? `aumento del +${valor}%`
+                    : tipo === 'descuento' ? `descuento del −${valor}%`
+                    : `costo absoluto de $${valor}`;
+
+    const conf = await Swal.fire({
+        icon: 'warning',
+        title: '¿Aplicar el cambio?',
+        html: `Se va a aplicar <strong>${tipoTexto}</strong> a <strong>${cambiosCalculados.length} productos</strong>.<br><br>` +
+              (recalcular
+                  ? '<i class="fas fa-check text-success"></i> Las 5 listas de precios <strong>se recalcularán</strong> con los márgenes actuales.<br>'
+                  : '<i class="fas fa-times text-danger"></i> Los precios <strong>quedarán congelados</strong> (solo cambia el costo).<br>') +
+              '<i class="fas fa-history text-info"></i> Se guarda snapshot en histórico para revisión posterior.<br><br>' +
+              '<strong>Esta acción no se puede deshacer fácilmente.</strong>',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, aplicar cambios',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#198754',
+        cancelButtonColor: '#6c757d'
+    });
+    if (!conf.isConfirmed) return;
+
+    // Loading
+    Swal.fire({
+        title: 'Aplicando cambios...',
+        html: 'Por favor esperá unos segundos.',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        const r = await fetch('/compras/api/actualizacion_masiva/aplicar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                producto_ids: cambiosCalculados.map(p => p.id),
+                tipo_op: tipo,
+                valor: valor,
+                recalcular_precios: recalcular
+            })
+        });
+        const data = await r.json();
+        if (!r.ok) {
+            Swal.fire({icon: 'error', title: 'Error', text: data.error || 'No se pudo aplicar'});
+            return;
+        }
+
+        let html = `Se actualizaron <strong>${data.actualizados} productos</strong> correctamente.<br>` +
+                   `Snapshot guardado en histórico de costos.<br>` +
+                   (recalcular ? 'Precios recalculados según márgenes.' : 'Precios mantenidos sin cambios.');
+        if (data.errores && data.errores.length > 0) {
+            html += `<br><br><small class="text-warning"><strong>${data.errores.length} omitidos:</strong><br>${data.errores.slice(0, 5).join('<br>')}${data.errores.length > 5 ? '<br>...' : ''}</small>`;
+        }
+
+        await Swal.fire({
+            icon: 'success',
+            title: '¡Cambios aplicados!',
+            html: html,
+            confirmButtonText: 'Volver a Compras'
+        });
+        window.location.href = "{{ url_for('compras.listado') }}";
+    } catch (err) {
+        Swal.fire({icon: 'error', title: 'Error de red', text: String(err)});
+    }
+}
+
+// Init
+actualizarPrefijoValor();
+</script>
+{% endblock %}

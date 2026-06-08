@@ -1,0 +1,740 @@
+{% extends 'base.html' %}
+{% block title %}Liquidaciones a Intermediarios{% endblock %}
+
+{% block content %}
+<style>
+    .card-intermediario {
+        border-left: 4px solid #6f42c1;
+        transition: all 0.2s;
+    }
+    .card-intermediario:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,.1);
+    }
+    .badge-estado-pendiente { background-color: #ffc107; color: #000; }
+    .badge-estado-pagada { background-color: #28a745; color: #fff; }
+    .badge-estado-anulada { background-color: #dc3545; color: #fff; }
+</style>
+
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="mb-1">
+                <i class="fas fa-handshake" style="color:#6f42c1;"></i>
+                Liquidaciones a Intermediarios
+            </h2>
+            <small class="text-muted">Pago de diferencias por mercadería entregada en consignación</small>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-primary"
+                    data-bs-toggle="modal" data-bs-target="#modalAyudaConsignacion">
+                <i class="fas fa-question-circle"></i> ¿Cómo funciona?
+            </button>
+        </div>
+    </div>
+
+    <!-- ═══ SECCIÓN 1: PENDIENTES POR LIQUIDAR ═══ -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-warning bg-opacity-25 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-clock"></i> Pendientes por Liquidar
+            </h5>
+            <button class="btn btn-sm btn-outline-secondary" onclick="cargarPendientes()">
+                <i class="fas fa-sync"></i> Actualizar
+            </button>
+        </div>
+        <div class="card-body">
+            <div id="contenedorPendientes">
+                <div class="text-center text-muted py-3">
+                    <div class="spinner-border" role="status"></div>
+                    <p class="mt-2">Cargando pendientes...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ SECCIÓN 2: LIQUIDACIONES GENERADAS ═══ -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="fas fa-history"></i> Liquidaciones Generadas</h5>
+        </div>
+        <div class="card-body">
+            <!-- Filtros -->
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">Intermediario</label>
+                    <select class="form-select" id="filtroIntermediario" onchange="cargarLiquidaciones()">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Estado</label>
+                    <select class="form-select" id="filtroEstado" onchange="cargarLiquidaciones()">
+                        <option value="">Todos</option>
+                        <option value="pendiente_pago">Pendiente de pago</option>
+                        <option value="pagada">Pagada</option>
+                        <option value="anulada">Anulada</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Desde</label>
+                    <input type="date" class="form-control" id="filtroDesde" onchange="cargarLiquidaciones()">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Hasta</label>
+                    <input type="date" class="form-control" id="filtroHasta" onchange="cargarLiquidaciones()">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-secondary w-100" onclick="limpiarFiltros()">
+                        <i class="fas fa-times"></i> Limpiar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabla de liquidaciones -->
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Número</th>
+                            <th>Fecha</th>
+                            <th>Intermediario</th>
+                            <th class="text-end">Vendido</th>
+                            <th class="text-end">Costo</th>
+                            <th class="text-end">Liquidado</th>
+                            <th>Estado</th>
+                            <th class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyLiquidaciones">
+                        <tr><td colspan="8" class="text-center text-muted py-4">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ MODAL: GENERAR LIQUIDACIÓN ═══ -->
+<div class="modal fade" id="modalGenerar" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color:#6f42c1; color:white;">
+                <h5 class="modal-title">
+                    <i class="fas fa-handshake"></i> Liquidar a <span id="modalIntermediarioNombre">-</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Selector base de cálculo -->
+                <div class="alert alert-info">
+                    <strong><i class="fas fa-calculator"></i> Base de cálculo:</strong>
+                    <div class="form-check form-check-inline ms-3">
+                        <input class="form-check-input" type="radio" name="baseCalculo" id="baseConIva" value="con_iva" checked onchange="recalcularModal()">
+                        <label class="form-check-label" for="baseConIva">
+                            <strong>Con IVA</strong> <small class="text-muted">(diferencia de totales)</small>
+                        </label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="baseCalculo" id="baseSinIva" value="sin_iva" onchange="recalcularModal()">
+                        <label class="form-check-label" for="baseSinIva">
+                            <strong>Sin IVA</strong> <small class="text-muted">(solo netos)</small>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Tabla de internos -->
+                <div class="table-responsive" style="max-height:400px;">
+                    <table class="table table-sm table-hover">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th class="text-center"><input type="checkbox" id="chkTodos" onchange="toggleTodos()" checked></th>
+                                <th>Interno</th>
+                                <th>Factura</th>
+                                <th class="text-end">Costo</th>
+                                <th class="text-end">Vendido</th>
+                                <th class="text-end">Diferencia</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyInternos"></tbody>
+                        <tfoot class="table-light fw-bold">
+                            <tr>
+                                <td colspan="3" class="text-end">TOTALES:</td>
+                                <td class="text-end" id="totalCostoModal">$0.00</td>
+                                <td class="text-end" id="totalVendidoModal">$0.00</td>
+                                <td class="text-end" id="totalLiquidarModal" style="color:#6f42c1;">$0.00</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <hr>
+
+                <!-- Forma de pago -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <h6><i class="fas fa-money-bill-wave"></i> Forma de pago</h6>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="form-check border rounded p-3">
+                            <input class="form-check-input" type="radio" name="formaPago" id="pagoAhora" value="ahora" checked onchange="togglePago()">
+                            <label class="form-check-label fw-bold" for="pagoAhora">
+                                <i class="fas fa-money-bill"></i> Pagar ahora
+                            </label>
+                            <select class="form-select mt-2" id="medioPagoAhora">
+                                <option value="EFECTIVO">Efectivo</option>
+                                <option value="TRANSFERENCIA">Transferencia</option>
+                                <option value="CHEQUE">Cheque</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check border rounded p-3">
+                            <input class="form-check-input" type="radio" name="formaPago" id="pagoDespues" value="despues" onchange="togglePago()">
+                            <label class="form-check-label fw-bold" for="pagoDespues">
+                                <i class="fas fa-clock"></i> Pagar después (Cta.Cte)
+                            </label>
+                            <small class="d-block text-muted mt-2">
+                                Se registrará como crédito a favor del intermediario.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Motivo opcional -->
+                <div class="mb-3">
+                    <label class="form-label">Observaciones (opcional)</label>
+                    <textarea class="form-control" id="motivoLiquidacion" rows="2" placeholder="Ej: Liquidación correspondiente a mayo..."></textarea>
+                </div>
+
+                <!-- Resumen final -->
+                <div class="alert alert-success">
+                    <strong>Total a liquidar a <span id="alertIntermediario">-</span>:</strong>
+                    <span class="fs-4 fw-bold ms-2" id="alertTotalFinal">$0.00</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" onclick="confirmarLiquidacion()">
+                    <i class="fas fa-check"></i> Confirmar Liquidación
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     MODAL AYUDA — CIRCUITO DE CONSIGNACIÓN
+     Reutilizable: mismo bloque en liquidaciones.html y nueva_venta.html
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalAyudaConsignacion" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background-color:#6f42c1; color:#fff;">
+        <h5 class="modal-title">
+          <i class="fas fa-handshake"></i> ¿Cómo funciona la Consignación?
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Resumen -->
+        <div class="alert alert-light border" style="border-left:4px solid #6f42c1 !important;">
+          <strong>En una frase:</strong> el consignatario se lleva mercadería
+          sin pagarla (queda como deuda suya). Cuando se vende, se factura al
+          cliente final. Al <strong>liquidar</strong>, esa deuda del
+          consignatario se cancela (para no contarla dos veces) y se le paga
+          su comisión.
+        </div>
+
+        <!-- Los 4 pasos -->
+        <h6 class="fw-bold mt-4 mb-3" style="color:#6f42c1;">
+          <i class="fas fa-route"></i> El circuito, paso a paso
+        </h6>
+
+        <div class="row g-3">
+          <div class="col-md-3">
+            <div class="card h-100 border-0 shadow-sm">
+              <div class="card-body">
+                <div class="badge bg-primary mb-2">PASO 1</div>
+                <h6 class="fw-bold">Entrega</h6>
+                <p class="small mb-0">
+                  Se le emite un <strong>Comprobante Interno</strong> al
+                  consignatario por la mercadería que se lleva. Va a su
+                  <strong>cuenta corriente como deuda pendiente</strong>
+                  (todavía la "debe", no se vendió).
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card h-100 border-0 shadow-sm">
+              <div class="card-body">
+                <div class="badge bg-primary mb-2">PASO 2</div>
+                <h6 class="fw-bold">Venta</h6>
+                <p class="small mb-0">
+                  La mercadería se vende. Se le emite una
+                  <strong>factura al cliente final</strong>. Esta factura
+                  es <strong>la venta real</strong> (la que cuenta para
+                  AFIP, reportes y estadísticas).
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card h-100 border-0 shadow-sm">
+              <div class="card-body">
+                <div class="badge bg-primary mb-2">PASO 3</div>
+                <h6 class="fw-bold">Liquidación</h6>
+                <p class="small mb-0">
+                  Al liquidar, <strong>se cancela el saldo pendiente del
+                  Comprobante Interno</strong> en la cuenta del
+                  consignatario. Así <strong>la deuda no se duplica</strong>
+                  (no puede deber el interno Y haberse vendido).
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card h-100 border-0 shadow-sm">
+              <div class="card-body">
+                <div class="badge bg-primary mb-2">PASO 4</div>
+                <h6 class="fw-bold">Comisión</h6>
+                <p class="small mb-0">
+                  La diferencia <strong>(vendido − costo)</strong> es la
+                  <strong>comisión del consignatario</strong>: queda como
+                  saldo a favor de él (vos le debés esa comisión).
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ejemplo real -->
+        <h6 class="fw-bold mt-4 mb-3" style="color:#6f42c1;">
+          <i class="fas fa-lightbulb"></i> Ejemplo real (ANTONIO DORA)
+        </h6>
+        <div class="table-responsive">
+          <table class="table table-bordered align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Momento</th>
+                <th>Qué pasa</th>
+                <th class="text-end">Saldo del consignatario</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>1. Entrega</strong></td>
+                <td>Comprobante Interno <code>0001-X0000012</code> por
+                    <strong>$10.197,42</strong> (costo de la mercadería)</td>
+                <td class="text-end text-danger fw-bold">debe $10.197,42</td>
+              </tr>
+              <tr>
+                <td><strong>2. Venta</strong></td>
+                <td>Factura <code>0001-00000009</code> al cliente final por
+                    <strong>$10.925,81</strong> (no afecta al consignatario)</td>
+                <td class="text-end text-danger fw-bold">debe $10.197,42</td>
+              </tr>
+              <tr class="table-success">
+                <td><strong>3. Liquidación</strong></td>
+                <td>Se cancela el interno ($10.197,42) y queda la comisión
+                    <strong>$728,39</strong> ($10.925,81 − $10.197,42)</td>
+                <td class="text-end text-success fw-bold">a favor $728,39</td>
+              </tr>
+              <tr>
+                <td><strong>4. Pago comisión</strong></td>
+                <td>Se le transfiere/paga la comisión al consignatario</td>
+                <td class="text-end fw-bold">$0,00 (saldado)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small text-muted">
+          <i class="fas fa-info-circle"></i> Antes de este circuito, el
+          interno quedaba como deuda <em>además</em> de la factura: el
+          consignatario aparecía debiendo $10.197,42 que en realidad ya se
+          habían vendido (deuda duplicada). Ahora eso no pasa.
+        </p>
+
+        <!-- Regla de reportes -->
+        <h6 class="fw-bold mt-4 mb-3" style="color:#6f42c1;">
+          <i class="fas fa-chart-bar"></i> Importante: reportes y estadísticas
+        </h6>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="alert alert-warning mb-0 h-100">
+              <strong><i class="fas fa-times-circle"></i> Interno a
+              CONSIGNATARIO</strong>
+              <p class="small mb-0 mt-1">
+                <strong>NO cuenta</strong> como venta en reportes ni
+                estadísticas. La venta real es la factura al cliente final.
+                Si contara, el producto se contaría <strong>dos veces</strong>.
+              </p>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="alert alert-success mb-0 h-100">
+              <strong><i class="fas fa-check-circle"></i> Interno NORMAL
+              (no consignatario)</strong>
+              <p class="small mb-0 mt-1">
+                <strong>SÍ cuenta</strong> como venta, igual que siempre.
+                La exclusión es <strong>solo</strong> para los internos a
+                clientes marcados como intermediario/consignatario.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Casos en definición - HONESTO -->
+        <h6 class="fw-bold mt-4 mb-3 text-secondary">
+          <i class="fas fa-exclamation-triangle"></i> Casos especiales (en definición)
+        </h6>
+        <div class="alert alert-secondary">
+          <strong>Anular una liquidación que YA fue pagada:</strong>
+          <p class="small mb-1 mt-1">
+            Si se anula una liquidación ya pagada, el sistema
+            <strong>revierte el interno</strong> (vuelve a quedar pendiente
+            en la cuenta del consignatario). Pero la <strong>comisión que
+            ya se transfirió NO se ajusta automáticamente</strong>: el
+            sistema avisa para que el reintegro se gestione manualmente.
+          </p>
+          <p class="small mb-0 text-muted">
+            <i class="fas fa-clock"></i> El comportamiento exacto de este
+            caso está <strong>pendiente de definición con el cliente</strong>.
+            Mientras tanto, anular una liquidación pagada requiere revisar
+            manualmente la comisión ya entregada.
+          </p>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+let pendientesData = [];        // datos del backend
+let intermediarioActivo = null; // intermediario seleccionado para liquidar
+
+// ═══════════════════════════════════════════════════════════
+// CARGA INICIAL
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+    cargarPendientes();
+    cargarIntermediariosFiltro();
+    cargarLiquidaciones();
+});
+
+const fmt = (n) => '$' + Number(n||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+// ═══════════════════════════════════════════════════════════
+// SECCIÓN PENDIENTES
+// ═══════════════════════════════════════════════════════════
+function cargarPendientes() {
+    const cont = document.getElementById('contenedorPendientes');
+    cont.innerHTML = '<div class="text-center text-muted py-3"><div class="spinner-border"></div></div>';
+    
+    fetch('/api/liquidaciones/pendientes_por_intermediario')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                cont.innerHTML = `<div class="alert alert-danger">${data.error || 'Error'}</div>`;
+                return;
+            }
+            pendientesData = data.intermediarios || [];
+            renderizarPendientes();
+        })
+        .catch(err => {
+            cont.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+        });
+}
+
+function renderizarPendientes() {
+    const cont = document.getElementById('contenedorPendientes');
+    
+    if (!pendientesData.length) {
+        cont.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-check-circle fa-2x mb-2 text-success"></i><br>No hay liquidaciones pendientes</div>';
+        return;
+    }
+    
+    let html = '<div class="row">';
+    pendientesData.forEach(item => {
+        html += `
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card card-intermediario h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-user" style="color:#6f42c1;"></i> ${item.intermediario_nombre}
+                        </h5>
+                        <div class="mb-2">
+                            <small class="text-muted">Internos pendientes:</small>
+                            <strong class="d-block fs-5">${item.cant_internos}</strong>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">Vendido (con IVA):</small>
+                            <strong class="d-block">${fmt(item.total_vendido_con_iva)}</strong>
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">Costo (con IVA):</small>
+                            <strong class="d-block">${fmt(item.total_costo_con_iva)}</strong>
+                        </div>
+                        <hr>
+                        <div class="mb-3">
+                            <small class="text-muted">A liquidar (con IVA):</small>
+                            <strong class="d-block fs-4" style="color:#6f42c1;">${fmt(item.a_liquidar_con_iva)}</strong>
+                        </div>
+                        <button class="btn w-100" style="background-color:#6f42c1;color:white;" onclick="abrirModalLiquidar(${item.intermediario_id})">
+                            <i class="fas fa-handshake"></i> Liquidar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    cont.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODAL DE LIQUIDACIÓN
+// ═══════════════════════════════════════════════════════════
+function abrirModalLiquidar(intermediarioId) {
+    intermediarioActivo = pendientesData.find(p => p.intermediario_id === intermediarioId);
+    if (!intermediarioActivo) {
+        Swal.fire({icon:'error', title:'Error', text:'No se encontraron datos del intermediario'});
+        return;
+    }
+    
+    document.getElementById('modalIntermediarioNombre').textContent = intermediarioActivo.intermediario_nombre;
+    document.getElementById('alertIntermediario').textContent = intermediarioActivo.intermediario_nombre;
+    
+    // Render tabla de internos
+    const tbody = document.getElementById('tbodyInternos');
+    let html = '';
+    intermediarioActivo.internos.forEach((it, idx) => {
+        html += `
+            <tr>
+                <td class="text-center">
+                    <input type="checkbox" class="chk-interno" data-idx="${idx}" checked onchange="recalcularModal()">
+                </td>
+                <td>
+                    <strong>${it.interno_numero}</strong><br>
+                    <small class="text-muted">${it.interno_fecha}</small>
+                </td>
+                <td>
+                    <strong>${it.factura_numero}</strong>
+                </td>
+                <td class="text-end" data-costo-con="${it.interno_total}" data-costo-sin="${it.interno_subtotal}">
+                    ${fmt(it.interno_total)}
+                </td>
+                <td class="text-end" data-vendido-con="${it.factura_total}" data-vendido-sin="${it.factura_subtotal}">
+                    ${fmt(it.factura_total)}
+                </td>
+                <td class="text-end fw-bold" data-dif-con="${it.diferencia_con_iva}" data-dif-sin="${it.diferencia_sin_iva}" style="color:#6f42c1;">
+                    ${fmt(it.diferencia_con_iva)}
+                </td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = html;
+    
+    // Reset estado
+    document.getElementById('chkTodos').checked = true;
+    document.getElementById('baseConIva').checked = true;
+    document.getElementById('pagoAhora').checked = true;
+    document.getElementById('motivoLiquidacion').value = '';
+    document.getElementById('medioPagoAhora').value = 'EFECTIVO';
+    togglePago();
+    recalcularModal();
+    
+    new bootstrap.Modal(document.getElementById('modalGenerar')).show();
+}
+
+function toggleTodos() {
+    const todos = document.getElementById('chkTodos').checked;
+    document.querySelectorAll('.chk-interno').forEach(c => c.checked = todos);
+    recalcularModal();
+}
+
+function togglePago() {
+    const pagoAhora = document.getElementById('pagoAhora').checked;
+    document.getElementById('medioPagoAhora').disabled = !pagoAhora;
+}
+
+function recalcularModal() {
+    const baseConIva = document.getElementById('baseConIva').checked;
+    const sufijo = baseConIva ? 'con' : 'sin';
+    
+    let totalCosto = 0, totalVendido = 0, totalDif = 0;
+    
+    document.querySelectorAll('.chk-interno').forEach(chk => {
+        if (!chk.checked) return;
+        const tr = chk.closest('tr');
+        const cells = tr.querySelectorAll('td');
+        const costo = parseFloat(cells[3].dataset[`costo${sufijo === 'con' ? 'Con' : 'Sin'}`]) || 0;
+        const vendido = parseFloat(cells[4].dataset[`vendido${sufijo === 'con' ? 'Con' : 'Sin'}`]) || 0;
+        const dif = parseFloat(cells[5].dataset[`dif${sufijo === 'con' ? 'Con' : 'Sin'}`]) || 0;
+        
+        // Actualizar visualmente las celdas según base elegida
+        cells[3].textContent = fmt(costo);
+        cells[4].textContent = fmt(vendido);
+        cells[5].textContent = fmt(dif);
+        
+        totalCosto += costo;
+        totalVendido += vendido;
+        totalDif += dif;
+    });
+    
+    document.getElementById('totalCostoModal').textContent = fmt(totalCosto);
+    document.getElementById('totalVendidoModal').textContent = fmt(totalVendido);
+    document.getElementById('totalLiquidarModal').textContent = fmt(totalDif);
+    document.getElementById('alertTotalFinal').textContent = fmt(totalDif);
+}
+
+function confirmarLiquidacion() {
+    if (!intermediarioActivo) return;
+    
+    const checkedInternos = [];
+    document.querySelectorAll('.chk-interno:checked').forEach(chk => {
+        const idx = parseInt(chk.dataset.idx);
+        const it = intermediarioActivo.internos[idx];
+        checkedInternos.push({
+            interno_id: it.interno_id,
+            factura_derivada_id: it.factura_id
+        });
+    });
+    
+    if (!checkedInternos.length) {
+        Swal.fire({icon:'warning', title:'Sin selección', text:'Marcá al menos un interno para liquidar.'});
+        return;
+    }
+    
+    const baseCalculo = document.querySelector('input[name="baseCalculo"]:checked').value;
+    const formaPago = document.querySelector('input[name="formaPago"]:checked').value;
+    const medioPago = formaPago === 'ahora' ? document.getElementById('medioPagoAhora').value : null;
+    const motivo = document.getElementById('motivoLiquidacion').value.trim();
+    
+    const payload = {
+        intermediario_id: intermediarioActivo.intermediario_id,
+        internos: checkedInternos,
+        base_calculo: baseCalculo,
+        forma_pago: formaPago,
+        medio_pago: medioPago,
+        motivo: motivo
+    };
+    
+    Swal.fire({title:'Generando liquidación...', allowOutsideClick:false, didOpen:()=>Swal.showLoading()});
+    
+    fetch('/api/liquidacion/generar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) {
+            Swal.fire({icon:'error', title:'Error', text: data.error || 'No se pudo generar'});
+            return;
+        }
+        
+        Swal.fire({
+            icon: 'success',
+            title: 'Liquidación generada',
+            html: `<p>Número: <strong>${data.liquidacion.numero}</strong></p>
+                   <p>Total liquidado: <strong>${fmt(data.liquidacion.total_liquidar)}</strong></p>`,
+            showCancelButton: true,
+            confirmButtonText: '<i class="fas fa-print"></i> Ver e imprimir',
+            cancelButtonText: 'Cerrar'
+        }).then((res) => {
+            bootstrap.Modal.getInstance(document.getElementById('modalGenerar')).hide();
+            cargarPendientes();
+            cargarLiquidaciones();
+            if (res.isConfirmed) {
+                window.location.href = `/liquidacion/${data.liquidacion.id}`;
+            }
+        });
+    })
+    .catch(err => Swal.fire({icon:'error', title:'Error', text:err.message}));
+}
+
+// ═══════════════════════════════════════════════════════════
+// SECCIÓN LIQUIDACIONES GENERADAS
+// ═══════════════════════════════════════════════════════════
+function cargarIntermediariosFiltro() {
+    fetch('/api/clientes_intermediarios')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            const select = document.getElementById('filtroIntermediario');
+            data.clientes.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.nombre;
+                select.appendChild(opt);
+            });
+        });
+}
+
+function cargarLiquidaciones() {
+    const params = new URLSearchParams();
+    const intermediario = document.getElementById('filtroIntermediario').value;
+    const estado = document.getElementById('filtroEstado').value;
+    const desde = document.getElementById('filtroDesde').value;
+    const hasta = document.getElementById('filtroHasta').value;
+    
+    if (intermediario) params.append('intermediario_id', intermediario);
+    if (estado) params.append('estado', estado);
+    if (desde) params.append('fecha_desde', desde);
+    if (hasta) params.append('fecha_hasta', hasta);
+    
+    fetch(`/api/liquidaciones/listar?${params}`)
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('tbodyLiquidaciones');
+            if (!data.success) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">${data.error}</td></tr>`;
+                return;
+            }
+            if (!data.liquidaciones.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Sin liquidaciones</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.liquidaciones.map(liq => {
+                const badgeClass = `badge-estado-${liq.estado === 'pendiente_pago' ? 'pendiente' : liq.estado}`;
+                const estadoText = liq.estado === 'pendiente_pago' ? 'Pendiente' : 
+                                   liq.estado === 'pagada' ? 'Pagada' : 'Anulada';
+                return `
+                    <tr>
+                        <td><strong>${liq.numero}</strong></td>
+                        <td>${liq.fecha}</td>
+                        <td>${liq.intermediario_nombre}</td>
+                        <td class="text-end">${fmt(liq.total_vendido)}</td>
+                        <td class="text-end">${fmt(liq.total_costo)}</td>
+                        <td class="text-end fw-bold" style="color:#6f42c1;">${fmt(liq.total_liquidar)}</td>
+                        <td><span class="badge ${badgeClass}">${estadoText}</span></td>
+                        <td class="text-center">
+                            <a href="/liquidacion/${liq.id}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-eye"></i> Ver
+                            </a>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        });
+}
+
+function limpiarFiltros() {
+    document.getElementById('filtroIntermediario').value = '';
+    document.getElementById('filtroEstado').value = '';
+    document.getElementById('filtroDesde').value = '';
+    document.getElementById('filtroHasta').value = '';
+    cargarLiquidaciones();
+}
+</script>
+{% endblock %}

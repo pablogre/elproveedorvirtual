@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+
+{% block title %}Importar Saldos Iniciales{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between flex-wrap gap-2 pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2 mb-0"><i class="fas fa-balance-scale"></i> Importar Saldos Iniciales</h1>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#modalAyudaImportadorSaldos">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+        <a href="#" id="btn_plantilla" class="btn btn-outline-success">
+            <i class="fas fa-download"></i> Descargar Plantilla
+        </a>
+        <a href="{{ url_for('importador.inicio') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-warning border-start border-4 border-warning">
+    <h6 class="mb-2"><i class="fas fa-exclamation-triangle"></i> Atención: este importador REEMPLAZA saldos existentes</h6>
+    <p class="mb-0 small">
+        Si un cliente o proveedor ya tiene un saldo cargado, será <strong>sobrescrito</strong> con el valor del Excel.
+        El sistema busca el cliente/proveedor por <strong>CUIT</strong>: si no existe en tu BD, esa fila se descarta
+        (primero hay que importar Clientes/Proveedores). Recomendamos hacer un backup antes.
+    </p>
+</div>
+
+<!-- ═══ PASO 0: TIPO DE SALDO ═══ -->
+<div class="card mb-3 border-primary">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="fas fa-tag"></i> Paso 1: ¿Qué tipo de saldo querés importar?</h6>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-check border rounded p-3 h-100" style="cursor: pointer;" onclick="document.getElementById('tipo_clientes').click()">
+                    <input class="form-check-input" type="radio" name="tipo_saldo" id="tipo_clientes" value="clientes" checked>
+                    <label class="form-check-label fw-bold ms-1" for="tipo_clientes">
+                        <i class="fas fa-users text-primary"></i> Saldos de Clientes
+                    </label>
+                    <div class="small text-muted mt-1 ms-4">
+                        Saldos deudores: cuánto te deben los clientes al inicio. Monto positivo = el cliente te debe.
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-check border rounded p-3 h-100" style="cursor: {% if proveedor_disponible %}pointer{% else %}not-allowed{% endif %};" {% if proveedor_disponible %}onclick="document.getElementById('tipo_proveedores').click()"{% endif %}>
+                    <input class="form-check-input" type="radio" name="tipo_saldo" id="tipo_proveedores" value="proveedores" {% if not proveedor_disponible %}disabled{% endif %}>
+                    <label class="form-check-label fw-bold ms-1" for="tipo_proveedores">
+                        <i class="fas fa-truck text-info"></i> Saldos de Proveedores
+                    </label>
+                    <div class="small text-muted mt-1 ms-4">
+                        {% if proveedor_disponible %}
+                        Saldos acreedores: cuánto les debés a tus proveedores. Monto positivo = vos le debés al proveedor.
+                        {% else %}
+                        <span class="text-danger">El módulo de proveedores no está disponible.</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ PASO 1: SUBIR ARCHIVO ═══ -->
+<div class="card mb-3" id="paso1">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="fas fa-upload"></i> Paso 2: Subí tu archivo Excel o CSV</h6>
+    </div>
+    <div class="card-body">
+        <div id="dropzone" class="border border-2 border-dashed rounded p-5 text-center"
+             style="border-color: #ccc; background: #f8f9fa; cursor: pointer; transition: all 0.2s;">
+            <i class="fas fa-cloud-upload-alt fa-4x text-primary mb-3 opacity-75"></i>
+            <h5>Arrastrá tu archivo acá o hacé click</h5>
+            <p class="text-muted mb-2">Formatos: <strong>.xlsx, .xls, .csv</strong></p>
+            <input type="file" id="archivo" class="d-none" accept=".xlsx,.xls,.csv">
+            <button type="button" class="btn btn-primary" onclick="document.getElementById('archivo').click()">
+                <i class="fas fa-folder-open"></i> Seleccionar Archivo
+            </button>
+        </div>
+        <div id="archivo_info" class="mt-3" style="display:none;">
+            <div class="alert alert-success mb-0 d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-file-excel"></i>
+                    <strong id="nombre_archivo"></strong>
+                    <span class="text-muted ms-2" id="info_archivo"></span>
+                </div>
+                <button class="btn btn-sm btn-outline-danger" onclick="resetear()">
+                    <i class="fas fa-times"></i> Cambiar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3" id="paso2" style="display:none;">
+    <div class="card-header bg-info text-white">
+        <h6 class="mb-0"><i class="fas fa-exchange-alt"></i> Paso 3: Mapeo de columnas</h6>
+    </div>
+    <div class="card-body">
+        <p class="mb-3"><i class="fas fa-magic text-info"></i> Verificá que <strong>CUIT</strong> y <strong>Monto</strong> estén bien mapeados.</p>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                    <tr><th style="width: 35%">Campo del sistema</th><th style="width: 65%">Columna del Excel</th></tr>
+                </thead>
+                <tbody>
+                    {% for campo in campos %}
+                    <tr>
+                        <td><strong>{{ campo.label }}</strong>{% if campo.required %} <span class="text-danger">*</span>{% endif %}</td>
+                        <td>
+                            <select class="form-select form-select-sm" id="map_{{ campo.key }}" data-campo="{{ campo.key }}" data-required="{{ '1' if campo.required else '0' }}">
+                                <option value="">— No mapear —</option>
+                            </select>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3" id="paso3" style="display:none;">
+    <div class="card-header bg-warning">
+        <h6 class="mb-0"><i class="fas fa-eye"></i> Paso 4: Vista previa</h6>
+    </div>
+    <div class="card-body">
+        <p class="mb-2">Mostrando las <strong>primeras 10 filas</strong> de un total de <strong id="total_filas">0</strong>.</p>
+        <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
+            <table class="table table-sm table-striped">
+                <thead class="table-dark sticky-top"><tr id="preview_headers"></tr></thead>
+                <tbody id="preview_body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3" id="paso4" style="display:none;">
+    <div class="card-header bg-success text-white">
+        <h6 class="mb-0"><i class="fas fa-check"></i> Paso 5: Confirmar e importar</h6>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle"></i>
+            Vas a actualizar saldos de hasta <strong id="cantidad_a_importar">0</strong>
+            <span id="entidad_label">clientes</span>.
+            <br>
+            <small>
+                Los registros que NO existan en tu BD (por CUIT) se descartarán.
+                <strong>Los saldos existentes serán reemplazados.</strong>
+            </small>
+        </div>
+        <div class="d-grid">
+            <button class="btn btn-success btn-lg" onclick="confirmarImportacion()">
+                <i class="fas fa-upload"></i> Sí, importar saldos
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3" id="resultado" style="display:none;">
+    <div class="card-header bg-dark text-white">
+        <h6 class="mb-0"><i class="fas fa-flag-checkered"></i> Resultado de la importación</h6>
+    </div>
+    <div class="card-body" id="resultado_body"></div>
+</div>
+
+{% include 'importador_saldos_ayuda.html' %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let estadoImportacion = { headers: [], mapeo: {}, sample: [], total: 0, token: null, tipo: 'clientes' };
+
+const dropzone = document.getElementById('dropzone');
+const inputArchivo = document.getElementById('archivo');
+
+// Cambio de tipo
+document.querySelectorAll('input[name="tipo_saldo"]').forEach(r => {
+    r.addEventListener('change', e => {
+        estadoImportacion.tipo = e.target.value;
+        actualizarLabels();
+        actualizarBtnPlantilla();
+    });
+});
+
+function actualizarLabels() {
+    const t = estadoImportacion.tipo;
+    document.getElementById('entidad_label').textContent = t === 'clientes' ? 'clientes' : 'proveedores';
+}
+function actualizarBtnPlantilla() {
+    const t = estadoImportacion.tipo;
+    const url = t === 'clientes' ?
+        '{{ url_for("importador.descargar_plantilla", entidad="saldos_clientes") }}' :
+        '{{ url_for("importador.descargar_plantilla", entidad="saldos_proveedores") }}';
+    document.getElementById('btn_plantilla').href = url;
+}
+actualizarBtnPlantilla();
+
+['dragenter','dragover'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.style.background='#e3f2fd'; dropzone.style.borderColor='#2196F3'; }));
+['dragleave','drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.style.background='#f8f9fa'; dropzone.style.borderColor='#ccc'; }));
+dropzone.addEventListener('drop', e => { if (e.dataTransfer.files.length > 0) { inputArchivo.files = e.dataTransfer.files; subirArchivo(); } });
+dropzone.addEventListener('click', e => { if (e.target === dropzone || e.target.closest('#dropzone') === dropzone) { if (e.target.tagName !== 'BUTTON') inputArchivo.click(); } });
+inputArchivo.addEventListener('change', subirArchivo);
+
+function getEndpointEntidad() {
+    return estadoImportacion.tipo === 'clientes' ? 'saldos_clientes' : 'saldos_proveedores';
+}
+
+function subirArchivo() {
+    if (!inputArchivo.files.length) return;
+    const archivo = inputArchivo.files[0];
+    document.getElementById('nombre_archivo').textContent = archivo.name;
+    document.getElementById('info_archivo').textContent = `(${(archivo.size/1024).toFixed(1)} KB)`;
+    document.getElementById('archivo_info').style.display = 'block';
+
+    Swal.fire({ title: 'Procesando...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    const fd = new FormData();
+    fd.append('archivo', archivo);
+    fetch(`/importador/${getEndpointEntidad()}/preview`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            Swal.close();
+            if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
+            estadoImportacion = { ...estadoImportacion, headers: d.headers, mapeo: d.mapeo, sample: d.sample, total: d.total_filas, token: d.archivo_token };
+            mostrarMapeo(); mostrarPreview(); actualizarBoton();
+            ['paso2','paso3','paso4'].forEach(id => document.getElementById(id).style.display = '');
+            document.getElementById('paso2').scrollIntoView({behavior:'smooth'});
+        })
+        .catch(err => { Swal.close(); Swal.fire('Error', String(err), 'error'); });
+}
+
+function mostrarMapeo() {
+    document.querySelectorAll('[id^="map_"]').forEach(sel => {
+        sel.innerHTML = '<option value="">— No mapear —</option>';
+        estadoImportacion.headers.forEach((h, i) => {
+            const opt = document.createElement('option');
+            opt.value = i; opt.textContent = `${i+1}. ${h}`;
+            sel.appendChild(opt);
+        });
+        const idx = estadoImportacion.mapeo[sel.dataset.campo];
+        if (idx !== null && idx !== undefined) sel.value = idx;
+        sel.addEventListener('change', () => {
+            estadoImportacion.mapeo[sel.dataset.campo] = sel.value === '' ? null : parseInt(sel.value);
+            mostrarPreview(); actualizarBoton();
+        });
+    });
+}
+
+function mostrarPreview() {
+    document.getElementById('total_filas').textContent = estadoImportacion.total;
+    const headerRow = document.getElementById('preview_headers');
+    const body = document.getElementById('preview_body');
+    headerRow.innerHTML = '<th style="width:50px;">#</th>';
+    estadoImportacion.headers.forEach((h, i) => {
+        const m = Object.entries(estadoImportacion.mapeo).find(([k, v]) => v === i);
+        const th = document.createElement('th');
+        if (m) { th.innerHTML = `${h}<br><small class="text-info">→ ${m[0]}</small>`; th.style.background='#cfe2ff'; th.style.color='#084298'; }
+        else { th.innerHTML = `${h}<br><small class="text-muted">(sin mapear)</small>`; }
+        headerRow.appendChild(th);
+    });
+    body.innerHTML = '';
+    estadoImportacion.sample.forEach(row => {
+        const tr = document.createElement('tr');
+        let html = `<td class="text-muted">${row.numero}</td>`;
+        row.valores.forEach(v => { html += `<td>${escapeHTML(v)}</td>`; });
+        tr.innerHTML = html;
+        body.appendChild(tr);
+    });
+}
+
+function actualizarBoton() {
+    const requeridos = document.querySelectorAll('[data-required="1"]');
+    let faltantes = [];
+    requeridos.forEach(sel => { if (!sel.value) faltantes.push(sel.dataset.campo); });
+    const btn = document.querySelector('#paso4 button');
+    document.getElementById('cantidad_a_importar').textContent = estadoImportacion.total;
+    if (faltantes.length > 0) { btn.disabled = true; btn.innerHTML = `<i class="fas fa-ban"></i> Faltan campos obligatorios`; }
+    else { btn.disabled = false; btn.innerHTML = `<i class="fas fa-upload"></i> Sí, importar saldos`; }
+}
+
+function confirmarImportacion() {
+    const ent = estadoImportacion.tipo === 'clientes' ? 'clientes' : 'proveedores';
+    Swal.fire({
+        title: '¿Confirmar?',
+        html: `Vas a actualizar saldos de hasta <strong>${estadoImportacion.total}</strong> ${ent}.<br><br><strong class="text-danger">Los saldos existentes serán reemplazados.</strong>`,
+        icon: 'warning', showCancelButton: true,
+        confirmButtonColor: '#198754', confirmButtonText: 'Sí, importar', cancelButtonText: 'Cancelar'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        Swal.fire({ title: 'Importando...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+        fetch(`/importador/${getEndpointEntidad()}/confirmar`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ archivo_token: estadoImportacion.token, mapeo: estadoImportacion.mapeo })
+        })
+        .then(r => r.json())
+        .then(d => {
+            Swal.close();
+            if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
+            mostrarResultado(d);
+        })
+        .catch(err => { Swal.close(); Swal.fire('Error', String(err), 'error'); });
+    });
+}
+
+function mostrarResultado(d) {
+    const ent = estadoImportacion.tipo === 'clientes' ? 'clientes' : 'proveedores';
+    const labelNoEnc = estadoImportacion.tipo === 'clientes' ? 'No encontrados en BD de clientes' : 'No encontrados en BD de proveedores';
+
+    let html = `
+        <div class="row text-center mb-3">
+            <div class="col-md-3"><div class="card border-success"><div class="card-body">
+                <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                <h2 class="text-success">${d.importados}</h2><small>Saldos actualizados</small>
+            </div></div></div>
+            <div class="col-md-3"><div class="card border-warning"><div class="card-body">
+                <i class="fas fa-search fa-2x text-warning mb-2"></i>
+                <h2 class="text-warning">${d.duplicados.length}</h2><small>${labelNoEnc}</small>
+            </div></div></div>
+            <div class="col-md-3"><div class="card border-danger"><div class="card-body">
+                <i class="fas fa-times-circle fa-2x text-danger mb-2"></i>
+                <h2 class="text-danger">${d.errores.length}</h2><small>Errores</small>
+            </div></div></div>
+            <div class="col-md-3"><div class="card border-info"><div class="card-body">
+                <i class="fas fa-info-circle fa-2x text-info mb-2"></i>
+                <h2 class="text-info">${d.advertencias.length}</h2><small>Advertencias</small>
+            </div></div></div>
+        </div>`;
+
+    if (d.duplicados.length > 0) {
+        html += `<details class="mb-2"><summary class="text-warning fw-bold mb-1">Ver no encontrados (${d.duplicados.length}) — primero hay que crearlos</summary><ul class="small mt-2">`;
+        d.duplicados.forEach(x => { html += `<li>Fila ${x.fila}: CUIT <strong>${x.cuit}</strong> ${x.nombre ? '— ' + escapeHTML(x.nombre) : ''}</li>`; });
+        html += '</ul></details>';
+    }
+    if (d.errores.length > 0) {
+        html += `<details class="mb-2"><summary class="text-danger fw-bold mb-1">Ver errores (${d.errores.length})</summary><ul class="small mt-2">`;
+        d.errores.forEach(x => { html += `<li>Fila ${x.fila}: ${x.errores.map(escapeHTML).join('; ')}</li>`; });
+        html += '</ul></details>';
+    }
+    if (d.advertencias.length > 0) {
+        html += `<details class="mb-2"><summary class="text-info fw-bold mb-1">Ver advertencias (${d.advertencias.length})</summary><ul class="small mt-2">`;
+        d.advertencias.forEach(x => { html += `<li>Fila ${x.fila} (<strong>${escapeHTML(x.nombre)}</strong>): ${x.advertencias.map(escapeHTML).join('; ')}</li>`; });
+        html += '</ul></details>';
+    }
+
+    html += `<div class="d-flex gap-2 mt-3">
+        <button class="btn btn-primary" onclick="resetear()"><i class="fas fa-redo"></i> Importar otros saldos</button>
+    </div>`;
+    document.getElementById('resultado_body').innerHTML = html;
+    document.getElementById('resultado').style.display = '';
+    document.getElementById('resultado').scrollIntoView({behavior:'smooth'});
+    Swal.fire({
+        icon: d.importados > 0 ? 'success' : 'warning',
+        title: d.importados > 0 ? '¡Saldos actualizados!' : 'Sin saldos actualizados',
+        html: `<strong>${d.importados}</strong> saldos actualizados.<br>${d.duplicados.length} no encontrados, ${d.errores.length} errores.`,
+        confirmButtonText: 'Cerrar'
+    });
+}
+
+function resetear() {
+    estadoImportacion = { headers: [], mapeo: {}, sample: [], total: 0, token: null, tipo: estadoImportacion.tipo };
+    inputArchivo.value = '';
+    document.getElementById('archivo_info').style.display = 'none';
+    ['paso2','paso3','paso4','resultado'].forEach(id => document.getElementById(id).style.display = 'none');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+function escapeHTML(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+{% endblock %}

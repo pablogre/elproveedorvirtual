@@ -1,0 +1,478 @@
+{% extends 'base.html' %}
+{% block title %}Imputar NC — {{ nc.punto_venta }}-{{ nc.numero }}{% endblock %}
+
+{% block content %}
+<style>
+    .factura-row.seleccionada { background: #e7f5ff; }
+    .factura-row .input-monto { max-width: 180px; }
+    .monto-invalido { border-color: #dc3545 !important; }
+    .resumen-box { background: #f8f9fa; border-radius: 6px; padding: 12px 16px; }
+    .imp-revertida td { color: #999; text-decoration: line-through; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3 flex-wrap gap-2">
+    <h2><i class="fas fa-link me-2"></i>Imputar Nota de Crédito</h2>
+    <div>
+        <a href="/cta_cte_proveedor/{{ proveedor.id }}" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-arrow-left me-1"></i> Volver a Cta Cte
+        </a>
+        <button class="btn btn-outline-info" onclick="abrirAyudaImputacion()">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+    </div>
+</div>
+
+<!-- Información de la NC -->
+<div class="card mb-3">
+    <div class="card-body py-3">
+        <div class="row g-2">
+            <div class="col-md-3">
+                <small class="text-muted">Proveedor</small>
+                <div class="fw-bold">{{ proveedor.razon_social }}</div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-muted">Nota de Crédito</small>
+                <div class="fw-bold">
+                    <span class="badge bg-info">{{ nc.tipo_comprobante }}</span>
+                    {{ nc.punto_venta }}-{{ nc.numero }}
+                </div>
+            </div>
+            <div class="col-md-2">
+                <small class="text-muted">Fecha</small>
+                <div class="fw-bold">{{ nc.fecha.strftime('%d/%m/%Y') if nc.fecha else '-' }}</div>
+            </div>
+            <div class="col-md-2">
+                <small class="text-muted">Total NC</small>
+                <div class="fw-bold">$<span id="totalNC">{{ '%.2f'|format(nc.total) }}</span></div>
+            </div>
+            <div class="col-md-2">
+                <small class="text-muted">Saldo disponible</small>
+                <div class="fw-bold fs-5 text-success">
+                    $<span id="saldoNC">{{ '%.2f'|format(nc.saldo_pendiente) }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de facturas pendientes -->
+<div class="card mb-3" id="cardFacturas">
+    <div class="card-header bg-light">
+        <div class="d-flex justify-content-between align-items-center">
+            <strong><i class="fas fa-file-invoice me-2"></i>Facturas pendientes del proveedor</strong>
+            <button class="btn btn-sm btn-outline-primary" onclick="imputarTodoLoPosible()">
+                <i class="fas fa-magic me-1"></i> Imputar todo lo posible
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th width="40">Sel.</th>
+                        <th>Comprobante</th>
+                        <th>Fecha</th>
+                        <th>Vto</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-end">Saldo pendiente</th>
+                        <th class="text-end" width="200">A imputar</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyFacturas">
+                    <tr><td colspan="7" class="text-center text-muted py-4">Cargando facturas...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Resumen y acción -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row align-items-center g-3">
+            <div class="col-md-4">
+                <div class="resumen-box">
+                    <small class="text-muted">Total a imputar</small>
+                    <div class="fw-bold fs-4 text-primary">$<span id="totalImputar">0,00</span></div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="resumen-box">
+                    <small class="text-muted">Saldo NC restante</small>
+                    <div class="fw-bold fs-4" id="saldoRestanteBox">$<span id="saldoRestante">{{ '%.2f'|format(nc.saldo_pendiente) }}</span></div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small text-muted mb-1">Observaciones (opcional)</label>
+                <input type="text" id="observaciones" class="form-control form-control-sm" maxlength="200" placeholder="Motivo / detalle">
+            </div>
+        </div>
+        <hr>
+        <div class="d-flex justify-content-end gap-2">
+            <a href="/cta_cte_proveedor/{{ proveedor.id }}" class="btn btn-outline-secondary">Cancelar</a>
+            <button class="btn btn-success" id="btnImputar" onclick="confirmarImputacion()" disabled>
+                <i class="fas fa-check me-1"></i> Imputar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Historial de imputaciones -->
+<div class="card">
+    <div class="card-header bg-light">
+        <strong><i class="fas fa-history me-2"></i>Imputaciones de esta NC</strong>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Factura</th>
+                        <th class="text-end">Monto imputado</th>
+                        <th>Estado</th>
+                        <th>Observaciones</th>
+                        <th width="120">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyHistorial">
+                    <tr><td colspan="6" class="text-center text-muted py-3">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const NC_ID         = {{ nc.id }};
+const PROV_ID       = {{ proveedor.id }};
+const NC_SALDO_INI  = {{ nc.saldo_pendiente }};
+let facturas        = [];        // [{id, numero, fecha, saldo_pendiente, ...}]
+let estadoSeleccion = {};        // {factura_id: {seleccionada: bool, monto: Number}}
+
+document.addEventListener('DOMContentLoaded', () => {
+    cargarFacturas();
+    cargarHistorial();
+});
+
+// ──────────────────────────────────────────────────────────────
+// CARGA DE FACTURAS PENDIENTES
+// ──────────────────────────────────────────────────────────────
+async function cargarFacturas() {
+    const tbody = document.getElementById('tbodyFacturas');
+    try {
+        const r = await fetch(`/api/proveedor/${PROV_ID}/facturas_pendientes`);
+        const data = await r.json();
+        if (!data.success) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center py-3">${data.error || 'Error'}</td></tr>`;
+            return;
+        }
+        // Solo facturas (no NDs ni internos) para imputación de NC
+        facturas = (data.facturas || []).filter(f => {
+            // En el endpoint compartido vienen también nota_debito e interno;
+            // para imputación de NC solo tomamos clase='factura'
+            return (f.clase_comprobante || 'factura') === 'factura';
+        });
+        if (facturas.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">El proveedor no tiene facturas pendientes</td></tr>`;
+            return;
+        }
+        renderFacturas();
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center py-3">${e.message}</td></tr>`;
+    }
+}
+
+function renderFacturas() {
+    const tbody = document.getElementById('tbodyFacturas');
+    tbody.innerHTML = '';
+    facturas.forEach(f => {
+        estadoSeleccion[f.id] = estadoSeleccion[f.id] || {seleccionada: false, monto: 0};
+        const tr = document.createElement('tr');
+        tr.className = 'factura-row';
+        tr.dataset.id = f.id;
+        let vtoBadge = '';
+        if (f.dias_para_vencer !== undefined && f.dias_para_vencer !== null) {
+            const d = f.dias_para_vencer;
+            if (d < 0)       vtoBadge = `<span class="badge bg-danger">Venc. ${-d}d</span>`;
+            else if (d <= 7) vtoBadge = `<span class="badge bg-warning text-dark">${d}d</span>`;
+            else             vtoBadge = `<span class="badge bg-light text-dark">${d}d</span>`;
+        } else if (f.fecha_vencimiento) {
+            vtoBadge = '-';
+        }
+        tr.innerHTML = `
+            <td><input type="checkbox" class="form-check-input" onchange="toggleFactura(${f.id}, this.checked)"></td>
+            <td><span class="badge bg-secondary">${f.tipo_comprobante || 'A'}</span> ${f.punto_venta || ''}-${f.numero || ''}</td>
+            <td>${f.fecha || '-'}</td>
+            <td>${vtoBadge}</td>
+            <td class="text-end">$${formatoMonto(f.total)}</td>
+            <td class="text-end fw-bold">$${formatoMonto(f.saldo_pendiente)}</td>
+            <td class="text-end">
+                <input type="number" class="form-control form-control-sm input-monto text-end"
+                       step="0.01" min="0" placeholder="0.00" disabled
+                       oninput="onCambioMonto(${f.id}, this.value)" data-factura-id="${f.id}">
+            </td>`;
+        tbody.appendChild(tr);
+    });
+    recalcularTotales();
+}
+
+// ──────────────────────────────────────────────────────────────
+// LÓGICA DE SELECCIÓN E IMPUTACIÓN
+// ──────────────────────────────────────────────────────────────
+function toggleFactura(facturaId, seleccionada) {
+    const factura = facturas.find(f => f.id === facturaId);
+    if (!factura) return;
+    estadoSeleccion[facturaId].seleccionada = seleccionada;
+    const tr = document.querySelector(`tr[data-id="${facturaId}"]`);
+    const input = tr.querySelector('input.input-monto');
+    if (seleccionada) {
+        tr.classList.add('seleccionada');
+        input.disabled = false;
+        // AUTOCOMPLETAR: imputar todo lo posible (min entre saldo NC y saldo factura)
+        const saldoNCActual = saldoNCDisponibleParaFila(facturaId);
+        const propuesto = Math.min(saldoNCActual, factura.saldo_pendiente);
+        if (propuesto > 0) {
+            input.value = propuesto.toFixed(2);
+            estadoSeleccion[facturaId].monto = propuesto;
+        } else {
+            input.value = '';
+            estadoSeleccion[facturaId].monto = 0;
+        }
+    } else {
+        tr.classList.remove('seleccionada');
+        input.value = '';
+        input.disabled = true;
+        estadoSeleccion[facturaId].monto = 0;
+    }
+    recalcularTotales();
+}
+
+function onCambioMonto(facturaId, valor) {
+    const monto = parseFloat(valor) || 0;
+    estadoSeleccion[facturaId].monto = monto;
+    recalcularTotales();
+}
+
+// Calcula el saldo NC que aún quedaría disponible SIN contar la fila dada
+function saldoNCDisponibleParaFila(facturaIdExcluida) {
+    let total = 0;
+    for (const [fid, st] of Object.entries(estadoSeleccion)) {
+        if (parseInt(fid) === facturaIdExcluida) continue;
+        if (st.seleccionada) total += st.monto;
+    }
+    return NC_SALDO_INI - total;
+}
+
+function imputarTodoLoPosible() {
+    // Recorre las facturas en orden y va imputando lo máximo posible hasta agotar la NC
+    let saldoRestante = NC_SALDO_INI;
+    facturas.forEach(f => {
+        const tr = document.querySelector(`tr[data-id="${f.id}"]`);
+        const checkbox = tr.querySelector('input[type="checkbox"]');
+        const input = tr.querySelector('input.input-monto');
+        if (saldoRestante <= 0) {
+            checkbox.checked = false;
+            estadoSeleccion[f.id] = {seleccionada: false, monto: 0};
+            input.value = '';
+            input.disabled = true;
+            tr.classList.remove('seleccionada');
+            return;
+        }
+        const aplicar = Math.min(saldoRestante, f.saldo_pendiente);
+        checkbox.checked = true;
+        input.disabled = false;
+        input.value = aplicar.toFixed(2);
+        estadoSeleccion[f.id] = {seleccionada: true, monto: aplicar};
+        tr.classList.add('seleccionada');
+        saldoRestante -= aplicar;
+    });
+    recalcularTotales();
+}
+
+function recalcularTotales() {
+    let totalImputar = 0;
+    let exceso = false;
+    let algunaInvalida = false;
+    for (const [fid, st] of Object.entries(estadoSeleccion)) {
+        if (!st.seleccionada) continue;
+        const factura = facturas.find(f => f.id === parseInt(fid));
+        const tr = document.querySelector(`tr[data-id="${fid}"]`);
+        const input = tr.querySelector('input.input-monto');
+        input.classList.remove('monto-invalido');
+        if (st.monto <= 0 || st.monto > factura.saldo_pendiente) {
+            input.classList.add('monto-invalido');
+            algunaInvalida = true;
+        }
+        totalImputar += st.monto;
+    }
+    if (totalImputar > NC_SALDO_INI) exceso = true;
+    document.getElementById('totalImputar').textContent = formatoMonto(totalImputar);
+    const restante = NC_SALDO_INI - totalImputar;
+    document.getElementById('saldoRestante').textContent = formatoMonto(restante);
+    const box = document.getElementById('saldoRestanteBox');
+    box.classList.remove('text-success','text-danger','text-primary');
+    if (exceso)        box.classList.add('text-danger');
+    else if (restante == 0) box.classList.add('text-success');
+    else               box.classList.add('text-primary');
+    const btn = document.getElementById('btnImputar');
+    btn.disabled = (totalImputar <= 0 || exceso || algunaInvalida);
+}
+
+function formatoMonto(n) {
+    return Number(n || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+// ──────────────────────────────────────────────────────────────
+// CONFIRMAR IMPUTACIÓN
+// ──────────────────────────────────────────────────────────────
+async function confirmarImputacion() {
+    const imputaciones = [];
+    for (const [fid, st] of Object.entries(estadoSeleccion)) {
+        if (st.seleccionada && st.monto > 0) {
+            imputaciones.push({factura_id: parseInt(fid), monto: st.monto});
+        }
+    }
+    if (imputaciones.length === 0) {
+        Swal.fire('Atención', 'No seleccionaste facturas para imputar', 'warning');
+        return;
+    }
+    const totalImputar = imputaciones.reduce((s, i) => s + i.monto, 0);
+    const obs = document.getElementById('observaciones').value.trim();
+    const conf = await Swal.fire({
+        icon: 'question',
+        title: '¿Confirmar imputación?',
+        html: `Se imputará <strong>$${formatoMonto(totalImputar)}</strong> de esta NC a <strong>${imputaciones.length} factura(s)</strong>.<br>`
+             + `Saldo restante de la NC: <strong>$${formatoMonto(NC_SALDO_INI - totalImputar)}</strong>`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, imputar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#198754',
+        reverseButtons: true
+    });
+    if (!conf.isConfirmed) return;
+    try {
+        const r = await fetch(`/api/nc_compra/${NC_ID}/imputar`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({imputaciones, observaciones: obs})
+        });
+        const data = await r.json();
+        if (data.success) {
+            await Swal.fire({
+                icon: 'success',
+                title: 'Imputación realizada',
+                html: data.mensaje,
+                timer: 1800,
+                timerProgressBar: true,
+                showConfirmButton: false
+            });
+            window.location.reload();
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo imputar', 'error');
+        }
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+// ──────────────────────────────────────────────────────────────
+// HISTORIAL DE IMPUTACIONES
+// ──────────────────────────────────────────────────────────────
+async function cargarHistorial() {
+    const tbody = document.getElementById('tbodyHistorial');
+    try {
+        const r = await fetch(`/api/nc_compra/${NC_ID}/imputaciones`);
+        const data = await r.json();
+        if (!data.success) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center py-3">${data.error || 'Error'}</td></tr>`;
+            return;
+        }
+        const imps = data.imputaciones || [];
+        if (imps.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">Esta NC todavía no tiene imputaciones</td></tr>`;
+            return;
+        }
+        tbody.innerHTML = '';
+        imps.forEach(imp => {
+            const tr = document.createElement('tr');
+            if (imp.estado === 'revertida') tr.className = 'imp-revertida';
+            const badgeEstado = imp.estado === 'activa'
+                ? '<span class="badge bg-success">Activa</span>'
+                : '<span class="badge bg-secondary">Revertida</span>';
+            const accion = imp.estado === 'activa'
+                ? `<button class="btn btn-sm btn-outline-danger" onclick="revertirImputacion(${imp.id})">
+                       <i class="fas fa-undo me-1"></i>Revertir</button>`
+                : '<span class="text-muted small">-</span>';
+            tr.innerHTML = `
+                <td>${imp.fecha || '-'}</td>
+                <td>${imp.factura?.numero || '-'}</td>
+                <td class="text-end fw-bold">$${formatoMonto(imp.monto_imputado)}</td>
+                <td>${badgeEstado}</td>
+                <td class="small text-muted">${imp.observaciones || ''}</td>
+                <td>${accion}</td>`;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center py-3">${e.message}</td></tr>`;
+    }
+}
+
+async function revertirImputacion(impId) {
+    const { value: motivo, isConfirmed } = await Swal.fire({
+        title: '¿Revertir imputación?',
+        html: 'La factura va a recuperar el saldo y la NC va a quedar disponible nuevamente.',
+        input: 'text',
+        inputLabel: 'Motivo (opcional)',
+        inputPlaceholder: 'Ej: corrección',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, revertir',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc3545',
+        reverseButtons: true
+    });
+    if (!isConfirmed) return;
+    try {
+        const r = await fetch(`/api/imputacion_nc_compra/${impId}/revertir`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({motivo: motivo || ''})
+        });
+        const data = await r.json();
+        if (data.success) {
+            await Swal.fire({icon: 'success', title: 'Reversión OK', timer: 1300, timerProgressBar: true, showConfirmButton: false});
+            window.location.reload();
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo revertir', 'error');
+        }
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+function abrirAyudaImputacion() {
+    Swal.fire({
+        icon: 'info',
+        title: 'Imputar NC a Facturas',
+        html: `
+            <div class="text-start">
+                <p><strong>Para qué sirve esta pantalla:</strong></p>
+                <p>Permite aplicar el crédito de una Nota de Crédito a una o varias facturas del mismo proveedor.</p>
+                <p><strong>Cómo usarla:</strong></p>
+                <ol>
+                    <li>Tildá las facturas a las que querés imputar la NC.</li>
+                    <li>Al tildar, se autocompleta el monto con el máximo posible.</li>
+                    <li>Podés editar el monto si querés imputar menos.</li>
+                    <li>"Imputar todo lo posible" reparte automáticamente el saldo de la NC entre las facturas más viejas.</li>
+                    <li>Confirmá con el botón "Imputar".</li>
+                </ol>
+                <p><strong>Reversión:</strong> en la sección historial podés revertir cualquier imputación activa. Eso devuelve el saldo a la factura y a la NC.</p>
+            </div>`,
+        width: '600px'
+    });
+}
+</script>
+{% endblock %}

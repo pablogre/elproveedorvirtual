@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}Puente con tu Estudio Contable{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between flex-wrap gap-2 pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2 mb-0"><i class="fas fa-file-excel"></i> Puente con tu Estudio Contable</h1>
+    <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#modalAyudaPuente">
+        <i class="fas fa-question-circle"></i> Ayuda
+    </button>
+</div>
+
+<div class="alert alert-info border-start border-4 border-info">
+    <h6 class="mb-2"><i class="fas fa-info-circle"></i> ¿Qué hace esta pantalla?</h6>
+    <p class="mb-2">
+        Genera un archivo Excel con todos los <strong>asientos contables</strong> del período seleccionado,
+        listo para que tu contador lo importe a su sistema contable.
+        Incluye ventas, compras, cobros, pagos, gastos y movimientos de caja.
+    </p>
+    <p class="mb-0 small">
+        <i class="fas fa-plug text-success"></i> <strong>Compatible con:</strong>
+        Tango Gestión · Catedral · Holístor · Bejerman · Xubio · Contabilium · Colppy · ZetaSoftware · ContAG
+        <a href="#" data-bs-toggle="modal" data-bs-target="#modalAyudaPuente" class="ms-1">y otros (ver ayuda)</a>.
+    </p>
+</div>
+
+<div class="row">
+    <div class="col-lg-7">
+        <!-- Selector de período -->
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="fas fa-calendar"></i> 1. Elegí el período</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Desde</label>
+                        <input type="date" id="desde" class="form-control form-control-lg">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Hasta</label>
+                        <input type="date" id="hasta" class="form-control form-control-lg">
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <small class="text-muted me-2"><i class="fas fa-bolt"></i> Atajos:</small>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="atajo('mes_actual')">Mes actual</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="atajo('mes_anterior')">Mes anterior</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="atajo('trimestre')">Último trimestre</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="atajo('anio_actual')">Año actual</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros: qué incluir -->
+        <div class="card mb-3">
+            <div class="card-header bg-secondary text-white">
+                <h6 class="mb-0"><i class="fas fa-filter"></i> 2. ¿Qué querés incluir? <small class="opacity-75">(por defecto, todo)</small></h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <div class="form-check"><input class="form-check-input" type="checkbox" id="inc_ventas" checked><label class="form-check-label" for="inc_ventas"><i class="fas fa-cash-register text-success"></i> Ventas (Facturas A/B/C)</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" id="inc_nc" checked><label class="form-check-label" for="inc_nc"><i class="fas fa-undo text-warning"></i> Notas de Crédito</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" id="inc_compras" checked><label class="form-check-label" for="inc_compras"><i class="fas fa-truck text-info"></i> Compras (a proveedores)</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" id="inc_pagos" checked><label class="form-check-label" for="inc_pagos"><i class="fas fa-hand-holding-usd text-info"></i> Pagos a proveedores</label></div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check"><input class="form-check-input" type="checkbox" id="inc_gastos" checked><label class="form-check-label" for="inc_gastos"><i class="fas fa-receipt text-danger"></i> Gastos</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" id="inc_movcaja" checked><label class="form-check-label" for="inc_movcaja"><i class="fas fa-exchange-alt text-secondary"></i> Movimientos de caja manuales</label></div>
+                        <div class="form-check"><input class="form-check-input" type="checkbox" id="inc_difcaja" checked><label class="form-check-label" for="inc_difcaja"><i class="fas fa-balance-scale text-secondary"></i> Diferencias de cierre de caja</label></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botones -->
+        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+            <button type="button" class="btn btn-outline-primary btn-lg" onclick="previsualizar()">
+                <i class="fas fa-eye"></i> Previsualizar
+            </button>
+            <button type="button" class="btn btn-success btn-lg" onclick="exportar()">
+                <i class="fas fa-file-excel"></i> Generar Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- Panel derecho: previsualización -->
+    <div class="col-lg-5">
+        <div class="card sticky-top" style="top:10px;">
+            <div class="card-header bg-warning">
+                <h6 class="mb-0"><i class="fas fa-clipboard-check"></i> Previsualización</h6>
+            </div>
+            <div class="card-body" id="preview_panel">
+                <div class="text-center text-muted py-4">
+                    <i class="fas fa-mouse-pointer fa-2x opacity-50 mb-2 d-block"></i>
+                    Hacé click en <strong>Previsualizar</strong> para ver cuántos asientos se van a generar.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'puente_contable_ayuda.html' %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Atajos de fecha
+function atajo(tipo) {
+    const hoy = new Date();
+    let desde, hasta;
+
+    if (tipo === 'mes_actual') {
+        desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        hasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+    } else if (tipo === 'mes_anterior') {
+        desde = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+        hasta = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+    } else if (tipo === 'trimestre') {
+        desde = new Date(hoy.getFullYear(), hoy.getMonth() - 3, 1);
+        hasta = hoy;
+    } else if (tipo === 'anio_actual') {
+        desde = new Date(hoy.getFullYear(), 0, 1);
+        hasta = hoy;
+    }
+
+    document.getElementById('desde').value = desde.toISOString().split('T')[0];
+    document.getElementById('hasta').value = hasta.toISOString().split('T')[0];
+}
+
+// Inicio: por default mes actual
+window.addEventListener('DOMContentLoaded', () => atajo('mes_actual'));
+
+function validarFechas() {
+    const desde = document.getElementById('desde').value;
+    const hasta = document.getElementById('hasta').value;
+    if (!desde || !hasta) {
+        Swal.fire('Falta período', 'Elegí fechas Desde y Hasta', 'warning');
+        return null;
+    }
+    if (hasta < desde) {
+        Swal.fire('Rango inválido', 'La fecha "Hasta" no puede ser anterior a "Desde"', 'warning');
+        return null;
+    }
+    return { desde, hasta };
+}
+
+function previsualizar() {
+    const f = validarFechas();
+    if (!f) return;
+
+    document.getElementById('preview_panel').innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-warning" role="status"></div>
+            <p class="mt-2 mb-0 text-muted">Calculando...</p>
+        </div>`;
+
+    const fd = new FormData();
+    fd.append('desde', f.desde);
+    fd.append('hasta', f.hasta);
+
+    fetch('{{ url_for("puente_contable.preview") }}', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (!d.success) {
+                document.getElementById('preview_panel').innerHTML = `<div class="alert alert-danger mb-0">${d.error}</div>`;
+                return;
+            }
+            const fila = (icono, label, n, color) =>
+                `<tr><td><i class="fas ${icono} ${color}"></i> ${label}</td><td class="text-end fw-bold">${n}</td></tr>`;
+
+            document.getElementById('preview_panel').innerHTML = `
+                <table class="table table-sm mb-2">
+                    <tbody>
+                        ${fila('fa-cash-register', 'Ventas', d.ventas, 'text-success')}
+                        ${fila('fa-undo', 'Notas de Crédito', d.nc, 'text-warning')}
+                        ${fila('fa-truck', 'Compras', d.compras, 'text-info')}
+                        ${fila('fa-hand-holding-usd', 'Pagos a proveedor', d.pagos, 'text-info')}
+                        ${fila('fa-receipt', 'Gastos', d.gastos, 'text-danger')}
+                        ${fila('fa-exchange-alt', 'Mov. caja manuales', d.mov_caja, 'text-secondary')}
+                        ${fila('fa-balance-scale', 'Diferencias caja', d.dif_caja, 'text-secondary')}
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr><td class="fw-bold">TOTAL ASIENTOS</td><td class="text-end fw-bold fs-5 text-primary">${d.total}</td></tr>
+                    </tfoot>
+                </table>
+                ${d.total === 0 ? '<div class="alert alert-warning mb-0 small">No hay movimientos en este período.</div>' : '<small class="text-muted">Estos son los asientos que se incluirán en el Excel.</small>'}`;
+        })
+        .catch(err => {
+            document.getElementById('preview_panel').innerHTML = `<div class="alert alert-danger mb-0">${err}</div>`;
+        });
+}
+
+function exportar() {
+    const f = validarFechas();
+    if (!f) return;
+
+    Swal.fire({
+        title: 'Generando Excel...',
+        html: 'Esto puede tardar unos segundos según la cantidad de movimientos.',
+        didOpen: () => Swal.showLoading(),
+        allowOutsideClick: false
+    });
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ url_for("puente_contable.exportar") }}';
+    form.style.display = 'none';
+
+    const campos = {
+        desde: f.desde, hasta: f.hasta,
+        inc_ventas:  document.getElementById('inc_ventas').checked  ? '1' : '0',
+        inc_nc:      document.getElementById('inc_nc').checked      ? '1' : '0',
+        inc_compras: document.getElementById('inc_compras').checked ? '1' : '0',
+        inc_pagos:   document.getElementById('inc_pagos').checked   ? '1' : '0',
+        inc_gastos:  document.getElementById('inc_gastos').checked  ? '1' : '0',
+        inc_movcaja: document.getElementById('inc_movcaja').checked ? '1' : '0',
+        inc_difcaja: document.getElementById('inc_difcaja').checked ? '1' : '0',
+    };
+
+    for (const [k, v] of Object.entries(campos)) {
+        const inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = k;
+        inp.value = v;
+        form.appendChild(inp);
+    }
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+
+    setTimeout(() => Swal.close(), 2500);
+}
+</script>
+{% endblock %}

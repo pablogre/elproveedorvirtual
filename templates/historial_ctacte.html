@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+{% block title %}CTA.CTE — {{ cliente_nombre }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h2 class="h4 mb-0"><i class="fas fa-clipboard-list me-2 text-primary"></i>Cuenta Corriente</h2>
+    <div class="d-flex gap-2 align-items-center">
+        <div class="form-check form-switch me-2 mb-0">
+            <input class="form-check-input" type="checkbox" id="chkMostrarAnulados" onchange="cargarHistorial()">
+            <label class="form-check-label small text-muted" for="chkMostrarAnulados">Ver anulados</label>
+        </div>
+        <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#modalAyudaHistorial">
+            <i class="fas fa-question-circle me-1"></i> Ayuda
+        </button>
+        <a href="/cobrar_cliente?cliente_id={{ cliente_id }}" class="btn btn-success btn-sm">
+            <i class="fas fa-hand-holding-usd me-1"></i> Cobrar
+        </a>
+        <a href="/clientes" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i> Volver
+        </a>
+    </div>
+</div>
+
+<!-- Modal Ayuda Historial -->
+<div class="modal fade" id="modalAyudaHistorial" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#0A2140; color:white;">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Ayuda — Cuenta Corriente del Cliente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="text-primary fw-bold">¿Qué es la Cuenta Corriente?</h6>
+                <p>Es el libro mayor del cliente. Registra todas las ventas a crédito y los cobros realizados, mostrando el saldo real que el cliente adeuda en todo momento.</p>
+
+                <h6 class="text-primary fw-bold mt-3">Columnas de la tabla</h6>
+                <table class="table table-sm table-bordered">
+                    <thead class="table-dark">
+                        <tr><th>Columna</th><th>Qué significa</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Debe</strong></td><td>Ventas o comprobantes emitidos al cliente. Aumentan la deuda.</td></tr>
+                        <tr><td><strong>Haber</strong></td><td>Cobros realizados al cliente (recibos). Reducen la deuda.</td></tr>
+                        <tr><td><strong>Saldo</strong></td><td>Deuda acumulada hasta esa línea. El último valor es lo que debe hoy.</td></tr>
+                        <tr><td><strong>Estado</strong></td><td><span class="badge bg-warning text-dark">Pend.</span> = tiene saldo pendiente. <span class="badge bg-success">Pagado</span> = cancelado.</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="text-primary fw-bold mt-3">Colores de las filas</h6>
+                <ul>
+                    <li><span class="badge bg-success">Verde</span> — Recibo de cobro (Haber)</li>
+                    <li>Sin color — Venta o comprobante (Debe)</li>
+                </ul>
+
+                <h6 class="text-primary fw-bold mt-3">¿Cómo cobrar?</h6>
+                <p>Hacé clic en el botón <strong class="text-success">Cobrar</strong> arriba a la derecha. Vas a poder seleccionar los comprobantes pendientes, elegir el medio de pago y generar el recibo de cobro (térmico y PDF).</p>
+
+                <div class="alert alert-info mt-3 mb-0">
+                    <i class="fas fa-info-circle me-1"></i>
+                    El <strong>Saldo Total</strong> en rojo indica que el cliente tiene deuda. En verde significa que está al día.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Encabezado cliente -->
+<div class="row mb-3">
+    <div class="col-md-8">
+        <div class="card border-0 bg-light">
+            <div class="card-body py-2">
+                <h5 class="mb-0" id="clienteNombre">Cargando...</h5>
+                <small class="text-muted" id="clienteDoc"></small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0" id="cardSaldo" style="background:#0A2140">
+            <div class="card-body py-2 text-center text-white">
+                <div class="small">Saldo Total</div>
+                <div class="h4 mb-0 fw-bold" id="saldoTotal">—</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Ver Factura -->
+<div class="modal fade" id="modalVerFactura" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#0A2140; color:white;">
+                <h5 class="modal-title"><i class="fas fa-file-invoice me-2"></i>Factura <span id="modalFacturaNro"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalFacturaBody">
+                <div class="text-center py-4"><span class="spinner-border text-primary"></span></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla Debe/Haber/Saldo -->
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" id="tablaHistorial">
+                <thead style="background:#0A2140; color:white;">
+                    <tr>
+                        <th class="ps-3">Fecha</th>
+                        <th>Comprobante</th>
+                        <th>Descripción</th>
+                        <th class="text-end">Debe</th>
+                        <th class="text-end">Haber</th>
+                        <th class="text-end pe-3">Saldo</th>
+                        <th class="text-center">Estado</th>
+                        <th class="text-center">Ver</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyHistorial">
+                    <tr><td colspan="7" class="text-center py-4 text-muted">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+const CLIENTE_ID = '{{ cliente_id }}';
+
+function fmt(n) {
+    return parseFloat(n).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+async function cargarHistorial() {
+    try {
+        const incluirAnulados = document.getElementById('chkMostrarAnulados').checked ? '?incluir_anulados=1' : '';
+        const r = await fetch(`/api/cta_cte/historial_completo/${CLIENTE_ID}${incluirAnulados}`);
+        const data = await r.json();
+        if (!data.success) throw new Error(data.error);
+
+        document.getElementById('clienteNombre').textContent = data.cliente.nombre || '';
+        document.getElementById('clienteDoc').textContent = data.cliente.documento || '';
+
+        const saldo = parseFloat(data.saldo_total || 0);
+        document.getElementById('saldoTotal').textContent = `$${fmt(saldo)}`;
+        document.getElementById('cardSaldo').style.background = saldo > 0 ? '#dc3545' : '#198754';
+
+        const tbody = document.getElementById('tbodyHistorial');
+        if (!data.movimientos.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">Sin movimientos</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.movimientos.map(m => {
+            const esPago = m.tipo_mov === 'pago';
+            const esAnulado = ['cancelado','anulado','anulada'].includes((m.estado || '').toLowerCase());
+            const badge = esAnulado
+                ? '<span class="badge bg-secondary">Anulado</span>'
+                : m.estado === 'pagado'
+                    ? '<span class="badge bg-success">Pagado</span>'
+                    : m.estado === 'pendiente'
+                        ? `<span class="badge bg-warning text-dark">Pend. $${fmt(m.saldo_pendiente)}</span>`
+                        : `<span class="badge bg-secondary">${m.estado}</span>`;
+            // Estilo: anulados en gris + tachados; pagos normales en verde claro
+            let rowClass = '';
+            let rowStyle = '';
+            if (esAnulado) {
+                rowClass = 'text-muted';
+                rowStyle = 'text-decoration:line-through; opacity:0.6;';
+            } else if (esPago) {
+                rowClass = 'table-success';
+            }
+
+            // Botón ver comprobante
+            let btnVer = '';
+            if (esAnulado) {
+                // Movimientos anulados: sin acciones
+                btnVer = '<span class="text-muted small">—</span>';
+            } else if (esPago && m.comprobante && m.comprobante.startsWith('R')) {
+                // Es un recibo de cobro — ver PDF + anular (si no está anulado)
+                btnVer = `<button class="btn btn-sm btn-outline-primary py-0" onclick="verRecibo('${m.comprobante}')" title="Ver recibo PDF">
+                    <i class="fas fa-file-pdf"></i>
+                </button>`;
+                if (m.estado !== 'anulada' && m.estado !== 'anulado') {
+                    btnVer += ` <button class="btn btn-sm btn-outline-danger py-0" onclick="anularRecibo('${m.comprobante}')" title="Anular recibo">
+                        <i class="fas fa-ban"></i>
+                    </button>`;
+                }
+            } else if (esPago && m.comprobante === 'A_CUENTA') {
+                // Pago A_CUENTA: imputar (si saldo > 0) + anular siempre disponible
+                if (m.saldo_pendiente > 0) {
+                    btnVer = `<a href="/imputar_pago/${m.id}" class="btn btn-sm btn-outline-success py-0" title="Imputar a facturas">
+                        <i class="fas fa-link"></i>
+                    </a>`;
+                }
+                btnVer += ` <button class="btn btn-sm btn-outline-danger py-0" onclick="anularPagoACuenta(${m.id})" title="Anular pago a cuenta">
+                    <i class="fas fa-ban"></i>
+                </button>`;
+            } else if (!esPago && m.factura_id) {
+                btnVer = `<button class="btn btn-sm btn-outline-secondary py-0" onclick="verFactura(${m.factura_id}, '${m.comprobante}')" title="Ver factura">
+                    <i class="fas fa-file-invoice"></i>
+                </button>`;
+            }
+
+            return `<tr class="${rowClass}" style="${rowStyle}">
+                <td class="ps-3 text-nowrap">${m.fecha}</td>
+                <td><code>${m.comprobante}</code></td>
+                <td class="text-truncate" style="max-width:200px" title="${m.descripcion}">${m.descripcion}</td>
+                <td class="text-end text-danger fw-bold">${m.debe > 0 ? '$'+fmt(m.debe) : ''}</td>
+                <td class="text-end text-success fw-bold">${m.haber > 0 ? '$'+fmt(m.haber) : ''}</td>
+                <td class="text-end fw-bold pe-3 ${m.saldo_corrido > 0 ? 'text-danger' : 'text-success'}">$${fmt(m.saldo_corrido)}</td>
+                <td class="text-center">${badge}</td>
+                <td class="text-center">${btnVer}</td>
+            </tr>`;
+        }).join('');
+    } catch(e) {
+        document.getElementById('tbodyHistorial').innerHTML = `<tr><td colspan="7" class="text-center text-danger py-3">${e.message}</td></tr>`;
+    }
+}
+
+async function verFactura(facturaId, numero) {
+    document.getElementById('modalFacturaNro').textContent = numero;
+    document.getElementById('modalFacturaBody').innerHTML = '<div class="text-center py-4"><span class="spinner-border text-primary"></span></div>';
+    const modal = new bootstrap.Modal(document.getElementById('modalVerFactura'));
+    modal.show();
+    try {
+        const r = await fetch(`/api/buscar_facturas?numero=${encodeURIComponent(numero)}&limite=1`);
+        const data = await r.json();
+        if (!data.success || !data.facturas.length) {
+            document.getElementById('modalFacturaBody').innerHTML = '<div class="alert alert-warning">No se encontró la factura.</div>';
+            return;
+        }
+        const f = data.facturas[0];
+        const mediosHTML = f.medios_pago.map(mp =>
+            `<tr><td>${mp.medio_pago.replace('_',' ').toUpperCase()}</td><td class="text-end">$${fmt(mp.importe)}</td></tr>`
+        ).join('');
+        document.getElementById('modalFacturaBody').innerHTML = `
+            <div class="row mb-3">
+                <div class="col-6"><strong>Número:</strong> ${f.numero}</div>
+                <div class="col-6"><strong>Fecha:</strong> ${f.fecha}</div>
+                <div class="col-6"><strong>Cliente:</strong> ${f.cliente.nombre}</div>
+                <div class="col-6"><strong>Documento:</strong> ${f.cliente.documento || '—'}</div>
+                <div class="col-6"><strong>Tipo:</strong> ${f.tipo_comprobante_nombre}</div>
+                <div class="col-6"><strong>Estado:</strong> <span class="badge ${f.estado === 'emitida' ? 'bg-success' : 'bg-secondary'}">${f.estado_descripcion}</span></div>
+                ${f.cae ? `<div class="col-12"><strong>CAE:</strong> <code>${f.cae}</code> — Vto: ${f.vto_cae}</div>` : ''}
+            </div>
+            <hr>
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="text-primary">Totales</h6>
+                    <table class="table table-sm">
+                        <tr><td>Subtotal:</td><td class="text-end">$${fmt(f.subtotal)}</td></tr>
+                        <tr><td>IVA:</td><td class="text-end">$${fmt(f.iva)}</td></tr>
+                        ${f.tiene_descuento ? `<tr><td>Descuento (${f.descuento_porcentaje}%):</td><td class="text-end text-danger">-$${fmt(f.descuento_monto)}</td></tr>` : ''}
+                        <tr class="fw-bold"><td>Total:</td><td class="text-end">$${fmt(f.total)}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-primary">Medios de Pago</h6>
+                    <table class="table table-sm"><tbody>${mediosHTML}</tbody></table>
+                </div>
+            </div>`;
+    } catch(e) {
+        document.getElementById('modalFacturaBody').innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+    }
+}
+
+async function anularPagoACuenta(pagoId) {
+    // Confirmación + pedir motivo en un solo paso
+    const conf = await Swal.fire({
+        title: '¿Anular pago a cuenta?',
+        html: `<div class="text-start">
+            <p>Esta acción va a:</p>
+            <ul>
+                <li>Revertir las imputaciones activas de este pago (las facturas vuelven a quedar pendientes).</li>
+                <li>Marcar el pago como <strong>anulado</strong> (queda visible solo con el toggle "Ver anulados").</li>
+                <li>Anular el movimiento en caja correspondiente (si existe).</li>
+            </ul>
+            <p class="text-danger mb-2"><strong>Esta acción no se puede deshacer.</strong></p>
+            <label class="form-label mt-2"><strong>Motivo</strong> <span class="text-muted">(opcional)</span></label>
+            <input id="swalMotivoAnular" class="form-control" placeholder="Ej: cargado por error">
+        </div>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, anular',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc3545',
+        focusConfirm: false,
+        preConfirm: () => {
+            const motivo = document.getElementById('swalMotivoAnular').value.trim();
+            return { motivo };
+        }
+    });
+    if (!conf.isConfirmed) return;
+    const motivo = (conf.value && conf.value.motivo) || '';
+
+    try {
+        const r = await fetch(`/api/pago_a_cuenta/${pagoId}/anular`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ motivo })
+        });
+        const data = await r.json();
+        if (!data.success) {
+            Swal.fire('No se pudo anular', data.error || 'Error desconocido', 'error');
+            return;
+        }
+        // Resumen de lo que pasó
+        let resumen = data.mensaje || 'Pago anulado';
+        if (data.imputaciones_revertidas && data.imputaciones_revertidas.length) {
+            resumen += `<br><br><small>${data.imputaciones_revertidas.length} imputación(es) revertida(s).</small>`;
+        }
+        if (data.caja_anulada) {
+            resumen += `<br><small>Movimiento de caja anulado.</small>`;
+        }
+        await Swal.fire({
+            title: 'Pago anulado',
+            html: resumen,
+            icon: 'success',
+            timer: 3000,
+            timerProgressBar: true
+        });
+        cargarHistorial();
+    } catch(e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+async function anularRecibo(numero) {
+    // 1. Buscar el recibo por número para obtener su id
+    let reciboId;
+    try {
+        const r = await fetch(`/api/cta_cte/recibo/buscar?numero=${encodeURIComponent(numero)}`);
+        const data = await r.json();
+        if (!data.success || !data.recibo) {
+            Swal.fire('No encontrado', `No se encontró el recibo ${numero}`, 'warning');
+            return;
+        }
+        reciboId = data.recibo.id;
+    } catch(e) {
+        Swal.fire('Error', e.message, 'error');
+        return;
+    }
+
+    // 2. Confirmar (acción sensible: revierte un cobro)
+    const conf = await Swal.fire({
+        title: `¿Anular recibo ${numero}?`,
+        html: `<div class="text-start">
+            <p>Esto va a:</p>
+            <ul>
+                <li>Devolver el saldo a los comprobantes que este recibo había cobrado (vuelven a quedar pendientes).</li>
+                <li>Eliminar el cobro de la cuenta corriente del cliente.</li>
+                <li>Marcar el recibo como <strong>anulado</strong> (queda registrado).</li>
+            </ul>
+            <p class="text-danger mb-0"><strong>Esta acción no se puede deshacer.</strong></p>
+        </div>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, anular recibo',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc3545'
+    });
+    if (!conf.isConfirmed) return;
+
+    // 3. Llamar al endpoint de anulación
+    try {
+        const r = await fetch(`/api/cta_cte/recibo/${reciboId}/anular`, {method: 'POST'});
+        const data = await r.json();
+        if (data.success) {
+            await Swal.fire('Recibo anulado', data.message, 'success');
+            cargarHistorial();  // recargar para reflejar el nuevo saldo
+        } else {
+            Swal.fire('No se pudo anular', data.error || 'Error desconocido', 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+async function verRecibo(numero) {
+    try {
+        const r = await fetch(`/api/cta_cte/recibo/buscar?numero=${encodeURIComponent(numero)}`);
+        const data = await r.json();
+        if (data.success && data.recibo) {
+            window.open(`/api/cta_cte/recibo/${data.recibo.id}/pdf`, '_blank');
+        } else {
+            Swal.fire('No encontrado', `No se encontró el recibo ${numero}`, 'warning');
+        }
+    } catch(e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+cargarHistorial();
+</script>
+{% endblock %}

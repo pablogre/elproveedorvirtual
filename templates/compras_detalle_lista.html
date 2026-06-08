@@ -1,0 +1,728 @@
+{% extends 'base.html' %}
+{% block title %}Compras de Mercadería{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-4">
+    <h2>
+        <i class="fas fa-boxes me-2"></i>Compras de Mercadería <small class="text-muted">(Stock + Costos)</small>
+        <button class="btn btn-sm btn-outline-info ms-2" data-bs-toggle="modal" data-bs-target="#modalAyuda" title="Ver ayuda">
+            <i class="fas fa-question-circle me-1"></i> Ayuda
+        </button>
+    </h2>
+    <div>
+        <a href="/facturas_compra" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-file-invoice-dollar me-1"></i> Gastos y Servicios
+        </a>
+        <a href="{{ url_for('compras.codigos_proveedor') }}" class="btn btn-outline-info me-2">
+            <i class="fas fa-barcode me-1"></i> Códigos por Proveedor
+        </a>
+        <a href="{{ url_for('compras.nueva') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i> Nueva Factura
+        </a>
+    </div>
+</div>
+
+<!-- ========== MODAL AYUDA EXHAUSTIVO ========== -->
+<div class="modal fade" id="modalAyuda" tabindex="-1" aria-labelledby="modalAyudaLabel">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalAyudaLabel">
+                    <i class="fas fa-question-circle me-2"></i>Manual completo — Compras de Mercadería
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- Índice rápido -->
+                <div class="alert alert-light border mb-3">
+                    <strong><i class="fas fa-list-ul me-1"></i> Contenido</strong><br>
+                    <small>
+                        1. ¿Qué es este módulo? · 2. Diferencia con Gastos y Servicios · 3. Botones y filtros ·
+                        4. Cargar factura paso a paso · 5. OCR con IA · 6. Descuento por línea ·
+                        7. Cálculo del costo final · 8. Anti-duplicado · 9. Anular factura ·
+                        10. Errores comunes · 11. Preguntas frecuentes · 12. Relación con otros módulos
+                    </small>
+                </div>
+
+                <div class="accordion" id="accordionAyudaCompras">
+
+                    <!-- ========== 1. ¿QUÉ ES? ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_que_es">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#c_que_es" aria-expanded="true" aria-controls="c_que_es">
+                                <i class="fas fa-lightbulb text-warning me-2"></i> <strong>1. ¿Qué es Compras de Mercadería?</strong>
+                            </button>
+                        </h2>
+                        <div id="c_que_es" class="accordion-collapse collapse show" aria-labelledby="hd_que_es" data-bs-parent="#accordionAyudaCompras">
+                            <div class="accordion-body">
+                                <p>Es el módulo donde cargás las facturas de compra de <strong>mercadería para revender</strong>. Cada factura cargada acá impacta automáticamente en:</p>
+                                <ul>
+                                    <li><i class="fas fa-boxes text-primary"></i> <strong>Stock</strong>: suma las cantidades compradas a cada producto.</li>
+                                    <li><i class="fas fa-tag text-success"></i> <strong>Costo</strong>: actualiza el costo de cada producto al precio neto que pagaste (con prorrateo de flete y descuento global).</li>
+                                    <li><i class="fas fa-dollar-sign text-info"></i> <strong>Precios de venta</strong>: recalcula las 5 listas de precios usando los márgenes que tenés configurados en cada producto.</li>
+                                    <li><i class="fas fa-handshake text-secondary"></i> <strong>Cuenta corriente del proveedor</strong>: suma el total al saldo (Debe).</li>
+                                    <li><i class="fas fa-percent text-danger"></i> <strong>Libro IVA Compras</strong>: registra los netos, IVA y percepciones.</li>
+                                </ul>
+                                <div class="alert alert-info mb-0 py-2">
+                                    <strong><i class="fas fa-info-circle"></i> En una palabra:</strong>
+                                    es el módulo "completo" para compras de productos que se revenden.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 2. DIFERENCIA CON GASTOS Y SERVICIOS ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_diferencia">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_diferencia" aria-expanded="false">
+                                <i class="fas fa-exchange-alt text-primary me-2"></i> <strong>2. Diferencia con "Gastos y Servicios"</strong>
+                            </button>
+                        </h2>
+                        <div id="c_diferencia" class="accordion-collapse collapse" aria-labelledby="hd_diferencia" data-bs-parent="#accordionAyudaCompras">
+                            <div class="accordion-body">
+                                <p>Hay <strong>dos módulos para cargar facturas de compra</strong> en el sistema. Tenés que usar el correcto según el tipo de gasto:</p>
+                                <table class="table table-sm table-bordered align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 30%">Característica</th>
+                                            <th class="text-center">Compras de Mercadería <small>(este módulo)</small></th>
+                                            <th class="text-center">Gastos y Servicios</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>¿Cuándo usarlo?</strong></td>
+                                            <td>Compraste mercadería para revender (productos).</td>
+                                            <td>Pagaste un servicio o gasto (luz, internet, contador, alquiler, papelería).</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Detalle de items</strong></td>
+                                            <td><i class="fas fa-check text-success"></i> Sí, con cantidades y precios</td>
+                                            <td><i class="fas fa-times text-danger"></i> No, solo el total</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Modifica stock</strong></td>
+                                            <td><i class="fas fa-check text-success"></i> Suma stock</td>
+                                            <td><i class="fas fa-times text-danger"></i> No toca stock</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Actualiza costos</strong></td>
+                                            <td><i class="fas fa-check text-success"></i> Sí, y recalcula precios de venta</td>
+                                            <td><i class="fas fa-times text-danger"></i> No</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Libro IVA Compras</strong></td>
+                                            <td><i class="fas fa-check text-success"></i> Sí</td>
+                                            <td><i class="fas fa-check text-success"></i> Sí</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Cta Cte Proveedor</strong></td>
+                                            <td><i class="fas fa-check text-success"></i> Sí</td>
+                                            <td><i class="fas fa-check text-success"></i> Sí</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div class="alert alert-warning mb-0 py-2 small">
+                                    <strong><i class="fas fa-exclamation-triangle"></i> Importante:</strong>
+                                    desde abril 2026 el sistema detecta automáticamente si una misma factura
+                                    se carga por error en los <strong>dos módulos</strong> (te avisa antes de duplicarla).
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 3. BOTONES Y FILTROS ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_botones">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_botones" aria-expanded="false">
+                                <i class="fas fa-mouse-pointer text-secondary me-2"></i> <strong>3. Botones de la pantalla y filtros</strong>
+                            </button>
+                        </h2>
+                        <div id="c_botones" class="accordion-collapse collapse" aria-labelledby="hd_botones" data-bs-parent="#accordionAyudaCompras">
+                            <div class="accordion-body">
+                                <h6 class="fw-bold">Botones de arriba</h6>
+                                <ul>
+                                    <li><i class="fas fa-file-invoice-dollar"></i> <strong>Gastos y Servicios</strong>: te lleva al otro módulo, para cargar facturas que no son de mercadería.</li>
+                                    <li><i class="fas fa-barcode"></i> <strong>Códigos por Proveedor</strong>: gestionás los códigos que cada proveedor usa para tus productos (útil para que el OCR vincule automáticamente).</li>
+                                    <li><i class="fas fa-plus"></i> <strong>Nueva Factura</strong>: abre el formulario para cargar una factura, ya sea manualmente o con OCR.</li>
+                                </ul>
+
+                                <h6 class="fw-bold mt-3">Filtros</h6>
+                                <p>Por defecto ves las facturas del <strong>mes actual</strong>. Podés filtrar por:</p>
+                                <ul>
+                                    <li><strong>Proveedor</strong>: una sola empresa o todos.</li>
+                                    <li><strong>Desde / Hasta</strong>: rango de fechas. Cargá las dos y dale "Filtrar".</li>
+                                </ul>
+
+                                <h6 class="fw-bold mt-3">Columnas de la tabla</h6>
+                                <ul>
+                                    <li><strong>Fecha</strong>: de la factura del proveedor (no la fecha de carga en el sistema).</li>
+                                    <li><strong>Comprobante</strong>: tipo (A/B/C) y número en formato <code>0000X-00000000</code>.</li>
+                                    <li><strong>Neto 21% / IVA 21%</strong>: monto sin IVA al 21% e IVA del 21% respectivamente.</li>
+                                    <li><strong>Neto 10.5% / IVA 10.5%</strong>: lo mismo para alícuota reducida.</li>
+                                    <li><strong>Total</strong>: importe final de la factura (lo que vas a pagar).</li>
+                                </ul>
+
+                                <h6 class="fw-bold mt-3">Acciones por fila</h6>
+                                <ul>
+                                    <li><i class="fas fa-eye text-info"></i> <strong>Ver detalle</strong>: abre la factura completa con todos sus artículos, percepciones e IVA discriminado. Desde ahí podés imprimirla.</li>
+                                    <li><i class="fas fa-trash text-danger"></i> <strong>Anular</strong> (solo admin): revierte todo. Ver sección 9.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 4. CARGAR FACTURA PASO A PASO ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_paso_a_paso">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_paso_a_paso" aria-expanded="false">
+                                <i class="fas fa-list-ol text-success me-2"></i> <strong>4. Cargar una factura — paso a paso</strong>
+                            </button>
+                        </h2>
+                        <div id="c_paso_a_paso" class="accordion-collapse collapse" aria-labelledby="hd_paso_a_paso" data-bs-parent="#accordionAyudaCompras">
+                            <div class="accordion-body">
+                                <p>Click en <strong>Nueva Factura</strong>. Vas a ver dos partes: <em>cabecera</em> arriba y <em>detalle de artículos</em> abajo.</p>
+
+                                <h6 class="fw-bold mt-3"><span class="badge bg-secondary">PASO 1</span> Cabecera</h6>
+                                <ul>
+                                    <li><strong>Proveedor</strong>: elegí del desplegable. Si no existe, andá a <a href="/proveedores" target="_blank">Proveedores</a> y dalo de alta primero.</li>
+                                    <li><strong>Fecha</strong>: la fecha que figura en la factura del proveedor.</li>
+                                    <li><strong>Tipo</strong>: A, B o C (lo que dice la factura).</li>
+                                    <li><strong>Punto de venta</strong>: 5 dígitos, ej. <code>00042</code>.</li>
+                                    <li><strong>Número</strong>: 8 dígitos, ej. <code>00012345</code>.</li>
+                                </ul>
+                                <div class="alert alert-info py-2 small mb-3">
+                                    <i class="fas fa-magic"></i> Apenas completes los 4 campos (proveedor, tipo, PV, número), el sistema chequea automáticamente si esa factura ya está cargada (anti-duplicado). Ver sección 8.
+                                </div>
+
+                                <h6 class="fw-bold mt-3"><span class="badge bg-secondary">PASO 2</span> Detalle de artículos</h6>
+                                <p>Por cada artículo de la factura del proveedor:</p>
+                                <ol>
+                                    <li><strong>Buscar producto</strong>: escribí código interno, código del proveedor o parte del nombre. Si no aparece, click en <em>"Alta Rápida de Producto"</em>.</li>
+                                    <li><strong>Cantidad</strong>: cuántas unidades compraste.</li>
+                                    <li><strong>Precio unitario sin IVA</strong>: el precio de <em>lista</em> que figura en la factura (antes del descuento de línea, si tiene).</li>
+                                    <li><strong>Descuento %</strong>: si la factura aplica un descuento por ítem (típico de mayoristas), cargalo acá. Ver sección 6.</li>
+                                    <li><strong>Código del proveedor</strong> (opcional): si el proveedor tiene un código distinto al tuyo, cargalo. Te sirve para que la próxima factura el OCR lo vincule solo.</li>
+                                    <li>Click en <strong>Agregar</strong>. El ítem aparece en la grilla.</li>
+                                </ol>
+
+                                <h6 class="fw-bold mt-3"><span class="badge bg-secondary">PASO 3</span> Totales de IVA</h6>
+                                <p>Cargá los netos e IVA <strong>exactamente como figuran en la factura del proveedor</strong>. El sistema no los calcula solo (porque pueden tener redondeos del proveedor que no querés modificar).</p>
+                                <ul>
+                                    <li><strong>Neto Gravado 21%</strong> e <strong>IVA 21%</strong></li>
+                                    <li><strong>Neto Gravado 10.5%</strong> e <strong>IVA 10.5%</strong></li>
+                                    <li><strong>Neto No Gravado</strong> (si corresponde)</li>
+                                </ul>
+                                <p class="small text-muted">El botón <strong>"Calcular IVA desde items"</strong> los sugiere a partir del detalle (te ahorra tipear), pero después revisalos.</p>
+
+                                <h6 class="fw-bold mt-3"><span class="badge bg-secondary">PASO 4</span> Ajustes (opcional)</h6>
+                                <ul>
+                                    <li><strong>Flete</strong>: si la factura tiene flete, cargalo. Se prorratea entre todos los items para impactar el costo.</li>
+                                    <li><strong>Descuento global</strong>: descuento al pie de la factura. También se prorratea.</li>
+                                    <li><strong>Percepciones</strong>: IVA, IIBB, Ganancias. Se sumando al total pero no afectan el costo.</li>
+                                </ul>
+
+                                <h6 class="fw-bold mt-3"><span class="badge bg-secondary">PASO 5</span> Guardar</h6>
+                                <p>Click en <strong>Guardar</strong>. Va a aparecer un modal de confirmación con la cantidad de items y el total. Si todo está bien, click en <strong>Sí, guardar</strong> y la factura queda registrada.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 5. OCR ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_ocr">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_ocr" aria-expanded="false">
+                                <i class="fas fa-camera text-info me-2"></i> <strong>5. OCR — Carga automática con foto o PDF</strong>
+                            </button>
+                        </h2>
+                        <div id="c_ocr" class="accordion-collapse collapse" aria-labelledby="hd_ocr" data-bs-parent="#accordionAyudaCompras">
+                            <div class="accordion-body">
+                                <p>El sistema usa Inteligencia Artificial para leer facturas y autocompletar el formulario. Te ahorra el 90% del tipeo.</p>
+
+                                <h6 class="fw-bold">Cómo escanear</h6>
+                                <ol>
+                                    <li>En el formulario de Nueva Factura, click en <strong>"Escanear factura"</strong>.</li>
+                                    <li>Subí una foto del celular (.jpg, .png) o un PDF.</li>
+                                    <li>Esperá 5-15 segundos. El sistema lee y completa: proveedor, fecha, CAE, tipo, PV, número, items, IVA, percepciones.</li>
+                                    <li>Revisá los datos. Si hay items con fondo amarillo <code>[SIN VINCULAR]</code>, hacé click en <i class="fas fa-link"></i> Vincular para asociarlos a un producto tuyo (o usá Alta Rápida si es nuevo).</li>
+                                    <li>Cuando ningún item esté en amarillo, click en Guardar.</li>
+                                </ol>
+
+                                <h6 class="fw-bold mt-3">Para que funcione bien</h6>
+                                <ul>
+                                    <li><i class="fas fa-check text-success"></i> Foto con buena luz (de día, sin sombras).</li>
+                                    <li><i class="fas fa-check text-success"></i> Factura completa en el cuadro.</li>
+                                    <li><i class="fas fa-check text-success"></i> Sin doblez ni arrugas grandes.</li>
+                                    <li><i class="fas fa-check text-success"></i> Si es PDF, mejor que mejor.</li>
+                                </ul>
+
+                                <h6 class="fw-bold mt-3">Lo que <em>no</em> funciona bien</h6>
+                                <ul>
+                                    <li><i class="fas fa-times text-danger"></i> Facturas pre-2021 (impresoras de matriz, papel amarillento).</li>
+                                    <li><i class="fas fa-times text-danger"></i> Facturas manuscritas.</li>
+                                    <li><i class="fas fa-times text-danger"></i> Fotos borrosas o con flash haciendo brillo sobre el papel.</li>
+                                </ul>
+
+                                <h6 class="fw-bold mt-3">Costo</h6>
+                                <p class="mb-0">Cada factura escaneada cuesta unos centavos de USD. Procesando 50 facturas por mes gastás aprox <strong>US$ 2</strong>. Es muy poco comparado con lo que ahorrás en tiempo.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 6. DESCUENTO POR LÍNEA ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_descuento">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_descuento" aria-expanded="false">
+                                <i class="fas fa-percent text-warning me-2"></i> <strong>6. Descuento por línea — NUEVO</strong>
+                            </button>
+                        </h2>
+                        <div id="c_descuento" class="accordion-collapse collapse" aria-labelledby="hd_descuento" data-bs-parent="#accordionAyudaCompras">
+                            <div class="accordion-body">
+                                <p>Algunos proveedores (típicamente mayoristas) aplican un <strong>descuento por ítem</strong> en la factura, en lugar de bajar el precio de lista. Por ejemplo: te facturan al precio de lista pero con un 15% de bonificación en cada renglón.</p>
+
+                                <h6 class="fw-bold">Por qué es importante separarlo</h6>
+                                <p>Si cargás solo el "precio neto" (con el descuento ya aplicado), perdés información. Y si después el proveedor te pasa una lista de precios actualizada, no podés comparar contra el precio de lista que pagás vos. Por eso el sistema te deja cargar las dos cosas:</p>
+                                <ul>
+                                    <li><strong>Precio unitario</strong> = el precio de lista (como figura en la columna "Precio" de la factura).</li>
+                                    <li><strong>Descuento %</strong> = el porcentaje de bonificación de esa línea.</li>
+                                </ul>
+
+                                <h6 class="fw-bold mt-3">Ejemplo numérico</h6>
+                                <div class="bg-light p-3 rounded border">
+                                    <p class="mb-2"><strong>Factura del proveedor dice:</strong></p>
+                                    <table class="table table-sm mb-2">
+                                        <thead class="table-secondary">
+                                            <tr><th>Producto</th><th class="text-end">Cant</th><th class="text-end">P.Unit.</th><th class="text-end">Bonif</th><th class="text-end">Subt sin IVA</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr><td>Aceite Cocinero 1.5L</td><td class="text-end">12</td><td class="text-end">$1.000</td><td class="text-end">15%</td><td class="text-end">$10.200</td></tr>
+                                        </tbody>
+                                    </table>
+                                    <p class="mb-1"><strong>Cómo lo cargás:</strong></p>
+                                    <ul class="mb-0 small">
+                                        <li>Cantidad: <code>12</code></li>
+                                        <li>Precio unitario sin IVA: <code>1000</code> ← precio de lista</li>
+                                        <li>Descuento %: <code>15</code></li>
+                                    </ul>
+                                </div>
+                                <p class="small text-muted mt-2 mb-0">
+                                    El subtotal lo calcula solo: 12 × 1.000 × (1 − 15/100) = $10.200. Las líneas con descuento aparecen en la grilla con fondo celeste claro.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 7. CÁLCULO DEL COSTO FINAL ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_costo">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_costo" aria-expanded="false">
+                                <i class="fas fa-calculator text-primary me-2"></i> <strong>7. Cálculo del costo final de cada producto</strong>
+                            </button>
+                        </h2>
+                        <div id="c_costo" class="accordion-collapse collapse" aria-labelledby="hd_costo" data-bs-parent="#accordionAyudaCompras">
+                            <div class="accordion-body">
+                                <p>Cuando guardás la factura, el sistema actualiza el costo de cada producto con esta fórmula:</p>
+                                <div class="bg-light p-3 rounded border mb-3">
+                                    <code style="font-size: 1.05em;">
+                                        Costo final = (P.Unit × (1 − Desc%/100)) + Prorrateo flete − Prorrateo descuento global
+                                    </code>
+                                </div>
+
+                                <h6 class="fw-bold">Prorrateo de flete y descuento global</h6>
+                                <p>Si la factura trae flete o descuento al pie, se reparten <strong>proporcionalmente</strong> entre todos los items según su peso en el total.</p>
+
+                                <div class="bg-light p-3 rounded border mb-3">
+                                    <p class="mb-2"><strong>Ejemplo:</strong></p>
+                                    <ul class="small mb-2">
+                                        <li>Item A: subtotal $7.000 (70% de la factura)</li>
+                                        <li>Item B: subtotal $3.000 (30% de la factura)</li>
+                                        <li>Flete: $500</li>
+                                    </ul>
+                                    <p class="mb-0 small">→ Item A absorbe $350 de flete, Item B absorbe $150.</p>
+                                </div>
+
+                                <h6 class="fw-bold">Recálculo de precios de venta</h6>
+                                <p>Una vez actualizado el costo, el sistema recalcula <strong>las 5 listas de precios</strong> usando los márgenes que tiene cada producto en el ABM. Por ejemplo, si un producto tiene <em>margen lista 1 = 30%</em>, el nuevo Precio 1 = nuevo costo × 1,30.</p>
+
+                                <div class="alert alert-warning py-2 mb-0 small">
+                                    <strong><i class="fas fa-exclamation-triangle"></i> Importante:</strong>
+                                    si un producto no tenía margen cargado en alguna lista, esa lista no se actualiza. Conviene siempre cargar los márgenes de las 5 listas en el ABM de Productos antes de cargar la primera factura.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 8. ANTI-DUPLICADO ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_duplicado">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_duplicado" aria-expanded="false">
+                                <i class="fas fa-shield-alt text-danger me-2"></i> <strong>8. Anti-duplicado — NUEVO</strong>
+                            </button>
+                        </h2>
+                        <div id="c_duplicado" class="accordion-collapse collapse" aria-labelledby="hd_duplicado" data-bs-parent="#accordionAyudaCompras">
+                            <div class="accordion-body">
+                                <p>El sistema detecta cuando intentás cargar una factura que ya está en el sistema, antes de que pierdas tiempo cargando los items.</p>
+
+                                <h6 class="fw-bold">Cuándo dispara</h6>
+                                <p>Apenas completás los 4 campos clave en la cabecera:</p>
+                                <ol>
+                                    <li>Proveedor</li>
+                                    <li>Tipo (A/B/C)</li>
+                                    <li>Punto de venta</li>
+                                    <li>Número</li>
+                                </ol>
+                                <p>El sistema chequea contra <strong>los dos módulos</strong> (Compras de Mercadería y Gastos y Servicios). Si ya existe esa combinación para ese proveedor, te avisa.</p>
+
+                                <h6 class="fw-bold mt-3">Qué muestra</h6>
+                                <ul>
+                                    <li>Cartel amarillo de SweetAlert con los datos de la factura existente: ID, fecha, total, razón social y módulo donde está cargada.</li>
+                                    <li>Los campos de proveedor, PV y número se pintan en rojo.</li>
+                                    <li>Botón <strong>"Ver factura existente"</strong> que te lleva directo a verla.</li>
+                                </ul>
+
+                                <h6 class="fw-bold mt-3">Si querés cargarla igual</h6>
+                                <p>Si el cartel apareció pero <em>realmente</em> querés cargar una factura nueva (porque te equivocaste de número), cambiá el número y el cartel desaparece automáticamente. El chequeo se repite cada vez que tocás esos campos.</p>
+
+                                <h6 class="fw-bold mt-3">Por qué es importante</h6>
+                                <p class="mb-0">Antes de esta validación, era fácil cargar la misma factura dos veces (o por error en cada módulo). Eso causaba: stock duplicado, costos mal actualizados, doble deuda al proveedor, problemas en el libro IVA. Ahora es imposible que pase.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 9. ANULAR ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_anular">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_anular" aria-expanded="false">
+                                <i class="fas fa-trash text-danger me-2"></i> <strong>9. Anular una factura</strong>
+                            </button>
+                        </h2>
+                        <div id="c_anular" class="accordion-collapse collapse" aria-labelledby="hd_anular" data-bs-parent="#accordionAyudaCompras">
+                            <div class="accordion-body">
+                                <p>Si te equivocaste al cargar una factura, podés anularla (solo el admin tiene este botón).</p>
+
+                                <h6 class="fw-bold">Qué se revierte</h6>
+                                <ul>
+                                    <li><i class="fas fa-undo text-warning"></i> <strong>Stock</strong>: se resta lo que se había sumado de cada producto.</li>
+                                    <li><i class="fas fa-undo text-warning"></i> <strong>Costo</strong>: vuelve al costo anterior (se busca en el histórico de costos).</li>
+                                    <li><i class="fas fa-undo text-warning"></i> <strong>Precios de venta</strong>: se recalculan con el costo viejo y los márgenes actuales.</li>
+                                    <li><i class="fas fa-undo text-warning"></i> <strong>Saldo del proveedor</strong>: se resta el total de la factura.</li>
+                                    <li><i class="fas fa-undo text-warning"></i> <strong>Libro IVA Compras</strong>: la factura desaparece.</li>
+                                </ul>
+
+                                <h6 class="fw-bold mt-3">Qué no se borra</h6>
+                                <p>Queda un registro en <code>producto_costo_historico</code> con el motivo "anulación". Eso permite auditar después qué pasó (no es un borrado silencioso).</p>
+
+                                <h6 class="fw-bold mt-3">Limitaciones</h6>
+                                <div class="alert alert-warning py-2 mb-0 small">
+                                    <ul class="mb-0">
+                                        <li>Si la factura ya tiene un <strong>pago imputado</strong> (Cta Cte Proveedores), tenés que anular primero el pago.</li>
+                                        <li>La anulación es <strong>física</strong> (DELETE), no un flag "anulada". Si necesitás conservar el comprobante por algún motivo, exportá el detalle antes.</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 10. ERRORES COMUNES ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_errores">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_errores" aria-expanded="false">
+                                <i class="fas fa-exclamation-triangle text-warning me-2"></i> <strong>10. Errores comunes y cómo resolverlos</strong>
+                            </button>
+                        </h2>
+                        <div id="c_errores" class="accordion-collapse collapse" aria-labelledby="hd_errores" data-bs-parent="#accordionAyudaCompras">
+                            <div class="accordion-body">
+
+                                <div class="card mb-2 border-warning">
+                                    <div class="card-header py-2 bg-warning bg-opacity-25">
+                                        <strong>"Hay X ítem(s) SIN VINCULAR"</strong>
+                                    </div>
+                                    <div class="card-body py-2 small">
+                                        El OCR detectó productos que no pudo asociar a tu catálogo. Filas amarillas en la grilla. <strong>Solución:</strong> click en <i class="fas fa-link"></i> Vincular en cada una y elegí el producto correspondiente. Si es un producto nuevo, usá <em>Alta Rápida</em>. Si no lo querés cargar, sacalo con <i class="fas fa-times"></i>.
+                                    </div>
+                                </div>
+
+                                <div class="card mb-2 border-warning">
+                                    <div class="card-header py-2 bg-warning bg-opacity-25">
+                                        <strong>"Cargá los totales de IVA antes de guardar"</strong>
+                                    </div>
+                                    <div class="card-body py-2 small">
+                                        No completaste los netos e IVA en la sección de totales. <strong>Solución:</strong> cargalos manualmente respetando los valores de la factura del proveedor, o usá el botón <em>Calcular IVA desde items</em> para que los sugiera (después revisalos).
+                                    </div>
+                                </div>
+
+                                <div class="card mb-2 border-warning">
+                                    <div class="card-header py-2 bg-warning bg-opacity-25">
+                                        <strong>"Factura ya cargada"</strong>
+                                    </div>
+                                    <div class="card-body py-2 small">
+                                        Es el anti-duplicado. Esa combinación de proveedor + tipo + PV + número ya existe en el sistema. <strong>Solución:</strong> hacé click en <em>Ver factura existente</em> para confirmar que es la misma. Si es otra factura distinta, revisá el número (capaz tipeaste mal).
+                                    </div>
+                                </div>
+
+                                <div class="card mb-2 border-danger">
+                                    <div class="card-header py-2 bg-danger bg-opacity-25">
+                                        <strong>"Cantidad inválida" / "Precio unitario debe ser &gt; 0"</strong>
+                                    </div>
+                                    <div class="card-body py-2 small">
+                                        Estás intentando agregar un ítem con cantidad = 0 o precio = 0. <strong>Solución:</strong> revisá esos campos antes de apretar Agregar.
+                                    </div>
+                                </div>
+
+                                <div class="card mb-0 border-danger">
+                                    <div class="card-header py-2 bg-danger bg-opacity-25">
+                                        <strong>"Los combos no se pueden comprar"</strong>
+                                    </div>
+                                    <div class="card-body py-2 small">
+                                        Estás intentando comprar un producto que en realidad es un combo (compuesto por otros). <strong>Solución:</strong> cargá los <em>productos base</em> que componen el combo, no el combo mismo. El stock del combo se calcula a partir de sus componentes.
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 11. FAQ ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_faq">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_faq" aria-expanded="false">
+                                <i class="fas fa-question text-info me-2"></i> <strong>11. Preguntas frecuentes</strong>
+                            </button>
+                        </h2>
+                        <div id="c_faq" class="accordion-collapse collapse" aria-labelledby="hd_faq" data-bs-parent="#accordionAyudaCompras">
+                            <div class="accordion-body">
+
+                                <p class="mb-1"><strong>¿Puedo editar una factura ya cargada?</strong></p>
+                                <p class="small text-muted mb-3">No. Una vez guardada, la factura es inmutable. Si te equivocaste, anulála y cargála de nuevo.</p>
+
+                                <p class="mb-1"><strong>¿Y si el costo nuevo es menor al anterior?</strong></p>
+                                <p class="small text-muted mb-3">No importa. El sistema siempre actualiza al costo de la última compra (FIFO de la última factura). Si esto te genera un problema (ej. tenés stock viejo a costo más alto), considerá actualizar el costo manualmente desde el ABM de Productos antes de la próxima venta.</p>
+
+                                <p class="mb-1"><strong>¿Cómo cargo una factura que es solo un servicio (luz, internet, contador)?</strong></p>
+                                <p class="small text-muted mb-3">No la cargues acá. Andá a <em>Gastos y Servicios</em> (botón gris arriba a la izquierda). Ese módulo es para facturas que no tocan stock.</p>
+
+                                <p class="mb-1"><strong>¿El descuento global modifica el costo final del producto?</strong></p>
+                                <p class="small text-muted mb-3">Sí, se prorratea entre todos los items. Por ejemplo, si la factura tiene un descuento global del 5%, todos los productos cargados absorben ese 5% en su costo final. Ver sección 7.</p>
+
+                                <p class="mb-1"><strong>¿Qué pasa si compro un producto nuevo que no tengo cargado?</strong></p>
+                                <p class="small text-muted mb-3">Usá el botón <em>Alta Rápida de Producto</em> en el detalle. Te pide código, nombre, IVA y margen, y queda dado de alta automáticamente. Después en el ABM de Productos completás los detalles que falten.</p>
+
+                                <p class="mb-1"><strong>¿Puedo cargar una factura sin productos (solo el total)?</strong></p>
+                                <p class="small text-muted mb-3">No. Este módulo requiere al menos un ítem. Si tu factura es de mercadería pero no tenés el detalle, cargála en Gastos y Servicios (perdés el control de stock pero queda en el libro IVA).</p>
+
+                                <p class="mb-1"><strong>¿Cuándo se actualiza la cuenta corriente del proveedor?</strong></p>
+                                <p class="small text-muted mb-3">Al guardar la factura. El total se suma al saldo (Debe). Cuando le pagues al proveedor (módulo <em>Pagar Proveedor</em>), se resta del saldo.</p>
+
+                                <p class="mb-1"><strong>¿Puedo cargar facturas viejas (de meses anteriores)?</strong></p>
+                                <p class="small text-muted mb-0">Sí, no hay límite. Solo cuidá que la fecha sea la real (la del comprobante), porque eso afecta los reportes del libro IVA Compras.</p>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== 12. RELACIÓN CON OTROS MÓDULOS ========== -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="hd_relacion">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#c_relacion" aria-expanded="false">
+                                <i class="fas fa-project-diagram text-secondary me-2"></i> <strong>12. Relación con otros módulos</strong>
+                            </button>
+                        </h2>
+                        <div id="c_relacion" class="accordion-collapse collapse" aria-labelledby="hd_relacion" data-bs-parent="#accordionAyudaCompras">
+                            <div class="accordion-body">
+                                <ul>
+                                    <li><strong><a href="/proveedores" target="_blank">Proveedores</a></strong>: alta del proveedor antes de cargar la factura. El saldo de la cta cte se actualiza con cada factura cargada.</li>
+                                    <li><strong><a href="/ordenes_compra" target="_blank">Órdenes de Compra</a></strong>: si la factura viene de una OC ya recibida, podés generarla desde ahí (no se vuelve a sumar stock, solo se actualizan costos).</li>
+                                    <li><strong>Cta Cte Proveedores</strong> (desde la pantalla del proveedor): la factura aparece como Debe. Cuando la pagás, queda vinculada al pago.</li>
+                                    <li><strong><a href="/iva_compras" target="_blank">IVA Compras</a></strong>: la factura aparece automáticamente en el libro IVA del período correspondiente.</li>
+                                    <li><strong><a href="{{ url_for('compras.codigos_proveedor') }}" target="_blank">Códigos por Proveedor</a></strong>: los códigos que cargaste en el detalle quedan registrados para que el OCR los use la próxima vez.</li>
+                                    <li><strong>Sugerencia de Compra</strong>: usa este histórico de compras para sugerirte qué reponer (días de cobertura, stock mínimo).</li>
+                                    <li><strong>Stock Audit</strong>: cada item de la factura genera un movimiento de stock con tipo "compra" que queda en el log de auditoría.</li>
+                                    <li><strong>Estadísticas / Margen de productos</strong>: el costo actualizado por esta factura es el que se usa para calcular margen real de las ventas posteriores.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Pie del modal con resumen -->
+                <div class="alert alert-success mt-3 mb-0 py-2 small">
+                    <strong><i class="fas fa-lightbulb"></i> Tip final:</strong>
+                    cargá las facturas <strong>el mismo día que las recibís</strong>. Así tenés stock y costos actualizados al instante, y evitás acumular pendientes que después son un dolor de cabeza.
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label small fw-bold">Proveedor</label>
+                <select id="filtroProveedor" class="form-select form-select-sm">
+                    <option value="">Todos los proveedores</option>
+                    {% for p in proveedores %}
+                    <option value="{{ p.id }}">{{ p.razon_social }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Desde</label>
+                <input type="date" id="filtroDesde" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Hasta</label>
+                <input type="date" id="filtroHasta" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary btn-sm w-100" onclick="cargarFacturas()">
+                    <i class="fas fa-search me-1"></i> Filtrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Proveedor</th>
+                        <th>Comprobante</th>
+                        <th class="text-end">Neto 21%</th>
+                        <th class="text-end">IVA 21%</th>
+                        <th class="text-end">Neto 10.5%</th>
+                        <th class="text-end">IVA 10.5%</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tblFacturas">
+                    <tr><td colspan="9" class="text-center text-muted py-3">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+const ES_ADMIN = {{ 'true' if es_admin else 'false' }};
+
+function fmt(n) {
+    return '$' + Number(n || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function cargarFacturas() {
+    const prov = document.getElementById('filtroProveedor').value;
+    const desde = document.getElementById('filtroDesde').value;
+    const hasta = document.getElementById('filtroHasta').value;
+
+    let url = '/compras/api/listar?';
+    if (prov) url += `proveedor_id=${prov}&`;
+    if (desde) url += `desde=${desde}&`;
+    if (hasta) url += `hasta=${hasta}&`;
+
+    fetch(url)
+        .then(r => r.json())
+        .then(facturas => {
+            const tbody = document.getElementById('tblFacturas');
+            if (!facturas.length) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">Sin facturas en el período</td></tr>';
+                return;
+            }
+            tbody.innerHTML = facturas.map(f => {
+                const esCI = f.tipo_comprobante === 'CI';
+                const badgeColor = esCI ? 'bg-secondary' : 'bg-dark';
+                const tituloCI = esCI ? ' title="Comprobante Interno — no afecta libro IVA"' : '';
+                return `
+                <tr${esCI ? ' class="table-warning-subtle"' : ''}>
+                    <td>${f.fecha}</td>
+                    <td>${f.proveedor}</td>
+                    <td><span class="badge ${badgeColor}"${tituloCI}>${f.tipo_comprobante}</span> ${f.numero_completo}</td>
+                    <td class="text-end">${fmt(f.neto_21)}</td>
+                    <td class="text-end text-warning">${fmt(f.iva_21)}</td>
+                    <td class="text-end">${fmt(f.neto_105)}</td>
+                    <td class="text-end text-warning">${fmt(f.iva_105)}</td>
+                    <td class="text-end fw-bold">${fmt(f.total)}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-info" onclick="verFactura(${f.id})" title="Ver detalle">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        ${ES_ADMIN ? `
+                        <button class="btn btn-sm btn-outline-danger" onclick="eliminarFactura(${f.id}, '${f.numero_completo}')" title="Anular">
+                            <i class="fas fa-trash"></i>
+                        </button>` : ''}
+                    </td>
+                </tr>
+            `;
+            }).join('');
+        });
+}
+
+function verFactura(id) {
+    window.location.href = `/compras/ver/${id}`;
+}
+
+async function eliminarFactura(id, nro) {
+    const conf = await Swal.fire({
+        icon: 'warning',
+        title: '¿Anular la factura?',
+        html: `<strong>${nro}</strong><br><br>` +
+              `Se va a revertir:` +
+              `<ul style="text-align:left;">` +
+                `<li>Stock de todos los artículos</li>` +
+                `<li>Costo anterior de cada producto</li>` +
+                `<li>Precios de venta según los márgenes anteriores</li>` +
+                `<li>Saldo del proveedor</li>` +
+              `</ul>`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, anular',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d'
+    });
+    if (!conf.isConfirmed) return;
+
+    fetch(`/compras/api/eliminar/${id}`, {method: 'POST'})
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                Swal.fire({icon: 'error', title: 'No se pudo anular', text: data.error});
+                return;
+            }
+            Swal.fire({
+                icon: 'success',
+                title: 'Factura anulada',
+                text: 'Se revirtió correctamente.',
+                timer: 1800,
+                timerProgressBar: true,
+                showConfirmButton: false
+            });
+            cargarFacturas();
+        })
+        .catch(err => Swal.fire({icon: 'error', title: 'Error de red', text: String(err)}));
+}
+
+// Por defecto: mes actual
+(function() {
+    const hoy = new Date();
+    const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    document.getElementById('filtroDesde').value = primero.toISOString().split('T')[0];
+    document.getElementById('filtroHasta').value = hoy.toISOString().split('T')[0];
+    cargarFacturas();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,847 @@
+{% extends 'base.html' %}
+{% block title %}Remitos{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3">
+    <h2>
+        <i class="fas fa-truck-loading me-2"></i>Remitos
+        <button class="btn btn-sm btn-outline-info ms-2" data-bs-toggle="modal" data-bs-target="#modalAyuda" title="Ver ayuda">
+            <i class="fas fa-question-circle me-1"></i> Ayuda
+        </button>
+    </h2>
+    <div>
+        <button class="btn btn-success me-2" onclick="facturarSeleccionados()" id="btnFacturar" disabled>
+            <i class="fas fa-file-invoice me-1"></i> Facturar seleccionados
+        </button>
+        <a href="{{ url_for('remitos.nuevo') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i> Nuevo Remito
+        </a>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Cliente</label>
+                <select id="filtroCliente" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    {% for c in clientes %}
+                    <option value="{{ c.id }}">{{ c.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Estado</label>
+                <select id="filtroEstado" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="pendiente">Pendientes</option>
+                    <option value="facturado">Facturados</option>
+                    <option value="anulado">Anulados</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Desde</label>
+                <input type="date" id="filtroDesde" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Hasta</label>
+                <input type="date" id="filtroHasta" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">N° Remito</label>
+                <input type="text" id="filtroNumero" class="form-control form-control-sm" placeholder="Ej: 0001">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold"><i class="fas fa-map-marked-alt me-1"></i>Zona</label>
+                <select id="filtroZona" class="form-select form-select-sm">
+                    <option value="">Todas</option>
+                    <option value="SIN_ZONA">Sin zona</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-primary btn-sm w-100" onclick="cargar()">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Info de selección -->
+<div id="panelSeleccion" class="alert alert-info py-2 mb-3" style="display:none;">
+    <i class="fas fa-info-circle me-1"></i>
+    <span id="infoSeleccion"></span>
+    <button class="btn btn-sm btn-link" onclick="limpiarSeleccion()">Limpiar selección</button>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width:40px;" class="text-center">
+                            <input type="checkbox" id="chkTodos" onchange="seleccionarTodos(this.checked)" title="Seleccionar todos los pendientes visibles">
+                        </th>
+                        <th>Fecha</th>
+                        <th>Número</th>
+                        <th>Cliente</th>
+                        <th class="text-center">Zona</th>
+                        <th class="text-center">Items</th>
+                        <th class="text-end">Total (al emitir)</th>
+                        <th class="text-center">Estado</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tbl">
+                    <tr><td colspan="9" class="text-center text-muted py-3">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: marcar manualmente como facturado -->
+<div class="modal fade" id="modalMarcarManual" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Marcar manualmente como facturado</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning small">
+                    Usá esto SOLO si ya facturaste el remito pero el sistema no lo marcó automáticamente (por ejemplo, si se cortó la luz después de emitir la factura). Si ingresás un ID de factura incorrecto, la trazabilidad va a quedar rota.
+                </div>
+                <input type="hidden" id="mmRemitoId">
+                <p><strong>Remito:</strong> <span id="mmRemitoNumero"></span></p>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">ID de la Factura</label>
+                    <input type="number" id="mmFacturaId" class="form-control" placeholder="Ej: 1234">
+                    <small class="text-muted">El ID numérico interno. Podés verlo desde el listado "Ver Facturas".</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-warning" onclick="confirmarMarcarManual()">Marcar como facturado</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: anular -->
+<div class="modal fade" id="modalAnular" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-ban me-2"></i>Anular remito</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Seguro que querés anular el remito <strong id="anRemitoNumero"></strong>?</p>
+                <p class="text-danger small">Se devolverá el stock de todos los artículos. Esta acción no se puede deshacer.</p>
+                <input type="hidden" id="anRemitoId">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Motivo (opcional)</label>
+                    <textarea id="anMotivo" class="form-control" rows="2" placeholder="Ej: el cliente canceló el pedido"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-danger" onclick="confirmarAnular()">Sí, anular</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- MODAL LIQUIDACIÓN — cuando vuelve el camión                  -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalLiquidar" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="fas fa-balance-scale me-2"></i>
+                    Liquidar remito <strong id="liqNumero"></strong>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small mb-3">
+                    <strong>📌 Volvió el camión.</strong>
+                    Por cada producto cargá <strong>cuánto devolvió el cliente</strong> (vuelve a stock)
+                    y <strong>cuánto se rompió en el viaje</strong> (no vuelve a stock, queda como merma propia).
+                    La columna <em>Entregada</em> se ajusta sola: es lo que el cliente <strong>se quedó al final</strong>.
+                    <br><br>
+                    <i class="fas fa-info-circle me-1"></i>
+                    Si el cliente lo rompe <em>después</em> de recibirlo, eso ya no es problema nuestro: dejalo como entregado.
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm align-middle" id="liqTabla">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 35%">Producto</th>
+                                <th class="text-end" style="width: 10%">Original</th>
+                                <th class="text-end" style="width: 13%">Entregada</th>
+                                <th class="text-end" style="width: 13%">Devuelta</th>
+                                <th class="text-end" style="width: 13%">Rotura</th>
+                                <th style="width: 16%">Motivo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="liqTbody"></tbody>
+                        <tfoot class="table-light fw-bold">
+                            <tr>
+                                <td colspan="2" class="text-end">TOTALES:</td>
+                                <td class="text-end text-success" id="liqTotEnt">0</td>
+                                <td class="text-end text-warning" id="liqTotDev">0</td>
+                                <td class="text-end text-danger" id="liqTotRot">0</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <div class="mt-3">
+                    <label class="form-label fw-bold">Observaciones generales (opcional)</label>
+                    <textarea id="liqObs" class="form-control" rows="2" maxlength="500"
+                              placeholder="Ej: Camión llegó tarde, cliente firmó conforme, etc."></textarea>
+                </div>
+
+                <div id="liqError" class="alert alert-danger mt-3 d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <div class="me-auto">
+                    <button class="btn btn-outline-success btn-sm" onclick="liqMarcarTodoEntregado()" type="button">
+                        <i class="fas fa-check-double me-1"></i> Marcar todo como entregado
+                    </button>
+                </div>
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-warning" onclick="confirmarLiquidacion()" id="liqBtnConfirmar">
+                    <i class="fas fa-check me-1"></i> Confirmar liquidación
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Ayuda -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Cómo funciona el módulo de Remitos</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="text-info fw-bold"><i class="fas fa-lightbulb me-1"></i> ¿Qué es un remito?</h6>
+                <p>Un remito es un comprobante <strong>interno</strong> que documenta la entrega de productos a un cliente, <strong>sin ser una factura</strong>. Es útil cuando:</p>
+                <ul>
+                    <li>El cliente se lleva la mercadería pero querés facturarla después (ej: mayoristas con cuenta mensual).</li>
+                    <li>Querés llevar control de qué se entregó sin emitir factura electrónica en el momento.</li>
+                    <li>Después de varios remitos podés consolidar todo en una sola factura.</li>
+                </ul>
+                <p class="small text-muted">El remito <strong>no</strong> se envía a ARCA ni tiene CAE. La factura posterior sí.</p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-hashtag me-1"></i> Numeración</h6>
+                <p>Los remitos llevan el formato <code>R 00001-00000001</code> (tipo + punto de venta + número correlativo). La numeración es automática y no se reutiliza.</p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-box me-1"></i> ¿Cuándo se descuenta el stock?</h6>
+                <p><strong>Al confeccionar el remito.</strong> Porque los productos ya salieron físicamente del depósito. Si después anulás el remito, el stock vuelve automáticamente.</p>
+                <p class="small text-muted">Cuando después facturás el remito, la factura NO vuelve a descontar stock (ya fue descontado al hacer el remito).</p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-exchange-alt me-1"></i> Estados posibles</h6>
+                <ul>
+                    <li><span class="badge bg-warning text-dark">pendiente</span> — recién creado, <strong>editable</strong>. Se puede modificar, anular o facturar.</li>
+                    <li><span class="badge bg-info text-dark">liquidado</span> — volvió el camión, se cargaron entregas/devoluciones/roturas. Listo para facturar por las cantidades reales.</li>
+                    <li><span class="badge bg-success">facturado</span> — se emitió una factura sobre este remito. Se puede <strong>ver</strong> pero no editar ni anular.</li>
+                    <li><span class="badge bg-secondary">anulado</span> — cancelado antes de facturar. El stock se devolvió. No se puede volver atrás.</li>
+                </ul>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-play me-1"></i> Flujo típico</h6>
+                <ol>
+                    <li><strong>Nuevo remito</strong>: seleccionás cliente, cargás productos, imprimís.</li>
+                    <li>El camión sale a hacer el reparto y entrega la mercadería.</li>
+                    <li><strong>Cuando vuelve el camión</strong>: tocás el botón ⚖️ <strong>"Liquidar"</strong> en el remito. Cargás cuánto devolvió el cliente y cuánto se rompió en el viaje (si pasó algo). El remito queda en estado <span class="badge bg-info text-dark">liquidado</span>.</li>
+                    <li>Cuando el cliente quiere su factura: desde este listado tildás uno o varios remitos del mismo cliente → <strong>"Facturar seleccionados"</strong>.</li>
+                    <li>Te lleva al módulo Nueva Venta con los items precargados (cantidades reales entregadas si fue liquidado, o cantidades originales si nunca se liquidó).</li>
+                    <li>Una vez emitida la factura, los remitos quedan en <span class="badge bg-success">facturado</span> con link a la factura.</li>
+                </ol>
+                <p class="small text-muted">
+                    💡 Si el cliente recibió todo conforme y no hubo devoluciones ni roturas, podés saltar el paso de liquidar y facturar directamente desde pendiente. La liquidación solo es necesaria cuando volvió mercadería o se rompió algo en el viaje.
+                </p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-balance-scale me-1"></i> Liquidación de remito (volvió el camión)</h6>
+                <p>Es el paso opcional para ajustar el remito según lo que <strong>realmente</strong> recibió el cliente. Hay 3 columnas por cada producto:</p>
+                <ul>
+                    <li><strong class="text-success">Entregada</strong> — lo que el cliente se quedó. <em>Se autocalcula</em> a medida que cargás Devuelta y Rotura.</li>
+                    <li><strong class="text-warning">Devuelta</strong> — lo que el cliente rechazó/no quiso. <strong>Vuelve al stock</strong> automáticamente.</li>
+                    <li><strong class="text-danger">Rotura</strong> — lo que se rompió en el viaje (camión, manipulación, etc). <strong>NO vuelve al stock</strong>: queda registrado como pérdida (merma propia).</li>
+                </ul>
+                <p>Casos típicos:</p>
+                <ul>
+                    <li><strong>Todo entregado OK</strong> — Botón "Marcar todo como entregado" → confirmar.</li>
+                    <li><strong>Cliente rechazó un producto entero</strong> (ej: 10 papas, no quiso ninguna) → Devuelta=10, las papas vuelven a stock.</li>
+                    <li><strong>Cliente rechazó parcialmente</strong> (ej: pidió 20, se quedó con 10) → Devuelta=10, vuelven 10 a stock.</li>
+                    <li><strong>Se rompió en el viaje</strong> (caja se cayó del camión) → Rotura=lo que se rompió. No vuelve a stock, queda como merma.</li>
+                </ul>
+                <p class="small text-muted">
+                    📌 La suma de Entregada + Devuelta + Rotura debe ser igual a la cantidad original. El sistema te avisa si no cuadra (fila roja).
+                    <br>
+                    📌 Si el cliente rompe algo <strong>después</strong> de recibirlo, eso ya no es problema nuestro: dejalo como entregado y se le factura igual.
+                    <br>
+                    📌 Una vez liquidado, el remito <strong>no se puede anular</strong>. Si te equivocaste, hablá con el admin.
+                </p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-compress-alt me-1"></i> Facturar varios remitos juntos</h6>
+                <p>Podés seleccionar múltiples remitos del <strong>mismo cliente</strong> (en estado pendiente o liquidado) y facturarlos en un solo comprobante. El sistema:</p>
+                <ul>
+                    <li><strong>Consolida</strong> los items: si el mismo producto aparece en varios remitos, se suman las cantidades en una sola línea.</li>
+                    <li>Usa los <strong>precios actuales</strong> del momento de facturar (no los del día en que se emitió cada remito).</li>
+                    <li>Si alguno de los remitos está liquidado, usa las <strong>cantidades reales entregadas</strong>, no las originales.</li>
+                </ul>
+                <p class="small text-muted">¿Por qué precios actuales? Es la práctica estándar para mayoristas en Argentina. Con inflación, usar precios viejos es inviable administrativamente. El remito guarda los precios originales como referencia histórica.</p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-undo me-1"></i> Devoluciones después de facturar</h6>
+                <p>Un remito ya facturado <strong>NO se puede anular</strong> (la factura electrónica ya está emitida).</p>
+                <p>Si el cliente devuelve algo después de que el remito fue facturado:</p>
+                <ol>
+                    <li>Andá al módulo <strong>Notas de Crédito</strong>.</li>
+                    <li>Creá una nota de crédito asociada a la factura correspondiente.</li>
+                    <li>Especificá los items devueltos — el sistema reintegra stock y emite la nota de crédito electrónica en ARCA.</li>
+                </ol>
+                <p class="small text-muted">El remito original queda como está, la nota de crédito compensa la devolución.</p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-wrench me-1"></i> Marcar manualmente como facturado</h6>
+                <p>Esta opción (botón naranja en remitos pendientes) existe como <strong>red de emergencia</strong>: si emitiste la factura pero por algún problema (corte de luz, error de red) el sistema no marcó el remito automáticamente, podés asociarlo a mano ingresando el ID de la factura.</p>
+                <p class="text-danger small">Usala solo cuando sea estrictamente necesario. Ingresar un ID incorrecto rompe la trazabilidad entre remito y factura.</p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-info-circle me-1"></i> Más cosas útiles</h6>
+                <ul class="mb-0">
+                    <li>Los <strong>combos</strong> no se pueden remitir (tenés que cargar los productos base).</li>
+                    <li>Los filtros aceptan combinaciones: podés ver remitos pendientes de un cliente específico en un rango de fechas.</li>
+                    <li>El ícono <i class="fas fa-print"></i> imprime el remito en la impresora térmica.</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const ES_ADMIN = {{ 'true' if es_admin else 'false' }};
+let seleccionados = new Set(); // ids de remitos seleccionados
+let remitosCargados = [];
+
+function fmt(n) {
+    return '$' + Number(n || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function cargar() {
+    const params = new URLSearchParams();
+    const cli = document.getElementById('filtroCliente').value;
+    const est = document.getElementById('filtroEstado').value;
+    const des = document.getElementById('filtroDesde').value;
+    const has = document.getElementById('filtroHasta').value;
+    const num = document.getElementById('filtroNumero').value.trim();
+    const zona = document.getElementById('filtroZona').value;
+    if (cli) params.append('cliente_id', cli);
+    if (est) params.append('estado', est);
+    if (des) params.append('desde', des);
+    if (has) params.append('hasta', has);
+    if (num) params.append('numero', num);
+    if (zona) params.append('zona', zona);
+
+    fetch(`/remitos/api/listar?${params.toString()}`)
+        .then(r => r.json())
+        .then(data => {
+            remitosCargados = data;
+            pintar();
+        });
+}
+
+function cargarZonasEnFiltro() {
+    fetch('/zonas/api/activas')
+        .then(r => r.json())
+        .then(zonas => {
+            const sel = document.getElementById('filtroZona');
+            zonas.forEach(z => {
+                sel.insertAdjacentHTML('beforeend', `<option value="${z.id}">${z.nombre}</option>`);
+            });
+        });
+}
+
+function pintar() {
+    const tbody = document.getElementById('tbl');
+    if (!remitosCargados.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">Sin remitos con esos filtros</td></tr>';
+        actualizarPanelSeleccion();
+        return;
+    }
+
+    tbody.innerHTML = remitosCargados.map(r => {
+        const badge = r.estado === 'pendiente' ? 'bg-warning text-dark' :
+                      r.estado === 'liquidado' ? 'bg-info text-dark' :
+                      r.estado === 'facturado' ? 'bg-success' : 'bg-secondary';
+        // Se puede tildar para facturar tanto pendientes como liquidados
+        const chkDisabled = (r.estado !== 'pendiente' && r.estado !== 'liquidado') ? 'disabled' : '';
+        const chkChecked = seleccionados.has(r.id) ? 'checked' : '';
+        const acciones = [];
+
+        acciones.push(`<a class="btn btn-sm btn-outline-info" href="/remitos/ver/${r.id}" title="Ver detalle"><i class="fas fa-eye"></i></a>`);
+
+        if (r.estado === 'pendiente') {
+            acciones.push(`<a class="btn btn-sm btn-outline-primary" href="/remitos/editar/${r.id}" title="Editar"><i class="fas fa-edit"></i></a>`);
+            acciones.push(`<button class="btn btn-sm btn-warning" onclick="abrirLiquidacion(${r.id}, '${r.numero_completo}')" title="Liquidar (volvió el camión)"><i class="fas fa-balance-scale"></i></button>`);
+            acciones.push(`<button class="btn btn-sm btn-outline-danger" onclick="abrirAnular(${r.id}, '${r.numero_completo}')" title="Anular"><i class="fas fa-ban"></i></button>`);
+            if (ES_ADMIN) {
+                acciones.push(`<button class="btn btn-sm btn-outline-warning" onclick="abrirMarcarManual(${r.id}, '${r.numero_completo}')" title="Marcar manualmente como facturado"><i class="fas fa-wrench"></i></button>`);
+            }
+        }
+
+        const facturaInfo = r.factura_venta_id ? `<br><small class="text-muted">Factura #${r.factura_venta_id}</small>` : '';
+
+        return `
+            <tr>
+                <td class="text-center">
+                    <input type="checkbox" ${chkDisabled} ${chkChecked} onchange="toggleSeleccion(${r.id}, this.checked)">
+                </td>
+                <td>${r.fecha}</td>
+                <td><strong>${r.numero_completo}</strong></td>
+                <td>${r.cliente}${r.cuit ? ' <small class="text-muted">(' + r.cuit + ')</small>' : ''}${facturaInfo}</td>
+                <td class="text-center">${r.zona_nombre ? `<span class="badge" style="background:${r.zona_color || '#0d6efd'}">${r.zona_nombre}</span>` : '<span class="text-muted small">-</span>'}</td>
+                <td class="text-center">${r.items_count}</td>
+                <td class="text-end">${fmt(r.total)}</td>
+                <td class="text-center"><span class="badge ${badge}">${r.estado}</span></td>
+                <td class="text-center">${acciones.join(' ')}</td>
+            </tr>
+        `;
+    }).join('');
+
+    actualizarPanelSeleccion();
+}
+
+// ================== SELECCIÓN ==================
+function toggleSeleccion(id, checked) {
+    if (checked) seleccionados.add(id); else seleccionados.delete(id);
+    actualizarPanelSeleccion();
+}
+
+function seleccionarTodos(checked) {
+    remitosCargados.filter(r => r.estado === 'pendiente' || r.estado === 'liquidado').forEach(r => {
+        if (checked) seleccionados.add(r.id); else seleccionados.delete(r.id);
+    });
+    pintar();
+}
+
+function limpiarSeleccion() {
+    seleccionados.clear();
+    pintar();
+}
+
+function actualizarPanelSeleccion() {
+    const panel = document.getElementById('panelSeleccion');
+    const btn = document.getElementById('btnFacturar');
+    if (!seleccionados.size) {
+        panel.style.display = 'none';
+        btn.disabled = true;
+        return;
+    }
+    // Verificar que todos sean del mismo cliente
+    const sel = remitosCargados.filter(r => seleccionados.has(r.id));
+    const clientes = [...new Set(sel.map(r => r.cliente))];
+    if (clientes.length > 1) {
+        panel.className = 'alert alert-danger py-2 mb-3';
+        panel.querySelector('#infoSeleccion').innerHTML =
+            `<strong>${seleccionados.size} remitos seleccionados</strong> pero son de distintos clientes (${clientes.length}). Los remitos a facturar juntos deben ser del mismo cliente.`;
+        panel.style.display = 'block';
+        btn.disabled = true;
+    } else {
+        panel.className = 'alert alert-info py-2 mb-3';
+        panel.querySelector('#infoSeleccion').innerHTML =
+            `<strong>${seleccionados.size} remito(s) seleccionado(s)</strong> del cliente <strong>${clientes[0]}</strong>. Click en "Facturar seleccionados" para consolidar.`;
+        panel.style.display = 'block';
+        btn.disabled = false;
+    }
+}
+
+// ================== FACTURAR ==================
+function facturarSeleccionados() {
+    if (!seleccionados.size) return;
+    const ids = Array.from(seleccionados);
+    Swal.fire({
+        title: `¿Facturar ${ids.length} remito(s)?`,
+        html: 'Se consolidarán los items y se pasará al módulo de nueva venta.<br><br><strong>Los precios usados serán los ACTUALES</strong>, no los del día en que se emitió cada remito.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#198754',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: 'Sí, facturar',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        fetch('/remitos/api/preparar_facturacion', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({remito_ids: ids})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { Swal.fire('Error', data.error, 'error'); return; }
+
+            // Guardar en sessionStorage con la MISMA clave que lee nueva_venta.html
+            // (reutiliza el flujo probado de pedidos -> verificarPedidoPendiente)
+            sessionStorage.setItem('pedido_para_facturar', JSON.stringify({
+                pedido_id: null,
+                remito_ids: data.remito_ids,
+                cliente_id: data.cliente_id,
+                cliente_nombre: data.cliente_nombre,
+                lista_precio: data.lista_precio,
+                productos: data.productos
+            }));
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Remitos preparados',
+                text: 'Redirigiendo a Nueva Venta...',
+                timer: 1200,
+                showConfirmButton: false,
+                timerProgressBar: true
+            }).then(() => {
+                window.location.href = data.redirect || '/nueva_venta';
+            });
+        });
+    });
+}
+
+// ================== ANULAR ==================
+function abrirAnular(id, numero) {
+    document.getElementById('anRemitoId').value = id;
+    document.getElementById('anRemitoNumero').textContent = numero;
+    document.getElementById('anMotivo').value = '';
+    new bootstrap.Modal(document.getElementById('modalAnular')).show();
+}
+
+function confirmarAnular() {
+    const id = document.getElementById('anRemitoId').value;
+    const motivo = document.getElementById('anMotivo').value.trim();
+    fetch(`/remitos/api/anular/${id}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({motivo})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { Swal.fire('Error', data.error, 'error'); return; }
+        bootstrap.Modal.getInstance(document.getElementById('modalAnular')).hide();
+        Swal.fire({
+            icon: 'success', title: 'Remito anulado', text: 'Se devolvió el stock correctamente.',
+            timer: 1800, showConfirmButton: false, timerProgressBar: true
+        });
+        cargar();
+    });
+}
+
+// ================== MARCAR MANUAL ==================
+function abrirMarcarManual(id, numero) {
+    document.getElementById('mmRemitoId').value = id;
+    document.getElementById('mmRemitoNumero').textContent = numero;
+    document.getElementById('mmFacturaId').value = '';
+    new bootstrap.Modal(document.getElementById('modalMarcarManual')).show();
+}
+
+function confirmarMarcarManual() {
+    const id = document.getElementById('mmRemitoId').value;
+    const facturaId = parseInt(document.getElementById('mmFacturaId').value);
+    if (!facturaId || facturaId <= 0) {
+        Swal.fire('Atención', 'Ingresá un ID de factura válido', 'warning');
+        return;
+    }
+
+    fetch(`/remitos/api/marcar_facturado_manual/${id}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({factura_venta_id: facturaId})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { Swal.fire('Error', data.error, 'error'); return; }
+        bootstrap.Modal.getInstance(document.getElementById('modalMarcarManual')).hide();
+        Swal.fire({
+            icon: 'success', title: 'Marcado como facturado',
+            timer: 1500, showConfirmButton: false, timerProgressBar: true
+        });
+        cargar();
+    });
+}
+
+// ================== INIT ==================
+(function() {
+    const hoy = new Date();
+    const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    document.getElementById('filtroDesde').value = primero.toISOString().split('T')[0];
+    document.getElementById('filtroHasta').value = hoy.toISOString().split('T')[0];
+    cargarZonasEnFiltro();
+    cargar();
+})();
+
+// ════════════════════════════════════════════════════════════
+// LIQUIDACIÓN DE REMITO (cuando vuelve el camión)
+// ════════════════════════════════════════════════════════════
+let liqRemitoId = null;
+let liqItems = [];
+let _modalLiq = null;
+
+function _fmtCant(n) {
+    const f = parseFloat(n || 0);
+    return Number.isInteger(f) ? f.toString() : f.toFixed(3).replace(/\.?0+$/, '');
+}
+
+async function abrirLiquidacion(remitoId, numero) {
+    liqRemitoId = remitoId;
+    document.getElementById('liqNumero').textContent = numero;
+    document.getElementById('liqObs').value = '';
+    document.getElementById('liqError').classList.add('d-none');
+    document.getElementById('liqTbody').innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm me-2"></div>Cargando items...</td></tr>';
+
+    if (!_modalLiq) _modalLiq = new bootstrap.Modal(document.getElementById('modalLiquidar'));
+    _modalLiq.show();
+
+    try {
+        const resp = await fetch(`/remitos/api/cargar/${remitoId}`);
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+
+        liqItems = data.items.map(it => ({
+            remito_detalle_id: it.remito_detalle_id,
+            codigo:            it.codigo,
+            nombre:            it.nombre,
+            cant_original:     parseFloat(it.cantidad),
+            cant_entregada:    parseFloat(it.cantidad),  // por defecto: todo entregado
+            cant_devuelta:     0,
+            cant_rotura:       0,
+            motivo:            '',
+        }));
+        renderLiqTabla();
+    } catch (e) {
+        document.getElementById('liqTbody').innerHTML =
+            `<tr><td colspan="6" class="text-center text-danger py-3">Error al cargar: ${e.message}</td></tr>`;
+    }
+}
+
+function renderLiqTabla() {
+    const tbody = document.getElementById('liqTbody');
+    tbody.innerHTML = liqItems.map((it, idx) => `
+        <tr data-idx="${idx}">
+            <td>
+                <code class="small">${it.codigo}</code><br>
+                <small>${it.nombre}</small>
+            </td>
+            <td class="text-end fw-bold">${_fmtCant(it.cant_original)}</td>
+            <td>
+                <input type="number" class="form-control form-control-sm text-end"
+                       step="0.001" min="0" max="${it.cant_original}"
+                       value="${it.cant_entregada}"
+                       oninput="liqInput(${idx}, 'cant_entregada', this.value)">
+            </td>
+            <td>
+                <input type="number" class="form-control form-control-sm text-end bg-warning-subtle"
+                       step="0.001" min="0" max="${it.cant_original}"
+                       value="${it.cant_devuelta}"
+                       oninput="liqInput(${idx}, 'cant_devuelta', this.value)">
+            </td>
+            <td>
+                <input type="number" class="form-control form-control-sm text-end bg-danger-subtle"
+                       step="0.001" min="0" max="${it.cant_original}"
+                       value="${it.cant_rotura}"
+                       oninput="liqInput(${idx}, 'cant_rotura', this.value)">
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm" maxlength="200"
+                       value="${it.motivo}" placeholder="opcional"
+                       oninput="liqInput(${idx}, 'motivo', this.value)">
+            </td>
+        </tr>
+    `).join('');
+    actualizarLiqTotales();
+}
+
+function liqInput(idx, campo, valor) {
+    const it = liqItems[idx];
+    if (campo === 'motivo') {
+        it.motivo = valor;
+        actualizarLiqTotales();
+        return;
+    }
+
+    let v = parseFloat(valor) || 0;
+    if (v < 0) v = 0;
+    // Tope: no puede ser mayor a la cantidad original
+    if (v > it.cant_original) v = it.cant_original;
+    it[campo] = v;
+
+    // Si el usuario tocó Devuelta o Rotura, autocalcular Entregada
+    // (el flow natural: "el cliente devolvió 4" → entregadas = original - 4)
+    if (campo === 'cant_devuelta' || campo === 'cant_rotura') {
+        const resto = it.cant_original - it.cant_devuelta - it.cant_rotura;
+        it.cant_entregada = resto > 0 ? resto : 0;
+    }
+
+    // Refrescar los 3 inputs numéricos de esta fila desde el estado real
+    // (importante para que se vea el clamping cuando el usuario pone valores fuera de rango)
+    const fila = document.querySelector(`#liqTbody tr[data-idx="${idx}"]`);
+    if (fila) {
+        const inputs = fila.querySelectorAll('input[type="number"]');
+        if (inputs[0]) inputs[0].value = it.cant_entregada;
+        if (inputs[1]) inputs[1].value = it.cant_devuelta;
+        if (inputs[2]) inputs[2].value = it.cant_rotura;
+    }
+
+    actualizarLiqTotales();
+    pintarFilaLiq(idx);
+}
+
+function pintarFilaLiq(idx) {
+    const it = liqItems[idx];
+    const fila = document.querySelector(`#liqTbody tr[data-idx="${idx}"]`);
+    if (!fila) return;
+    const suma = (it.cant_entregada || 0) + (it.cant_devuelta || 0) + (it.cant_rotura || 0);
+    if (Math.abs(suma - it.cant_original) > 0.001) {
+        fila.classList.add('table-danger');
+    } else {
+        fila.classList.remove('table-danger');
+    }
+}
+
+function actualizarLiqTotales() {
+    let totEnt = 0, totDev = 0, totRot = 0;
+    liqItems.forEach((it, i) => {
+        totEnt += parseFloat(it.cant_entregada) || 0;
+        totDev += parseFloat(it.cant_devuelta)  || 0;
+        totRot += parseFloat(it.cant_rotura)    || 0;
+        pintarFilaLiq(i);
+    });
+    document.getElementById('liqTotEnt').textContent = _fmtCant(totEnt);
+    document.getElementById('liqTotDev').textContent = _fmtCant(totDev);
+    document.getElementById('liqTotRot').textContent = _fmtCant(totRot);
+}
+
+function liqMarcarTodoEntregado() {
+    liqItems.forEach(it => {
+        it.cant_entregada = it.cant_original;
+        it.cant_devuelta  = 0;
+        it.cant_rotura    = 0;
+    });
+    renderLiqTabla();
+}
+
+function validarLiquidacion() {
+    const errores = [];
+    liqItems.forEach(it => {
+        const suma = (it.cant_entregada || 0) + (it.cant_devuelta || 0) + (it.cant_rotura || 0);
+        if (Math.abs(suma - it.cant_original) > 0.001) {
+            errores.push(`<strong>${it.codigo}</strong> ${it.nombre}: la suma (${_fmtCant(suma)}) no coincide con la cantidad original (${_fmtCant(it.cant_original)})`);
+        }
+    });
+    return errores;
+}
+
+async function confirmarLiquidacion() {
+    const errBox = document.getElementById('liqError');
+    errBox.classList.add('d-none');
+
+    const errores = validarLiquidacion();
+    if (errores.length) {
+        errBox.innerHTML = '<strong>Hay items mal cargados:</strong><br>' + errores.join('<br>');
+        errBox.classList.remove('d-none');
+        return;
+    }
+
+    const totDev = liqItems.reduce((s, it) => s + (it.cant_devuelta || 0), 0);
+    const totRot = liqItems.reduce((s, it) => s + (it.cant_rotura || 0), 0);
+
+    let html = '<p class="text-start mb-2">Vas a registrar:</p><ul class="text-start small">';
+    if (totDev > 0) html += `<li>Devolución de <strong>${_fmtCant(totDev)}</strong> al stock</li>`;
+    if (totRot > 0) html += `<li>Rotura en viaje (merma) de <strong>${_fmtCant(totRot)}</strong> (no vuelve a stock)</li>`;
+    if (totDev === 0 && totRot === 0) html += '<li>Todo se entregó conforme</li>';
+    html += '</ul><p class="text-start small text-muted mb-0">Esta operación no se puede deshacer fácilmente.</p>';
+
+    const conf = await Swal.fire({
+        title: '¿Confirmar liquidación?',
+        html: html,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, liquidar',
+        cancelButtonText: 'Volver',
+        confirmButtonColor: '#ffc107',
+    });
+    if (!conf.isConfirmed) return;
+
+    const btn = document.getElementById('liqBtnConfirmar');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Procesando...';
+
+    try {
+        const resp = await fetch(`/remitos/api/liquidar/${liqRemitoId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                items: liqItems.map(it => ({
+                    remito_detalle_id: it.remito_detalle_id,
+                    cant_entregada:    parseFloat(it.cant_entregada) || 0,
+                    cant_devuelta:     parseFloat(it.cant_devuelta)  || 0,
+                    cant_rotura:       parseFloat(it.cant_rotura)    || 0,
+                    motivo:            it.motivo || '',
+                })),
+                observaciones: document.getElementById('liqObs').value || '',
+            }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error(data.error || 'Error desconocido');
+
+        _modalLiq.hide();
+        await Swal.fire({
+            icon: 'success',
+            title: 'Remito liquidado',
+            html: `Entregado: <strong>${_fmtCant(data.totales.entregado)}</strong><br>
+                   Devuelto a stock: <strong>${_fmtCant(data.totales.devuelto)}</strong><br>
+                   Roturas: <strong>${_fmtCant(data.totales.rotura)}</strong><br><br>
+                   <small class="text-muted">El remito quedó listo para facturar por las cantidades entregadas.</small>`,
+            confirmButtonText: 'OK',
+        });
+        cargar();
+    } catch (e) {
+        errBox.innerHTML = '<strong>Error:</strong> ' + e.message;
+        errBox.classList.remove('d-none');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check me-1"></i> Confirmar liquidación';
+    }
+}
+</script>
+{% endblock %}

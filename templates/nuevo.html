@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+
+{% block title %}Nuevo Presupuesto{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap gap-2 pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2 mb-0"><i class="fas fa-file-alt"></i> Nuevo Presupuesto</h1>
+    <a href="{{ url_for('presupuestos.listado') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Volver
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Cliente + validez -->
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="fas fa-user"></i> Cliente y vigencia</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-8">
+                        <label class="form-label">Cliente <span class="text-danger">*</span></label>
+                        <select id="cliente_id" class="form-select">
+                            <option value="">Seleccionar cliente...</option>
+                            {% for c in clientes %}
+                            <option value="{{ c.id }}">{{ c.nombre }}{% if c.documento %} — {{ c.tipo_documento or '' }} {{ c.documento }}{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Vigencia (días)</label>
+                        <input type="number" id="validez_dias" class="form-control" value="15" min="1" max="365">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Buscar productos -->
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="fas fa-search"></i> Agregar productos</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label">Buscar por código o nombre</label>
+                        <div class="position-relative">
+                            <input type="text" class="form-control" id="buscar_producto"
+                                   placeholder="Ej: PROD001, empanada, servicio..."
+                                   autocomplete="off" autofocus>
+                            <div id="sugerencias" class="position-absolute w-100 bg-white border rounded shadow-sm"
+                                 style="top:100%;z-index:1000;max-height:300px;overflow-y:auto;display:none;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Cantidad</label>
+                        <input type="number" class="form-control" id="cantidad" value="1.000" min="0.001" step="0.001">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label d-block">&nbsp;</label>
+                        <button type="button" class="btn btn-success w-100" onclick="agregarProducto()">
+                            <i class="fas fa-plus"></i> Agregar
+                        </button>
+                    </div>
+                </div>
+                <small class="form-text text-muted mt-2 d-block">
+                    <i class="fas fa-lightbulb"></i> Los precios que ingresás son <strong>sin IVA</strong>. El sistema calcula el IVA aparte.
+                </small>
+            </div>
+        </div>
+
+        <!-- Detalle -->
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white">
+                <h6 class="mb-0"><i class="fas fa-list"></i> Detalle del presupuesto</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0 align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width:90px;">Código</th>
+                                <th>Descripción</th>
+                                <th class="text-end" style="width:110px;">Cantidad</th>
+                                <th class="text-end" style="width:120px;">P. Unit.</th>
+                                <th class="text-end" style="width:80px;">IVA%</th>
+                                <th class="text-end" style="width:120px;">Subtotal</th>
+                                <th style="width:50px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="items_body">
+                            <tr id="sin_items">
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    <i class="fas fa-shopping-cart fa-2x opacity-50 mb-2 d-block"></i>
+                                    Sin ítems. Usá el buscador para agregar productos.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Observaciones -->
+        <div class="card mb-3">
+            <div class="card-header bg-secondary text-white">
+                <h6 class="mb-0"><i class="fas fa-comment"></i> Observaciones (opcional)</h6>
+            </div>
+            <div class="card-body">
+                <textarea id="observaciones" class="form-control" rows="2"
+                          placeholder="Ej: Condiciones de pago, plazo de entrega, aclaraciones..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Columna derecha: totales + guardar -->
+    <div class="col-lg-4">
+        <div class="card sticky-top" style="top:10px;">
+            <div class="card-header bg-warning">
+                <h6 class="mb-0"><i class="fas fa-calculator"></i> Totales</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-1">
+                    <span>Subtotal:</span>
+                    <strong id="t_subtotal">$0,00</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span>IVA:</span>
+                    <strong id="t_iva">$0,00</strong>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between">
+                    <span class="h5 mb-0">TOTAL:</span>
+                    <span class="h5 mb-0 text-success" id="t_total">$0,00</span>
+                </div>
+                <hr class="my-2">
+                <button type="button" class="btn btn-primary w-100" onclick="guardar()">
+                    <i class="fas fa-save"></i> Guardar Presupuesto
+                </button>
+                <small class="text-muted d-block mt-2 text-center">
+                    Se guarda en estado <span class="badge bg-secondary">BORRADOR</span>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let items = [];
+
+const inputBuscar = document.getElementById('buscar_producto');
+const sugerenciasBox = document.getElementById('sugerencias');
+let timerBuscar = null;
+let productoSeleccionado = null;
+
+// ============ BUSCADOR ============
+inputBuscar.addEventListener('input', function() {
+    clearTimeout(timerBuscar);
+    const q = this.value.trim();
+    productoSeleccionado = null;
+    if (q.length < 2) {
+        sugerenciasBox.style.display = 'none';
+        return;
+    }
+    timerBuscar = setTimeout(() => buscarProductos(q), 250);
+});
+
+inputBuscar.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        agregarProducto();
+    } else if (e.key === 'Escape') {
+        sugerenciasBox.style.display = 'none';
+    }
+});
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#buscar_producto') && !e.target.closest('#sugerencias')) {
+        sugerenciasBox.style.display = 'none';
+    }
+});
+
+function buscarProductos(q) {
+    fetch(`/api/buscar_productos/${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!Array.isArray(data) || data.length === 0) {
+                sugerenciasBox.innerHTML = '<div class="p-2 text-muted"><i class="fas fa-search"></i> Sin resultados</div>';
+                sugerenciasBox.style.display = 'block';
+                return;
+            }
+            sugerenciasBox.innerHTML = '';
+            data.slice(0, 10).forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'p-2 border-bottom';
+                div.style.cssText = 'cursor:pointer;';
+                div.innerHTML = `
+                    <div class="d-flex justify-content-between">
+                        <div><strong>${p.codigo}</strong> — ${p.nombre}</div>
+                        <div class="text-success"><strong>$${parseFloat(p.precio).toFixed(2)}</strong></div>
+                    </div>
+                    <small class="text-muted">Stock: ${p.stock} — IVA: ${p.iva || 21}%</small>
+                `;
+                div.onmouseover = () => div.style.backgroundColor = '#f0f0f0';
+                div.onmouseout = () => div.style.backgroundColor = '';
+                div.onclick = () => seleccionarProducto(p);
+                sugerenciasBox.appendChild(div);
+            });
+            sugerenciasBox.style.display = 'block';
+        })
+        .catch(err => {
+            console.error('Error buscar productos:', err);
+            sugerenciasBox.style.display = 'none';
+        });
+}
+
+function seleccionarProducto(p) {
+    productoSeleccionado = p;
+    inputBuscar.value = p.codigo;
+    sugerenciasBox.style.display = 'none';
+    const cant = document.getElementById('cantidad');
+    cant.focus();
+    cant.select();
+}
+
+// ============ AGREGAR ITEM ============
+function agregarProducto() {
+    if (!productoSeleccionado) {
+        // Si no hay producto seleccionado pero sí texto, buscar y autoseleccionar el primero
+        const q = inputBuscar.value.trim();
+        if (!q) return;
+        fetch(`/api/buscar_productos/${encodeURIComponent(q)}`)
+            .then(r => r.json())
+            .then(lst => {
+                if (lst && lst.length) {
+                    productoSeleccionado = lst[0];
+                    inputBuscar.value = lst[0].codigo;
+                    agregarProducto();
+                } else {
+                    Swal.fire({icon:'warning', title:'Producto no encontrado', timer:1500, showConfirmButton:false});
+                }
+            });
+        return;
+    }
+
+    const p = productoSeleccionado;
+    const cantidad = parseFloat(document.getElementById('cantidad').value || 1);
+    if (!cantidad || cantidad <= 0) {
+        Swal.fire('Cantidad inválida', 'Ingresá una cantidad mayor a 0', 'warning');
+        return;
+    }
+
+    items.push({
+        producto_id: p.id,
+        codigo: p.codigo,
+        descripcion: p.nombre,
+        cantidad: cantidad,
+        precio_unitario: parseFloat(p.precio) || 0,
+        iva_alicuota: parseFloat(p.iva) || 21,
+        es_pesable: !!p.es_pesable
+    });
+
+    renderItems();
+
+    // Reset
+    inputBuscar.value = '';
+    productoSeleccionado = null;
+    document.getElementById('cantidad').value = '1.000';
+    inputBuscar.focus();
+}
+
+// ============ RENDER ============
+function renderItems() {
+    const tbody = document.getElementById('items_body');
+    if (!items.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center text-muted py-4">
+                    <i class="fas fa-shopping-cart fa-2x opacity-50 mb-2 d-block"></i>
+                    Sin ítems.
+                </td>
+            </tr>`;
+        actualizarTotales();
+        return;
+    }
+    tbody.innerHTML = '';
+    items.forEach((it, i) => {
+        const subtotal = it.cantidad * it.precio_unitario;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><small class="text-muted">${it.codigo || '-'}</small></td>
+            <td>${it.descripcion}</td>
+            <td><input type="number" class="form-control form-control-sm text-end" min="0.001" step="0.001" value="${it.cantidad}" onchange="cambiarCampo(${i},'cantidad',this.value)"></td>
+            <td><input type="number" class="form-control form-control-sm text-end" min="0" step="0.01" value="${it.precio_unitario.toFixed(2)}" onchange="cambiarCampo(${i},'precio_unitario',this.value)"></td>
+            <td><input type="number" class="form-control form-control-sm text-end" min="0" step="0.5" value="${it.iva_alicuota}" onchange="cambiarCampo(${i},'iva_alicuota',this.value)"></td>
+            <td class="text-end"><strong>$${subtotal.toFixed(2)}</strong></td>
+            <td class="text-center"><button class="btn btn-sm btn-outline-danger" onclick="quitarItem(${i})" title="Quitar"><i class="fas fa-times"></i></button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+    actualizarTotales();
+}
+
+function cambiarCampo(i, campo, valor) {
+    const num = parseFloat(valor);
+    if (isNaN(num) || num < 0) { renderItems(); return; }
+    items[i][campo] = num;
+    renderItems();
+}
+
+function quitarItem(i) {
+    items.splice(i, 1);
+    renderItems();
+}
+
+// ============ TOTALES ============
+function actualizarTotales() {
+    let subtotal = 0, iva = 0;
+    items.forEach(it => {
+        const sub = it.cantidad * it.precio_unitario;
+        subtotal += sub;
+        iva += sub * (it.iva_alicuota / 100);
+    });
+    document.getElementById('t_subtotal').textContent = '$' + subtotal.toFixed(2);
+    document.getElementById('t_iva').textContent = '$' + iva.toFixed(2);
+    document.getElementById('t_total').textContent = '$' + (subtotal + iva).toFixed(2);
+}
+
+// ============ GUARDAR ============
+function guardar() {
+    const cliente_id = document.getElementById('cliente_id').value;
+    if (!cliente_id) {
+        Swal.fire('Falta cliente', 'Seleccioná un cliente antes de guardar', 'warning');
+        return;
+    }
+    if (!items.length) {
+        Swal.fire('Sin ítems', 'Agregá al menos un ítem', 'warning');
+        return;
+    }
+
+    const payload = {
+        cliente_id: parseInt(cliente_id),
+        validez_dias: parseInt(document.getElementById('validez_dias').value || 15),
+        observaciones: document.getElementById('observaciones').value || '',
+        items: items
+    };
+
+    Swal.fire({
+        title: 'Guardando...',
+        didOpen: () => Swal.showLoading(),
+        allowOutsideClick: false
+    });
+
+    fetch('{{ url_for("presupuestos.crear") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.success) {
+            Swal.fire({
+                title: '¡Guardado!',
+                html: `Presupuesto <strong>${d.numero}</strong>`,
+                icon: 'success',
+                timer: 1800,
+                showConfirmButton: false
+            }).then(() => { window.location.href = `/presupuestos/${d.id}`; });
+        } else {
+            Swal.fire('Error', d.error || 'Error al guardar', 'error');
+        }
+    })
+    .catch(err => Swal.fire('Error', String(err), 'error'));
+}
+</script>
+{% endblock %}

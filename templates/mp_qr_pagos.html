@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Pagos QR MercadoPago{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex align-items-center mb-3">
+    <i class="fab fa-cc-mastercard fa-2x text-primary me-3"></i>
+    <div>
+      <h3 class="mb-0">Pagos QR MercadoPago</h3>
+      <small class="text-muted">Historial y conciliación</small>
+    </div>
+    <a href="/mp/config" class="btn btn-outline-primary ms-auto">
+      <i class="fas fa-cog"></i> Configuración
+    </a>
+  </div>
+
+  <!-- Filtros -->
+  <form method="GET" class="card card-body mb-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Desde</label>
+        <input type="date" name="desde" value="{{ filtros.desde }}" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Hasta</label>
+        <input type="date" name="hasta" value="{{ filtros.hasta }}" class="form-control">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Estado</label>
+        <select name="estado" class="form-select">
+          <option value="">Todos</option>
+          <option value="approved" {% if filtros.estado=='approved' %}selected{% endif %}>Aprobados</option>
+          <option value="pending" {% if filtros.estado=='pending' %}selected{% endif %}>Pendientes</option>
+          <option value="rejected" {% if filtros.estado=='rejected' %}selected{% endif %}>Rechazados</option>
+          <option value="cancelled" {% if filtros.estado=='cancelled' %}selected{% endif %}>Cancelados</option>
+          <option value="expired" {% if filtros.estado=='expired' %}selected{% endif %}>Expirados</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button class="btn btn-primary"><i class="fas fa-search"></i> Filtrar</button>
+        <a href="/mp/pagos" class="btn btn-outline-secondary">Limpiar</a>
+      </div>
+    </div>
+  </form>
+
+  {% set total_aprobados = pagos|selectattr('estado','equalto','approved')|map(attribute='monto')|sum %}
+  {% set cant_aprobados = pagos|selectattr('estado','equalto','approved')|list|length %}
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-4">
+      <div class="card border-success">
+        <div class="card-body">
+          <small class="text-muted">APROBADOS</small>
+          <h3 class="mb-0">${{ "{:,.2f}".format(total_aprobados).replace(",","X").replace(".",",").replace("X",".") }}</h3>
+          <small>{{ cant_aprobados }} pagos</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-secondary">
+        <div class="card-body">
+          <small class="text-muted">TOTAL OPERACIONES</small>
+          <h3 class="mb-0">{{ pagos|length }}</h3>
+          <small>en el período</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla -->
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Fecha</th>
+            <th>Estado</th>
+            <th>Monto</th>
+            <th>Método</th>
+            <th>Payment ID MP</th>
+            <th>Ref. externa</th>
+            <th>Factura</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in pagos %}
+          <tr>
+            <td><small>{{ p.fecha_aprobacion or p.fecha_creacion }}</small></td>
+            <td>
+              {% if p.estado == 'approved' %}
+                <span class="badge bg-success"><i class="fas fa-check"></i> Aprobado</span>
+              {% elif p.estado == 'pending' %}
+                <span class="badge bg-warning text-dark">Pendiente</span>
+              {% elif p.estado == 'rejected' %}
+                <span class="badge bg-danger">Rechazado</span>
+              {% elif p.estado == 'cancelled' %}
+                <span class="badge bg-secondary">Cancelado</span>
+              {% else %}
+                <span class="badge bg-dark">{{ p.estado }}</span>
+              {% endif %}
+            </td>
+            <td class="text-end fw-bold">${{ "{:,.2f}".format(p.monto).replace(",","X").replace(".",",").replace("X",".") }}</td>
+            <td><small>{{ p.metodo_detalle or '—' }}</small></td>
+            <td><code class="small">{{ p.payment_id or '—' }}</code></td>
+            <td><code class="small">{{ p.external_reference }}</code></td>
+            <td>
+              {% if p.factura_numero %}
+                <a href="/facturas?q={{ p.factura_numero }}">{{ p.factura_numero }}</a>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="text-center text-muted py-4">Sin pagos en el período.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

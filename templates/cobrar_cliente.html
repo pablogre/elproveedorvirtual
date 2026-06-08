@@ -1,0 +1,595 @@
+{% extends "base.html" %}
+{% block title %}Cobrar Cliente{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h2 class="h4 mb-0"><i class="fas fa-hand-holding-usd me-2 text-success"></i>Cobrar Cliente</h2>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#modalAyudaCobrar">
+            <i class="fas fa-question-circle me-1"></i> Ayuda
+        </button>
+        <a href="/clientes" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i> Volver
+        </a>
+    </div>
+</div>
+
+<!-- Modal Ayuda Cobrar -->
+<div class="modal fade" id="modalAyudaCobrar" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#0A2140; color:white;">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Ayuda — Cobrar Cliente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="text-primary fw-bold">¿Cómo registrar un cobro?</h6>
+                <ol>
+                    <li><strong>Seleccioná el cliente</strong> en el desplegable. Se cargan automáticamente los comprobantes que tiene pendientes de pago.</li>
+                    <li><strong>Marcá los comprobantes</strong> que el cliente está pagando. Podés seleccionar uno o varios a la vez.</li>
+                    <li><strong>Modificá el importe a cobrar</strong> si el cliente paga parcialmente un comprobante (el campo es editable por fila).</li>
+                    <li><strong>Agregá el medio de pago</strong>: efectivo, transferencia, débito, crédito o Mercado Pago. Podés combinar varios medios.</li>
+                    <li>Cuando la <strong>Diferencia sea $0,00</strong> el botón <em>Generar Recibo</em> se habilita.</li>
+                    <li>Al confirmar se <strong>imprime el recibo en la térmica</strong> automáticamente y podés ver el PDF A4.</li>
+                </ol>
+
+                <h6 class="text-primary fw-bold mt-3">Pago parcial</h6>
+                <p>Si el cliente paga solo una parte de un comprobante, modificá el campo <strong>"A cobrar"</strong> con el importe real. El comprobante queda con saldo pendiente y aparecerá en el próximo cobro.</p>
+
+                <h6 class="text-primary fw-bold mt-3">Reimprimir un recibo</h6>
+                <p>Usá la sección <strong>"Reimprimir recibo"</strong> abajo a la derecha. Seleccioná el recibo del desplegable (muestra los últimos 20) y elegí Térmica o PDF A4.</p>
+
+                <h6 class="text-primary fw-bold mt-3">Pago a cuenta / Adelanto</h6>
+                <p>Si el cliente quiere adelantar dinero sin tener una deuda pendiente, usá la sección <strong>"Pago a cuenta / Adelanto"</strong>. El importe queda registrado en la CTA.CTE como Haber y reduce el saldo del cliente. Es útil para clientes que pagan por adelantado antes de recibir mercadería.</p>
+                <div class="alert alert-info py-2 mb-0">
+                    <i class="fas fa-info-circle me-1"></i>
+                    El pago a cuenta <strong>no genera un recibo impreso</strong> — queda registrado en el historial de la CTA.CTE del cliente.
+                </div>
+
+                <h6 class="text-primary fw-bold mt-3">Indicadores de color</h6>
+                <table class="table table-sm table-bordered">
+                    <tbody>
+                        <tr><td><strong class="text-success">Diferencia $0,00</strong></td><td>Los medios de pago coinciden exactamente con lo seleccionado. Se puede confirmar.</td></tr>
+                        <tr><td><strong class="text-danger">Diferencia negativa</strong></td><td>Falta agregar medios de pago o reducir el importe a cobrar.</td></tr>
+                    </tbody>
+                </table>
+
+                <div class="alert alert-warning mt-3 mb-0">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    <strong>Importante:</strong> Un recibo generado no se puede modificar. Si cometiste un error, contactá al administrador.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- Columna izquierda: cliente + comprobantes -->
+    <div class="col-lg-7">
+
+        <!-- Selector de cliente -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-header py-2" style="background:#0A2140; color:white;">
+                <i class="fas fa-user me-1"></i> Cliente
+            </div>
+            <div class="card-body">
+                <select id="selectCliente" class="form-select" onchange="cargarPendientes()">
+                    <option value="">Seleccionar cliente...</option>
+                    {% for c in clientes %}
+                    <option value="{{ c.id }}">{{ c.nombre }}{% if c.documento %} — {{ c.documento }}{% endif %}</option>
+                    {% endfor %}
+                </select>
+                <div id="infoCliente" class="mt-2 d-none">
+                    <span class="text-muted small">Saldo total: </span>
+                    <strong id="saldoCliente" class="text-danger"></strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comprobantes pendientes -->
+        <div class="card shadow-sm">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:#0A2140; color:white;">
+                <span><i class="fas fa-file-invoice me-1"></i> Comprobantes pendientes</span>
+                <button class="btn btn-sm btn-outline-light" onclick="seleccionarTodos()">Seleccionar todos</button>
+            </div>
+            <div class="card-body p-0">
+                <div id="divSinPendientes" class="text-center text-muted py-4 d-none">Sin comprobantes pendientes</div>
+
+                <!-- Imputación automática en cascada (FIFO): salda de la más vieja a la más nueva -->
+                <div id="barraImputarAuto" class="bg-light border-bottom px-3 py-2 d-none">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small fw-bold text-secondary">
+                                <i class="fas fa-bolt me-1 text-warning"></i>Imputar monto recibido:
+                            </label>
+                        </div>
+                        <div class="col">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" id="montoRecibido" class="form-control text-end"
+                                       placeholder="Ej: 2000000" step="0.01" min="0"
+                                       onkeydown="if(event.key==='Enter'){event.preventDefault();imputarAutomatico();}">
+                                <button class="btn btn-success" onclick="imputarAutomatico()">
+                                    <i class="fas fa-bolt me-1"></i>Imputar automático
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="limpiarImputacion()" title="Limpiar selección">
+                                    <i class="fas fa-eraser"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-1">
+                        <i class="fas fa-info-circle me-1"></i>Cancela las facturas más antiguas primero; la última que no alcance queda parcial.
+                    </div>
+                </div>
+
+                <table class="table table-hover table-sm mb-0" id="tablaPendientes">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3"><input type="checkbox" id="chkTodos" onchange="toggleTodos(this)"></th>
+                            <th>Fecha</th>
+                            <th>Comprobante</th>
+                            <th class="text-end">Total</th>
+                            <th class="text-end">Saldo</th>
+                            <th class="text-end pe-3">A cobrar</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyPendientes">
+                        <tr><td colspan="6" class="text-center text-muted py-3">Seleccioná un cliente</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Columna derecha: medios de pago + resumen -->
+    <div class="col-lg-5">
+
+        <!-- Medios de pago -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-header py-2" style="background:#0A2140; color:white;">
+                <i class="fas fa-money-bill-wave me-1"></i> Medios de pago
+            </div>
+            <div class="card-body">
+                <div class="input-group input-group-sm mb-2">
+                    <select id="medioSelect" class="form-select" onchange="onMedioChange()">
+                        <option value="efectivo">💵 Efectivo</option>
+                        <option value="transferencia">🏦 Transferencia</option>
+                        <option value="debito">💳 Débito</option>
+                        <option value="credito">💳 Crédito</option>
+                        <option value="mercado_pago">📱 Mercado Pago</option>
+                        <option value="saldo_favor">💚 Saldo a favor</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                    <input type="number" id="medioImporte" class="form-control text-end" placeholder="Importe" step="0.01" min="0">
+                    <button class="btn btn-primary" onclick="agregarMedio()">+</button>
+                </div>
+                <div id="avisoSaldoFavor" class="alert alert-success py-1 small d-none">
+                    <i class="fas fa-info-circle me-1"></i> Saldo disponible: <strong id="saldoFavorDisponible">$0,00</strong>
+                </div>
+                <div id="listaMedios"></div>
+            </div>
+        </div>
+
+        <!-- Resumen -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr>
+                        <td>Total seleccionado:</td>
+                        <td class="text-end fw-bold" id="totalSeleccionado">$0,00</td>
+                    </tr>
+                    <tr>
+                        <td>Total medios de pago:</td>
+                        <td class="text-end fw-bold" id="totalMedios">$0,00</td>
+                    </tr>
+                    <tr class="table-warning">
+                        <td class="fw-bold">Diferencia:</td>
+                        <td class="text-end fw-bold" id="diferencia">$0,00</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Observaciones + botón -->
+        <div class="mb-3">
+            <input type="text" id="observaciones" class="form-control form-control-sm" placeholder="Observaciones (opcional)">
+        </div>
+        <button class="btn btn-success w-100" onclick="generarRecibo()" id="btnCobrar" disabled>
+            <i class="fas fa-receipt me-1"></i> Generar Recibo de Cobro
+        </button>
+
+        <!-- Pago a cuenta -->
+        <div class="card shadow-sm mt-3">
+            <div class="card-header py-2" style="background:#198754; color:white;">
+                <i class="fas fa-piggy-bank me-1"></i> Pago a cuenta / Adelanto
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-2">Registrá un pago del cliente sin imputarlo a ningún comprobante. Quedará como saldo a favor.</p>
+                <div class="input-group input-group-sm mb-2">
+                    <select id="medioPagoAcuenta" class="form-select">
+                        <option value="efectivo">💵 Efectivo</option>
+                        <option value="transferencia">🏦 Transferencia</option>
+                        <option value="debito">💳 Débito</option>
+                        <option value="credito">💳 Crédito</option>
+                        <option value="mercado_pago">📱 Mercado Pago</option>
+                    </select>
+                    <input type="number" id="importeAcuenta" class="form-control text-end" placeholder="Importe" step="0.01" min="0.01">
+                </div>
+                <input type="text" id="obsAcuenta" class="form-control form-control-sm mb-2" placeholder="Observaciones (opcional)">
+                <button class="btn btn-success btn-sm w-100" onclick="registrarPagoACuenta()">
+                    <i class="fas fa-piggy-bank me-1"></i> Registrar pago a cuenta
+                </button>
+            </div>
+        </div>
+
+        <!-- Reimprimir recibo anterior -->
+        <div class="card shadow-sm mt-3">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center" style="background:#0A2140; color:white;">
+                <span><i class="fas fa-print me-1"></i> Reimprimir recibo</span>
+                <button class="btn btn-sm btn-outline-light" onclick="cargarUltimosRecibos()">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <select id="selectRecibo" class="form-select form-select-sm mb-2" onchange="seleccionarRecibo()">
+                    <option value="">— Últimos recibos —</option>
+                </select>
+                <div id="infoReimprimir" class="d-none">
+                    <div class="border rounded p-2 bg-light small mb-2" id="detalleReimprimir"></div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-primary w-50" onclick="imprimirTermicaRecibo()">
+                            <i class="fas fa-print me-1"></i> Térmica
+                        </button>
+                        <a id="btnPdfReimprimir" href="#" target="_blank" class="btn btn-sm btn-outline-primary w-50">
+                            <i class="fas fa-file-pdf me-1"></i> PDF A4
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+async function registrarPagoACuenta() {
+    const cid = document.getElementById('selectCliente').value;
+    if (!cid) { Swal.fire('Error', 'Seleccioná un cliente', 'warning'); return; }
+    const importe = parseFloat(document.getElementById('importeAcuenta').value) || 0;
+    if (importe <= 0) { Swal.fire('Error', 'Ingresá un importe válido', 'warning'); return; }
+    const medio = document.getElementById('medioPagoAcuenta').value;
+    const obs   = document.getElementById('obsAcuenta').value;
+
+    try {
+        const r = await fetch('/api/cta_cte/pago_a_cuenta', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ cliente_id: parseInt(cid), importe, medio, observaciones: obs })
+        });
+        const data = await r.json();
+        if (data.success) {
+            await Swal.fire({ icon: 'success', title: '¡Registrado!', html: `Pago a cuenta de <strong>$${fmt(importe)}</strong> registrado.<br>Saldo restante: <strong>$${fmt(data.saldo_nuevo)}</strong>`, confirmButtonColor: '#198754' });
+            document.getElementById('importeAcuenta').value = '';
+            document.getElementById('obsAcuenta').value = '';
+            await cargarPendientes();
+            await cargarUltimosRecibos();
+        } else {
+            Swal.fire('Error', data.error, 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+let saldoFavorDisponible = 0;
+
+async function onMedioChange() {
+    const medio = document.getElementById('medioSelect').value;
+    const aviso = document.getElementById('avisoSaldoFavor');
+    if (medio === 'saldo_favor') {
+        const cid = document.getElementById('selectCliente').value;
+        if (!cid) { aviso.classList.add('d-none'); return; }
+        try {
+            const r = await fetch(`/api/cta_cte/saldo_favor/${cid}`);
+            const data = await r.json();
+            saldoFavorDisponible = data.saldo_favor || 0;
+            document.getElementById('saldoFavorDisponible').textContent = `$${fmt(saldoFavorDisponible)}`;
+            document.getElementById('medioImporte').value = saldoFavorDisponible.toFixed(2);
+            document.getElementById('medioImporte').max = saldoFavorDisponible;
+            aviso.classList.remove('d-none');
+        } catch(e) { aviso.classList.add('d-none'); }
+    } else {
+        aviso.classList.add('d-none');
+        document.getElementById('medioImporte').removeAttribute('max');
+    }
+}
+
+let reciboEncontrado = null;
+
+async function cargarUltimosRecibos() {
+    try {
+        const r = await fetch('/api/cta_cte/recibo/ultimos?limite=20');
+        const data = await r.json();
+        if (!data.success) return;
+        const sel = document.getElementById('selectRecibo');
+        sel.innerHTML = '<option value="">— Últimos recibos —</option>';
+        data.recibos.forEach(r => {
+            sel.innerHTML += `<option value="${r.id}" data-recibo='${JSON.stringify(r)}'>${r.numero} — ${r.cliente_nombre} — $${fmt(r.total)} — ${r.fecha}</option>`;
+        });
+    } catch(e) { console.error(e); }
+}
+
+function seleccionarRecibo() {
+    const sel = document.getElementById('selectRecibo');
+    const opt = sel.selectedOptions[0];
+    if (!opt || !opt.value) {
+        document.getElementById('infoReimprimir').classList.add('d-none');
+        reciboEncontrado = null;
+        return;
+    }
+    reciboEncontrado = JSON.parse(opt.dataset.recibo);
+    document.getElementById('infoReimprimir').classList.remove('d-none');
+    document.getElementById('detalleReimprimir').innerHTML =
+        `<strong>${reciboEncontrado.numero}</strong> — ${reciboEncontrado.fecha}<br>
+         Cliente: ${reciboEncontrado.cliente_nombre}<br>
+         Total: <strong>$${fmt(reciboEncontrado.total)}</strong>`;
+    document.getElementById('btnPdfReimprimir').href = `/api/cta_cte/recibo/${reciboEncontrado.id}/pdf`;
+}
+
+// Cargar al iniciar
+window.addEventListener('DOMContentLoaded', () => {
+    cargarUltimosRecibos();
+    const params = new URLSearchParams(window.location.search);
+    const cid = params.get('cliente_id');
+    if (cid) {
+        document.getElementById('selectCliente').value = cid;
+        cargarPendientes();
+    }
+});
+
+async function imprimirTermicaRecibo() {
+    if (!reciboEncontrado) return;
+    try {
+        const r = await fetch(`/api/cta_cte/recibo/${reciboEncontrado.id}/imprimir_termica`, {method:'POST'});
+        const data = await r.json();
+        if (data.success) {
+            Swal.fire({icon:'success', title:'Impreso', timer:1500, showConfirmButton:false});
+        } else {
+            Swal.fire('Error', data.error, 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+let pendientes = [];
+let mediosPago = [];
+let contadorMedio = 0;
+
+function fmt(n) {
+    return parseFloat(n||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+// Pre-seleccionar cliente si viene por URL
+
+
+async function cargarPendientes() {
+    const cid = document.getElementById('selectCliente').value;
+    if (!cid) return;
+
+    const r = await fetch(`/api/cta_cte/movimientos_pendientes/${cid}`);
+    const data = await r.json();
+    if (!data.success) return;
+
+    pendientes = data.movimientos;
+
+    document.getElementById('infoCliente').classList.remove('d-none');
+    document.getElementById('saldoCliente').textContent = `$${fmt(data.saldo_total)}`;
+
+    const tbody = document.getElementById('tbodyPendientes');
+    if (!pendientes.length) {
+        document.getElementById('divSinPendientes').classList.remove('d-none');
+        document.getElementById('barraImputarAuto').classList.add('d-none');
+        tbody.innerHTML = '';
+        return;
+    }
+    document.getElementById('divSinPendientes').classList.add('d-none');
+    document.getElementById('barraImputarAuto').classList.remove('d-none');
+
+    tbody.innerHTML = pendientes.map((m, i) => `
+        <tr>
+            <td class="ps-3"><input type="checkbox" class="chk-mov" data-idx="${i}" onchange="actualizarTotales()"></td>
+            <td class="text-nowrap">${m.fecha}</td>
+            <td><code>${m.numero_comprobante}</code></td>
+            <td class="text-end">$${fmt(m.monto_total)}</td>
+            <td class="text-end text-danger fw-bold">$${fmt(m.saldo_pendiente)}</td>
+            <td class="text-end pe-3">
+                <input type="number" class="form-control form-control-sm text-end inp-pagar"
+                    data-idx="${i}" value="${m.saldo_pendiente.toFixed(2)}"
+                    min="0.01" max="${m.saldo_pendiente.toFixed(2)}" step="0.01"
+                    style="width:110px; display:inline-block"
+                    oninput="actualizarTotales()">
+            </td>
+        </tr>
+    `).join('');
+
+    actualizarTotales();
+}
+
+function imputarAutomatico() {
+    if (!pendientes.length) return;
+
+    let restante = parseFloat(document.getElementById('montoRecibido').value) || 0;
+    if (restante <= 0) {
+        Swal.fire({ icon: 'warning', title: 'Ingresá un monto', text: 'Escribí el monto recibido para imputar.', confirmButtonColor: '#0A2140' });
+        return;
+    }
+
+    const saldoTotal = pendientes.reduce((s, m) => s + m.saldo_pendiente, 0);
+    if (restante > saldoTotal + 0.01) {
+        // No dejar imputar más que la deuda: el excedente iría como pago a cuenta.
+        Swal.fire({
+            icon: 'info',
+            title: 'El monto supera la deuda',
+            html: `La deuda total es <strong>$${fmt(saldoTotal)}</strong>.<br>` +
+                  `Voy a imputar $${fmt(saldoTotal)} y cancelar todos los comprobantes.<br>` +
+                  `El excedente ($${fmt(restante - saldoTotal)}) registralo aparte como <strong>Pago a cuenta</strong>.`,
+            confirmButtonColor: '#0A2140'
+        });
+        restante = saldoTotal;
+    }
+
+    // Cascada FIFO: pendientes ya viene ordenado del más viejo al más nuevo.
+    pendientes.forEach((m, i) => {
+        const chk = document.querySelector(`.chk-mov[data-idx="${i}"]`);
+        const inp = document.querySelector(`.inp-pagar[data-idx="${i}"]`);
+        if (!chk || !inp) return;
+
+        const saldo = m.saldo_pendiente;
+        const aImputar = Math.min(saldo, restante);
+
+        if (aImputar > 0.001) {
+            // redondeo a 2 decimales para evitar arrastres de coma flotante
+            const monto = Math.round(aImputar * 100) / 100;
+            inp.value = monto.toFixed(2);
+            chk.checked = true;
+            restante = Math.round((restante - monto) * 100) / 100;
+        } else {
+            // sin plata restante: dejar la fila sin tildar y con su saldo original
+            chk.checked = false;
+            inp.value = saldo.toFixed(2);
+        }
+    });
+
+    // Sincronizar "Seleccionar todos" y recalcular
+    const todosTildados = document.querySelectorAll('.chk-mov').length === document.querySelectorAll('.chk-mov:checked').length;
+    document.getElementById('chkTodos').checked = todosTildados;
+    actualizarTotales();
+}
+
+function limpiarImputacion() {
+    document.getElementById('montoRecibido').value = '';
+    document.querySelectorAll('.chk-mov').forEach(c => { c.checked = false; });
+    document.querySelectorAll('.inp-pagar').forEach((inp, i) => {
+        if (pendientes[i]) inp.value = pendientes[i].saldo_pendiente.toFixed(2);
+    });
+    document.getElementById('chkTodos').checked = false;
+    actualizarTotales();
+}
+
+function toggleTodos(chk) {
+    document.querySelectorAll('.chk-mov').forEach(c => { c.checked = chk.checked; });
+    actualizarTotales();
+}
+
+function seleccionarTodos() {
+    document.querySelectorAll('.chk-mov').forEach(c => { c.checked = true; });
+    document.getElementById('chkTodos').checked = true;
+    actualizarTotales();
+}
+
+function actualizarTotales() {
+    let total = 0;
+    document.querySelectorAll('.chk-mov:checked').forEach(chk => {
+        const idx = chk.dataset.idx;
+        const inp = document.querySelector(`.inp-pagar[data-idx="${idx}"]`);
+        total += parseFloat(inp.value) || 0;
+    });
+    const totalMedios = mediosPago.reduce((s, m) => s + m.importe, 0);
+    const dif = totalMedios - total;
+
+    document.getElementById('totalSeleccionado').textContent = `$${fmt(total)}`;
+    document.getElementById('diferencia').textContent = `$${fmt(dif)}`;
+    document.getElementById('diferencia').className = `text-end fw-bold ${Math.abs(dif) < 0.01 ? 'text-success' : 'text-danger'}`;
+    document.getElementById('btnCobrar').disabled = !(total > 0 && Math.abs(dif) < 0.01 && mediosPago.length > 0);
+}
+
+function agregarMedio() {
+    const medio = document.getElementById('medioSelect').value;
+    const importe = parseFloat(document.getElementById('medioImporte').value) || 0;
+    if (importe <= 0) return;
+
+    const id = contadorMedio++;
+    mediosPago.push({ id, medio, importe });
+    document.getElementById('medioImporte').value = '';
+    renderMedios();
+    actualizarTotales();
+}
+
+function quitarMedio(id) {
+    mediosPago = mediosPago.filter(m => m.id !== id);
+    renderMedios();
+    actualizarTotales();
+}
+
+function renderMedios() {
+    const total = mediosPago.reduce((s, m) => s + m.importe, 0);
+    document.getElementById('totalMedios').textContent = `$${fmt(total)}`;
+    document.getElementById('listaMedios').innerHTML = mediosPago.map(m => `
+        <div class="d-flex justify-content-between align-items-center border rounded px-2 py-1 mb-1">
+            <span>${m.medio} — <strong>$${fmt(m.importe)}</strong></span>
+            <button class="btn btn-sm btn-outline-danger py-0" onclick="quitarMedio(${m.id})">✕</button>
+        </div>
+    `).join('');
+    actualizarTotales();
+}
+
+async function generarRecibo() {
+    const cid = document.getElementById('selectCliente').value;
+    const imputaciones = [];
+    document.querySelectorAll('.chk-mov:checked').forEach(chk => {
+        const idx = chk.dataset.idx;
+        const inp = document.querySelector(`.inp-pagar[data-idx="${idx}"]`);
+        imputaciones.push({
+            movimiento_id: pendientes[idx].id,
+            monto_imputado: parseFloat(inp.value)
+        });
+    });
+
+    const payload = {
+        cliente_id:    parseInt(cid),
+        imputaciones,
+        medios_pago:   mediosPago.map(m => ({ medio: m.medio, importe: m.importe })),
+        observaciones: document.getElementById('observaciones').value
+    };
+
+    document.getElementById('btnCobrar').disabled = true;
+    document.getElementById('btnCobrar').innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Procesando...';
+
+    try {
+        const r = await fetch('/api/cta_cte/cobrar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await r.json();
+
+        if (data.success) {
+            await Swal.fire({
+                icon: 'success',
+                title: '¡Recibo generado!',
+                html: `<strong>${data.numero_recibo}</strong><br>Total cobrado: <strong>$${fmt(data.total)}</strong><br>Saldo restante: <strong>$${fmt(data.saldo_nuevo)}</strong><br><br><a href="/api/cta_cte/recibo/${data.recibo_id}/pdf" target="_blank" class="btn btn-outline-primary btn-sm"><i class="fas fa-file-pdf me-1"></i> Ver PDF A4</a>`,
+                confirmButtonColor: '#198754'
+            });
+            // Recargar pendientes
+            await cargarPendientes();
+            mediosPago = [];
+            renderMedios();
+            document.getElementById('observaciones').value = '';
+        } else {
+            Swal.fire('Error', data.error, 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', e.message, 'error');
+    } finally {
+        document.getElementById('btnCobrar').disabled = false;
+        document.getElementById('btnCobrar').innerHTML = '<i class="fas fa-receipt me-1"></i> Generar Recibo de Cobro';
+        actualizarTotales();
+    }
+}
+</script>
+{% endblock %}

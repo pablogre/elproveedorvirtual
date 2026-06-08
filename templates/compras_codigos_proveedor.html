@@ -1,0 +1,312 @@
+{% extends 'base.html' %}
+{% block title %}Códigos de Producto por Proveedor{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3">
+    <h2>
+        <i class="fas fa-barcode me-2"></i>Códigos de Producto por Proveedor
+        <button class="btn btn-sm btn-outline-info ms-2" data-bs-toggle="modal" data-bs-target="#modalAyuda" title="Ver ayuda">
+            <i class="fas fa-question-circle me-1"></i> Ayuda
+        </button>
+    </h2>
+    <a href="{{ url_for('compras.listado') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i> Volver
+    </a>
+</div>
+
+<!-- Modal de Ayuda -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Códigos de Producto por Proveedor</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="text-info fw-bold"><i class="fas fa-lightbulb me-1"></i> ¿Para qué sirve esto?</h6>
+                <p>Cada proveedor identifica tus productos con su propio código interno (generalmente distinto al código que vos usás en el sistema). Acá guardás esa relación, para que después puedas buscar productos por el código del proveedor al cargar una factura de compra.</p>
+                <p class="small text-muted">Ejemplo: tu sistema tiene al producto con código <code>3293</code> pero el proveedor te lo factura como <code>LON-12</code>. Guardando esa relación, la próxima vez que cargues una factura de ese proveedor podés escribir <code>LON-12</code> en el buscador y te encuentra el producto.</p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-play me-1"></i> Cómo usar esta pantalla</h6>
+                <ol>
+                    <li><strong>Seleccioná un proveedor</strong> del dropdown de arriba.</li>
+                    <li>Se carga la lista de todos los productos que ya tienen código asignado para ese proveedor.</li>
+                    <li>Acciones disponibles por fila:
+                        <ul>
+                            <li><i class="fas fa-edit text-primary"></i> <strong>Editar</strong>: cambiar el código del proveedor.</li>
+                            <li><i class="fas fa-trash text-danger"></i> <strong>Eliminar</strong> (solo admin): quita la asociación.</li>
+                        </ul>
+                    </li>
+                    <li>Botón <strong>"Agregar código de producto"</strong>: abre un modal donde buscás el producto (por código interno o nombre) y asignás el código que usa el proveedor.</li>
+                </ol>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-database me-1"></i> Otras formas de cargar códigos</h6>
+                <p>Además de esta pantalla, los códigos del proveedor también se cargan automáticamente:</p>
+                <ul>
+                    <li>Al cargar una <strong>Nueva Factura con Detalle</strong>, en el campo "Cód. Proveedor" al lado de cada artículo.</li>
+                    <li>En el <strong>Alta Rápida de Producto</strong>, si agregás un producto nuevo mientras cargás una factura.</li>
+                </ul>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-info-circle me-1"></i> Tené en cuenta</h6>
+                <ul class="mb-0">
+                    <li>Cada producto puede tener <strong>un código distinto por cada proveedor</strong>.</li>
+                    <li>Si cargás un código nuevo para una combinación que ya existía, se <strong>actualiza</strong> (no se duplica).</li>
+                    <li>Si en el listado aparece "(inactivo)" es porque el producto fue dado de baja en el ABM de productos.</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Selector de proveedor -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label small fw-bold">Proveedor</label>
+                <select id="proveedor" class="form-select" onchange="cargar()">
+                    <option value="">Seleccione un proveedor...</option>
+                    {% for p in proveedores %}
+                    <option value="{{ p.id }}">{{ p.razon_social }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-success w-100" onclick="abrirAgregar()" id="btnAgregar" disabled>
+                    <i class="fas fa-plus me-1"></i> Agregar código de producto
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-list me-2"></i>Códigos cargados</span>
+        <span id="contador" class="badge bg-secondary">0</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 130px">Cód. Interno</th>
+                        <th>Producto</th>
+                        <th style="width: 200px">Cód. del Proveedor</th>
+                        <th style="width: 120px">Carga</th>
+                        <th style="width: 120px" class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tbl">
+                    <tr><td colspan="5" class="text-center text-muted py-4">Seleccioná un proveedor</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Agregar/Editar -->
+<div class="modal fade" id="modal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitulo"><i class="fas fa-plus me-2"></i>Agregar código</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="mProductoId">
+
+                <div id="boxBuscar" class="mb-3">
+                    <label class="form-label small fw-bold">Buscar producto (código o nombre)</label>
+                    <div class="position-relative">
+                        <input type="text" id="mBuscarProd" class="form-control" placeholder="Escribí al menos 2 letras..." autocomplete="off">
+                        <div id="mSug" class="list-group position-absolute w-100" style="z-index:1000; max-height:250px; overflow-y:auto; display:none;"></div>
+                    </div>
+                </div>
+
+                <div id="boxSeleccionado" class="alert alert-info py-2" style="display:none;"></div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Código del proveedor *</label>
+                    <input type="text" id="mCodigoProv" class="form-control" placeholder="El código que usa este proveedor">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardar()"><i class="fas fa-save me-1"></i> Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const ES_ADMIN = {{ 'true' if es_admin else 'false' }};
+let proveedorActual = null;
+let productoSeleccionado = null;
+let modoEdicion = null; // {id, producto_id} cuando edita
+let timeoutBusca = null;
+
+function cargar() {
+    proveedorActual = document.getElementById('proveedor').value;
+    const btn = document.getElementById('btnAgregar');
+    btn.disabled = !proveedorActual;
+
+    if (!proveedorActual) {
+        document.getElementById('tbl').innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Seleccioná un proveedor</td></tr>';
+        document.getElementById('contador').textContent = '0';
+        return;
+    }
+
+    fetch(`/compras/api/codigos_proveedor/${proveedorActual}`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('contador').textContent = data.length;
+            if (!data.length) {
+                document.getElementById('tbl').innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Sin códigos cargados para este proveedor</td></tr>';
+                return;
+            }
+            document.getElementById('tbl').innerHTML = data.map(r => `
+                <tr>
+                    <td><code>${r.codigo_interno}</code></td>
+                    <td>${r.nombre}${!r.activo ? ' <small class="text-danger">(inactivo)</small>' : ''}</td>
+                    <td><strong>${r.codigo_proveedor}</strong></td>
+                    <td><small class="text-muted">${r.fecha_creacion}</small></td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary" onclick='editar(${JSON.stringify(r)})' title="Editar código">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        ${ES_ADMIN ? `
+                        <button class="btn btn-sm btn-outline-danger" onclick="eliminar(${r.id}, '${r.codigo_proveedor.replace(/'/g, "\\'")}')" title="Eliminar">
+                            <i class="fas fa-trash"></i>
+                        </button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        });
+}
+
+// ================== AGREGAR ==================
+function abrirAgregar() {
+    modoEdicion = null;
+    productoSeleccionado = null;
+    document.getElementById('modalTitulo').innerHTML = '<i class="fas fa-plus me-2"></i>Agregar código';
+    document.getElementById('boxBuscar').style.display = 'block';
+    document.getElementById('boxSeleccionado').style.display = 'none';
+    document.getElementById('mBuscarProd').value = '';
+    document.getElementById('mCodigoProv').value = '';
+    document.getElementById('mProductoId').value = '';
+    document.getElementById('mSug').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('modal')).show();
+    setTimeout(() => document.getElementById('mBuscarProd').focus(), 300);
+}
+
+document.getElementById('mBuscarProd').addEventListener('input', function() {
+    clearTimeout(timeoutBusca);
+    const q = this.value.trim();
+    if (q.length < 2) {
+        document.getElementById('mSug').style.display = 'none';
+        return;
+    }
+    timeoutBusca = setTimeout(() => buscarProducto(q), 250);
+});
+
+function buscarProducto(q) {
+    fetch(`/compras/api/buscar_producto_abm?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(prods => {
+            const cont = document.getElementById('mSug');
+            if (!prods.length) {
+                cont.innerHTML = '<div class="list-group-item text-muted">Sin coincidencias</div>';
+                cont.style.display = 'block';
+                return;
+            }
+            cont.innerHTML = prods.map(p => `
+                <a href="#" class="list-group-item list-group-item-action" onclick='seleccionar(${JSON.stringify(p)}); return false;'>
+                    <strong>${p.codigo}</strong> - ${p.nombre}
+                </a>
+            `).join('');
+            cont.style.display = 'block';
+        });
+}
+
+function seleccionar(p) {
+    productoSeleccionado = p;
+    document.getElementById('mProductoId').value = p.id;
+    document.getElementById('boxBuscar').style.display = 'none';
+    document.getElementById('boxSeleccionado').style.display = 'block';
+    document.getElementById('boxSeleccionado').innerHTML =
+        `<strong>${p.codigo}</strong> - ${p.nombre} <button class="btn btn-sm btn-link" onclick="cambiarProducto()">(cambiar)</button>`;
+    document.getElementById('mSug').style.display = 'none';
+    document.getElementById('mCodigoProv').focus();
+}
+
+function cambiarProducto() {
+    productoSeleccionado = null;
+    document.getElementById('mProductoId').value = '';
+    document.getElementById('boxBuscar').style.display = 'block';
+    document.getElementById('boxSeleccionado').style.display = 'none';
+    document.getElementById('mBuscarProd').value = '';
+    document.getElementById('mBuscarProd').focus();
+}
+
+// ================== EDITAR ==================
+function editar(r) {
+    modoEdicion = {id: r.id, producto_id: r.producto_id};
+    productoSeleccionado = {id: r.producto_id, codigo: r.codigo_interno, nombre: r.nombre};
+    document.getElementById('modalTitulo').innerHTML = '<i class="fas fa-edit me-2"></i>Editar código';
+    document.getElementById('boxBuscar').style.display = 'none';
+    document.getElementById('boxSeleccionado').style.display = 'block';
+    document.getElementById('boxSeleccionado').innerHTML = `<strong>${r.codigo_interno}</strong> - ${r.nombre}`;
+    document.getElementById('mProductoId').value = r.producto_id;
+    document.getElementById('mCodigoProv').value = r.codigo_proveedor;
+    new bootstrap.Modal(document.getElementById('modal')).show();
+    setTimeout(() => document.getElementById('mCodigoProv').focus(), 300);
+}
+
+// ================== GUARDAR ==================
+function guardar() {
+    const producto_id = document.getElementById('mProductoId').value;
+    const codigo_proveedor = document.getElementById('mCodigoProv').value.trim();
+
+    if (!producto_id) { alertSwal('Seleccioná un producto', 'info'); return; }
+    if (!codigo_proveedor) { alertSwal('Ingresá el código del proveedor', 'info'); return; }
+
+    fetch('/compras/api/codigo_proveedor/guardar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            producto_id: parseInt(producto_id),
+            proveedor_id: parseInt(proveedorActual),
+            codigo_proveedor
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { alertSwal(data.error); return; }
+        bootstrap.Modal.getInstance(document.getElementById('modal')).hide();
+        cargar();
+    });
+}
+
+// ================== ELIMINAR ==================
+async function eliminar(id, codigoProv) {
+    if (!(await confirmSwal(`¿Eliminar el código "${codigoProv}"?`))) return;
+    fetch(`/compras/api/codigo_proveedor/eliminar/${id}`, {method: 'POST'})
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { alertSwal(data.error); return; }
+            cargar();
+        });
+}
+</script>
+{% endblock %}

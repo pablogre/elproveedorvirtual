@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Importador de Datos{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between flex-wrap gap-2 pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2 mb-0"><i class="fas fa-file-import"></i> Importador de Datos</h1>
+    <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#modalAyudaImportador">
+        <i class="fas fa-question-circle"></i> Ayuda
+    </button>
+</div>
+
+<div class="alert alert-info border-start border-4 border-info">
+    <h6 class="mb-2"><i class="fas fa-info-circle"></i> Carga masiva desde Excel/CSV</h6>
+    <p class="mb-0">
+        Subí un archivo <strong>Excel (.xlsx, .xls)</strong> o <strong>CSV</strong> con tus datos
+        del sistema viejo. El importador detecta automáticamente las columnas
+        (CUIT, nombre, precio, etc.) y te muestra una vista previa antes de cargar.
+        Si tu sistema actual no exporta a Excel, descargá una plantilla y completala.
+    </p>
+</div>
+
+<div class="row g-3 mt-2">
+    <div class="col-md-6 col-lg-3">
+        <a href="{{ url_for('importador.pantalla_clientes') }}" class="text-decoration-none">
+            <div class="card h-100 border-primary border-2 hover-shadow" style="cursor: pointer;">
+                <div class="card-body text-center py-4">
+                    <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                    <h5 class="card-title">Clientes</h5>
+                    <p class="card-text small text-muted">
+                        Razón social, CUIT/DNI, condición IVA, contacto, lista de precios.
+                    </p>
+                    <span class="badge bg-success">Disponible</span>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <a href="{{ url_for('importador.pantalla_productos') }}" class="text-decoration-none">
+            <div class="card h-100 border-success border-2 hover-shadow" style="cursor: pointer;">
+                <div class="card-body text-center py-4">
+                    <i class="fas fa-box fa-3x text-success mb-3"></i>
+                    <h5 class="card-title">Productos</h5>
+                    <p class="card-text small text-muted">
+                        Código, nombre, precios (5 listas), costo, stock, IVA, categoría, código de barras.
+                    </p>
+                    <span class="badge bg-success">Disponible</span>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <a href="{{ url_for('importador.pantalla_proveedores') }}" class="text-decoration-none">
+            <div class="card h-100 border-info border-2 hover-shadow" style="cursor: pointer;">
+                <div class="card-body text-center py-4">
+                    <i class="fas fa-truck fa-3x text-info mb-3"></i>
+                    <h5 class="card-title">Proveedores</h5>
+                    <p class="card-text small text-muted">
+                        Razón social, CUIT, condición IVA, datos de contacto.
+                    </p>
+                    <span class="badge bg-success">Disponible</span>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <a href="{{ url_for('importador.pantalla_saldos') }}" class="text-decoration-none">
+            <div class="card h-100 border-warning border-2 hover-shadow" style="cursor: pointer;">
+                <div class="card-body text-center py-4">
+                    <i class="fas fa-balance-scale fa-3x text-warning mb-3"></i>
+                    <h5 class="card-title">Saldos Iniciales</h5>
+                    <p class="card-text small text-muted">
+                        Saldos deudores de clientes y saldos acreedores con proveedores.
+                    </p>
+                    <span class="badge bg-success">Disponible</span>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-warning mt-4 border-start border-4 border-warning">
+    <h6 class="mb-2"><i class="fas fa-exclamation-triangle"></i> Antes de empezar — IMPORTANTE</h6>
+    <ul class="mb-0">
+        <li><strong>Hacé un backup de la base de datos</strong> antes de la primera importación masiva. Si algo sale mal podés volver atrás.</li>
+        <li>Empezá <strong>probando con pocos registros</strong> (10-20) para verificar que el mapeo de columnas sea correcto.</li>
+        <li>El sistema <strong>NO sobrescribe registros existentes</strong>. Si un CUIT/código ya existe, esa fila se saltea y queda registrada como duplicado.</li>
+    </ul>
+</div>
+
+{% include 'importador_ayuda.html' %}
+
+<style>
+.hover-shadow:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+    transform: translateY(-3px);
+    transition: all 0.2s ease-in-out;
+}
+</style>
+
+{% endblock %}

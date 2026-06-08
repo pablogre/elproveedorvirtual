@@ -1,0 +1,109 @@
+# ════════════════════════════════════════════════════════════════════════════
+# SCHIRO / FactuFácil - Dependencias Python
+# ════════════════════════════════════════════════════════════════════════════
+# Instalación:
+#   cd C:\SCHIRO
+#   pip install -r requirements.txt
+#
+# Si pip falla por permisos en Windows:
+#   pip install -r requirements.txt --user
+#
+# Si tenés AppLocker bloqueando:
+#   python -m pip install -r requirements.txt
+# ════════════════════════════════════════════════════════════════════════════
+
+
+# ─── FLASK Y EXTENSIONES ──────────────────────────────────────────────────
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Werkzeug==3.0.1
+Jinja2==3.1.2
+itsdangerous==2.1.2
+click==8.1.7
+blinker==1.7.0
+
+
+# ─── BASE DE DATOS (MySQL/MariaDB) ────────────────────────────────────────
+SQLAlchemy==2.0.23
+PyMySQL==1.1.0
+mysqlclient==2.2.4
+# NOTA: mysqlclient requiere "Microsoft Visual C++ Build Tools" en Windows.
+# Si falla la instalación, descargá el wheel pre-compilado de:
+# https://www.lfd.uci.edu/~gohlke/pythonlibs/#mysqlclient
+
+
+# ─── AFIP / ARCA (Facturación electrónica) ─────────────────────────────────
+zeep==4.2.1                # Cliente SOAP
+cryptography==41.0.7       # Firma digital PKCS7
+lxml==4.9.3                # Parsing XML para WSAA/WSFEv1
+
+
+# ─── HTTP Y SSL ────────────────────────────────────────────────────────────
+requests==2.31.0
+urllib3==2.1.0
+certifi==2023.11.17
+charset-normalizer==3.3.2
+idna==3.6
+
+
+# ─── IMPORTADOR (Excel/CSV) ────────────────────────────────────────────────
+openpyxl==3.1.2            # Lee y escribe .xlsx
+xlrd==1.2.0                # Lee .xls antiguos (NO actualizar a 2.x: rompe .xls)
+pandas==2.1.4              # Manejo de datos tabulares
+
+
+# ─── PUENTE CONTABLE (Excel para contadores) ───────────────────────────────
+XlsxWriter==3.1.9          # Escribe .xlsx con formato avanzado
+
+
+# ─── GENERACIÓN DE PDFs ────────────────────────────────────────────────────
+reportlab==4.0.7           # PDFs de facturas, NC, reportes
+
+
+# ─── CÓDIGOS QR (AFIP) ─────────────────────────────────────────────────────
+qrcode==7.4.2
+Pillow==10.1.0             # Requerida por qrcode + íconos PWA móvil
+
+
+# ─── IMPRESIÓN TÉRMICA (Windows) ───────────────────────────────────────────
+pywin32==306               # win32print, win32api para EPSON TM-m30II
+
+
+# ─── FECHAS Y ZONAS HORARIAS ───────────────────────────────────────────────
+python-dateutil==2.8.2
+tzdata==2023.4             # NECESARIO en Windows para zoneinfo (timezone AR)
+
+
+# ─── VARIABLES DE ENTORNO ──────────────────────────────────────────────────
+python-dotenv==1.0.0
+
+
+# ─── OCR DE FACTURAS DE PROVEEDOR (Claude Vision) ──────────────────────────
+anthropic==0.39.0
+pdf2image==1.17.0
+# IMPORTANTE: pdf2image requiere Poppler instalado en el sistema.
+# Windows: descargar de https://github.com/oschwartz10612/poppler-windows/releases
+# Descomprimir en C:\poppler\ y agregar C:\poppler\Library\bin al PATH del sistema
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# DEPENDENCIAS DE SISTEMA OPERATIVO (no se instalan con pip):
+# ════════════════════════════════════════════════════════════════════════════
+#
+# 1. Poppler (para pdf2image):
+#    Descargar: https://github.com/oschwartz10612/poppler-windows/releases
+#    Descomprimir en C:\poppler\
+#    Agregar C:\poppler\Library\bin al PATH
+#
+# 2. Microsoft Visual C++ Build Tools (para mysqlclient):
+#    https://visualstudio.microsoft.com/es/visual-cpp-build-tools/
+#    Solo si la instalación de mysqlclient falla con error de compilación.
+#
+# 3. MariaDB / MySQL Server:
+#    https://mariadb.org/download/
+#    Configurar usuario, password y crear la base de datos antes de iniciar.
+#
+# 4. Python 3.11.x (recomendado, no usar 3.13 que rompe algunas dependencias):
+#    https://www.python.org/downloads/release/python-31110/
+#
+# ════════════════════════════════════════════════════════════════════════════

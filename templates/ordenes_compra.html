@@ -1,0 +1,616 @@
+{% extends 'base.html' %}
+{% block title %}Órdenes de Compra{% endblock %}
+
+{% block content %}
+<style>
+    .estado-borrador   { background: #e2e3e5; color: #383d41; }
+    .estado-enviada    { background: #cce5ff; color: #004085; }
+    .estado-confirmada { background: #d4edda; color: #155724; }
+    .estado-parcial    { background: #fff3cd; color: #856404; }
+    .estado-recibida   { background: #b8daff; color: #004085; }
+    .estado-facturada  { background: #c3e6cb; color: #155724; }
+    .estado-cerrada    { background: #6c757d; color: white; }
+    .estado-cancelada  { background: #f8d7da; color: #721c24; text-decoration: line-through; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mt-3 mb-4 flex-wrap gap-2">
+    <h2><i class="fas fa-clipboard-list me-2"></i>Órdenes de Compra</h2>
+    <div>
+        <a href="/proveedores" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-truck me-1"></i> Proveedores
+        </a>
+        <a href="/facturas_compra" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-file-invoice-dollar me-1"></i> Facturas Compra
+        </a>
+        <button class="btn btn-outline-info me-2" onclick="abrirAyuda()">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+        <button class="btn btn-primary" onclick="nuevaOC()">
+            <i class="fas fa-plus me-1"></i> Nueva OC
+        </button>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Proveedor</label>
+                <select id="filtroProveedor" class="form-select form-select-sm" onchange="cargarOCs()">
+                    <option value="">Todos</option>
+                    {% for p in proveedores %}
+                    <option value="{{ p.id }}">{{ p.razon_social }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Desde</label>
+                <input type="date" id="filtroDes" class="form-control form-control-sm" onchange="cargarOCs()">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Hasta</label>
+                <input type="date" id="filtroHas" class="form-control form-control-sm" onchange="cargarOCs()">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Estado</label>
+                <select id="filtroEstado" class="form-select form-select-sm" onchange="cargarOCs()">
+                    <option value="">Todos</option>
+                    <option value="borrador">Borrador</option>
+                    <option value="enviada">Enviada</option>
+                    <option value="confirmada">Confirmada</option>
+                    <option value="parcial">Parcial</option>
+                    <option value="recibida">Recibida</option>
+                    <option value="facturada">Facturada</option>
+                    <option value="cerrada">Cerrada</option>
+                    <option value="cancelada">Cancelada</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="limpiarFiltros()" title="Limpiar filtros">
+                    <i class="fas fa-eraser me-1"></i> Limpiar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tarjetas resumen -->
+<div class="row g-2 mb-3" id="panelResumen" style="display:none">
+    <div class="col-md-3">
+        <div class="card border-0 bg-light text-center py-2">
+            <div class="small text-muted">Cantidad OCs</div>
+            <div class="fw-bold fs-5" id="totCant">0</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 bg-primary text-white text-center py-2">
+            <div class="small">Total</div>
+            <div class="fw-bold fs-5" id="totGeneral">$0,00</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 bg-warning text-dark text-center py-2">
+            <div class="small">Pendientes (borr./env./conf.)</div>
+            <div class="fw-bold fs-5" id="totPend">0</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 bg-success text-white text-center py-2">
+            <div class="small">Cerradas</div>
+            <div class="fw-bold fs-5" id="totCerr">0</div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 table-sm align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>N° OC</th>
+                        <th>Fecha</th>
+                        <th>Proveedor</th>
+                        <th class="text-center">Ítems</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-center">Estado</th>
+                        <th>Entrega estim.</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="bodyOCs">
+                    <tr><td colspan="8" class="text-center py-4 text-muted">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════ -->
+<!-- Modal AYUDA                                               -->
+<!-- ═════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Ayuda — Órdenes de Compra</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- ═══════════ INTRO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-book me-2"></i>¿Qué es una Orden de Compra?</h4>
+                <p>
+                    Una <strong>Orden de Compra (OC)</strong> es el documento que le mandás a un
+                    proveedor para pedirle mercadería. Funciona como un pedido formal: listás los
+                    productos, cantidades y precios acordados, y el proveedor la usa como referencia
+                    para armar el envío.
+                </p>
+                <p>
+                    Este módulo cierra el <strong>ciclo de compras completo</strong>:
+                </p>
+                <div class="alert alert-primary small">
+                    <strong>Sugerencia de Compra → Orden de Compra → Recepción → Factura → Pago → Cta Cte</strong><br>
+                    Cada paso se conecta con el siguiente y el sistema lleva el seguimiento automático.
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ FLUJOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-project-diagram me-2"></i>Los 4 flujos posibles</h4>
+
+                <p>El módulo está diseñado para adaptarse a <strong>cómo te llega la mercadería</strong>
+                en la vida real. Hay 4 escenarios, y todos funcionan:</p>
+
+                <!-- Flujo 1 -->
+                <div class="card mb-3 border-success">
+                    <div class="card-header bg-success text-white fw-bold">
+                        <i class="fas fa-truck-fast me-2"></i>Flujo 1 — Todo junto (camión con remito y factura el mismo día)
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2"><strong>Cuándo pasa:</strong> cuando el proveedor te trae la mercadería <em>y</em>
+                        la factura al mismo tiempo.</p>
+                        <ol>
+                            <li>Creás la OC y la confirmás.</li>
+                            <li>Registrás la <strong>recepción</strong> (marcás qué llegó). <br>
+                                👉 <em>El stock se suma ahora.</em></li>
+                            <li>Generás la <strong>factura</strong> desde la OC recibida. <br>
+                                👉 <em>El sistema detecta automáticamente que venís desde una OC y NO vuelve a sumar stock.</em></li>
+                        </ol>
+                        <p class="mb-0 text-success"><strong>Resultado:</strong> stock sumado 1 sola vez ✓</p>
+                    </div>
+                </div>
+
+                <!-- Flujo 2 -->
+                <div class="card mb-3 border-primary">
+                    <div class="card-header bg-primary text-white fw-bold">
+                        <i class="fas fa-box-open me-2"></i>Flujo 2 — Primero remito, factura después (el más común)
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2"><strong>Cuándo pasa:</strong> cuando el proveedor te entrega la mercadería
+                        con un remito y después, a los días, te manda la factura.</p>
+                        <ol>
+                            <li>OC confirmada.</li>
+                            <li>Llega la mercadería con remito → registrás la <strong>recepción</strong>. <br>
+                                👉 <em>El stock se suma ahora.</em></li>
+                            <li>A los días llega la factura → la <strong>generás desde la OC</strong>. <br>
+                                👉 <em>El sistema detecta la OC y NO suma stock (solo actualiza costo y precios).</em></li>
+                        </ol>
+                        <p class="mb-0 text-success"><strong>Resultado:</strong> stock sumado 1 sola vez ✓</p>
+                    </div>
+                </div>
+
+                <!-- Flujo 3 -->
+                <div class="card mb-3 border-info">
+                    <div class="card-header bg-info text-white fw-bold">
+                        <i class="fas fa-file-invoice me-2"></i>Flujo 3 — Factura directa, sin OC (como antes)
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2"><strong>Cuándo pasa:</strong> cuando no usás OC (compra urgente, un viaje corto,
+                        una compra chica). Simplemente vas a Facturas de Compra y cargás la factura directo.</p>
+                        <ol>
+                            <li>Ir a <strong>Compras → Facturas de Compra</strong>.</li>
+                            <li>Cargar la factura normalmente. <br>
+                                👉 <em>Al no venir desde una OC, el sistema suma stock (comportamiento clásico).</em></li>
+                        </ol>
+                        <p class="mb-0 text-success"><strong>Resultado:</strong> stock sumado 1 sola vez ✓
+                        (funciona exactamente como siempre lo hiciste).</p>
+                    </div>
+                </div>
+
+                <!-- Flujo 4 -->
+                <div class="card mb-3 border-warning">
+                    <div class="card-header bg-warning text-dark fw-bold">
+                        <i class="fas fa-hourglass-half me-2"></i>Flujo 4 — Factura antes que la mercadería (raro)
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2"><strong>Cuándo pasa:</strong> te facturan antes de mandarte la mercadería
+                        (ej. pago anticipado). Esto no se puede cargar directamente con el circuito normal
+                        porque al cargar la factura sin OC el sistema suma stock (y la mercadería todavía no llegó).</p>
+                        <p class="mb-2"><strong>Qué hacer:</strong></p>
+                        <ol>
+                            <li>Crear la <strong>OC</strong> normalmente y confirmarla.</li>
+                            <li><strong>NO</strong> cargar la factura todavía — esperar a que llegue la mercadería.</li>
+                            <li>Cuando llega la mercadería → registrar la <strong>recepción</strong> (suma stock).</li>
+                            <li>Finalmente generar la <strong>factura</strong> desde la OC (ya no suma stock).</li>
+                        </ol>
+                        <p class="mb-0 text-warning"><strong>Por qué así:</strong> el sistema está diseñado para que
+                        el stock suba cuando la mercadería físicamente entra al depósito, no cuando se emite el papel.
+                        Si necesitás registrar el pago anticipado antes, usá el módulo de <strong>Cta Cte Proveedores</strong>
+                        (pago sin imputar a factura, o adelanto).</p>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ REGLA DE STOCK ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-boxes-stacked me-2"></i>La regla de oro del stock</h4>
+
+                <div class="alert alert-warning">
+                    <strong>El stock se suma UNA sola vez por cada ingreso de mercadería.</strong><br>
+                    Ya sea al registrar la recepción de una OC, o al cargar una factura sin OC — pero
+                    no las dos cosas. El sistema se encarga automáticamente de evitar la doble suma.
+                </div>
+
+                <p>Cómo lo hace:</p>
+                <ul>
+                    <li>Al <strong>registrar una recepción</strong> desde una OC → suma stock.</li>
+                    <li>Al <strong>facturar una OC que ya tiene recepciones</strong> → NO suma stock (ya se sumó).</li>
+                    <li>Al <strong>cargar una factura directa sin OC</strong> → suma stock (comportamiento clásico).</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ESTRUCTURA DE LA PANTALLA ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-th-large me-2"></i>Estructura de esta pantalla</h4>
+
+                <h6 class="fw-bold mt-3">1) Header</h6>
+                <ul>
+                    <li><strong>Proveedores / Facturas Compra</strong>: links a esos módulos.</li>
+                    <li><strong>Ayuda</strong>: este modal.</li>
+                    <li><strong>Nueva OC</strong>: abre la pantalla de creación (Fase 2).</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">2) Filtros</h6>
+                <ul>
+                    <li><strong>Proveedor</strong>: ver las OCs de un proveedor específico.</li>
+                    <li><strong>Desde / Hasta</strong>: rango de fecha de emisión.</li>
+                    <li><strong>Estado</strong>: filtrar por alguno de los 8 estados.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">3) Tarjetas de resumen</h6>
+                <ul>
+                    <li><strong>Cantidad OCs</strong>: total que cumplen los filtros.</li>
+                    <li><strong>Total</strong>: suma en $ de todas las OCs.</li>
+                    <li><strong>Pendientes</strong>: OCs en borrador, enviada o confirmada (sin recepción todavía).</li>
+                    <li><strong>Cerradas</strong>: OCs que completaron el ciclo.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">4) Tabla</h6>
+                <p>Cada fila es una OC con su estado en badge de color. Botones de acción a la derecha.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ESTADOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-list me-2"></i>Los 8 estados de una OC</h4>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr><th style="width:140px">Estado</th><th>Significado</th><th>Qué se puede hacer</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge estado-borrador">Borrador</span></td>
+                                <td>OC en edición, todavía no enviada al proveedor.</td>
+                                <td>Editar todo, enviar al proveedor, cancelar, eliminar.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-enviada">Enviada</span></td>
+                                <td>Ya se la mandaste al proveedor (PDF por mail/WhatsApp).</td>
+                                <td>Marcar como confirmada, cancelar, solo editar observaciones.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-confirmada">Confirmada</span></td>
+                                <td>El proveedor confirmó que la acepta.</td>
+                                <td>Registrar recepción (total o parcial), cancelar.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-parcial">Parcial</span></td>
+                                <td>Llegó parte de la mercadería, falta lo demás.</td>
+                                <td>Registrar otra recepción, facturar lo recibido, cancelar lo pendiente.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-recibida">Recibida</span></td>
+                                <td>Llegó toda la mercadería pedida.</td>
+                                <td>Generar factura de compra.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-facturada">Facturada</span></td>
+                                <td>Se generó la factura de compra asociada.</td>
+                                <td>Solo consulta. Ir a la factura para pagar.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-cerrada">Cerrada</span></td>
+                                <td>Ciclo completo (recibida + facturada + pagada).</td>
+                                <td>Solo consulta. Estado final.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-cancelada">Cancelada</span></td>
+                                <td>OC que se canceló antes de facturar.</td>
+                                <td>Solo consulta. Queda en historia con el motivo.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ REGLAS IMPORTANTES ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-gavel me-2"></i>Reglas importantes</h4>
+                <ul>
+                    <li><strong>Edición:</strong> una OC solo se puede editar cuando está en <strong>borrador</strong>.
+                        En otros estados solo se pueden cambiar observaciones.</li>
+                    <li><strong>Cancelación:</strong> se permite en cualquier estado <u>excepto</u> facturada y cerrada.
+                        Al cancelar, hay que indicar un motivo.</li>
+                    <li><strong>Productos:</strong> solo se usan productos del catálogo del sistema. Si falta alguno,
+                        hay que crearlo primero en la pantalla de productos.</li>
+                    <li><strong>Precios:</strong> al armar la OC el precio por default es el precio de costo actual
+                        del producto, pero lo podés editar por ítem (precio negociado para esa OC).</li>
+                    <li><strong>Recepciones parciales:</strong> están permitidas. Podés recibir una OC en múltiples
+                        tandas — cada vez que llega algo, registrás una recepción y el sistema va llevando la cuenta
+                        de lo que falta.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ INTEGRACIONES ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-link me-2"></i>Integración con otros módulos</h4>
+                <ul>
+                    <li><strong>Sugerencia de Compra (Módulo 1):</strong> desde la sugerencia generás OCs automáticamente
+                        con los productos y cantidades sugeridos.</li>
+                    <li><strong>Productos:</strong> al recibir mercadería, el stock se actualiza.</li>
+                    <li><strong>Facturas de Compra:</strong> desde una OC recibida generás la factura con los datos
+                        pre-cargados. La factura queda vinculada a la OC.</li>
+                    <li><strong>Cta Cte Proveedores (Módulo 4):</strong> la factura generada suma deuda al proveedor
+                        normalmente, y después la pagás como cualquier otra factura desde <em>Pagar Proveedor</em>.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ FAQ ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-question-circle me-2"></i>Preguntas frecuentes</h4>
+                <div class="accordion" id="faqAccOC">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqOC1">
+                                ¿Tengo que usar OC siempre, o puedo seguir cargando facturas sueltas?
+                            </button>
+                        </h2>
+                        <div id="faqOC1" class="accordion-collapse collapse" data-bs-parent="#faqAccOC">
+                            <div class="accordion-body">
+                                <strong>Podés seguir cargando facturas sueltas.</strong> El Módulo 5 es opcional y aditivo —
+                                si no lo usás, todo sigue funcionando como antes (Flujo 3). Se recomienda usarlo para
+                                compras programadas donde querés control del proceso desde el pedido, pero para una
+                                compra chica o urgente, la factura directa está bien.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqOC2">
+                                ¿Qué pasa si el proveedor me trae más mercadería de la que pedí?
+                            </button>
+                        </h2>
+                        <div id="faqOC2" class="accordion-collapse collapse" data-bs-parent="#faqAccOC">
+                            <div class="accordion-body">
+                                El sistema no te lo permite — al registrar la recepción no podés cargar una cantidad
+                                mayor a la pendiente. Si realmente querés recibir más, tenés dos opciones:
+                                <ul class="mb-0">
+                                    <li>Hacer una OC aparte por la diferencia.</li>
+                                    <li>Cancelar la OC y crear una nueva con las cantidades correctas (antes de recibir).</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqOC3">
+                                ¿Y si me trae menos? ¿La cancelo?
+                            </button>
+                        </h2>
+                        <div id="faqOC3" class="accordion-collapse collapse" data-bs-parent="#faqAccOC">
+                            <div class="accordion-body">
+                                No, registrás una <strong>recepción parcial</strong> con lo que efectivamente llegó.
+                                La OC pasa a estado "parcial". Después podés: (a) esperar otra entrega y registrar
+                                otra recepción; o (b) facturar lo recibido y cancelar el pendiente (si el proveedor
+                                no te lo va a traer).
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqOC4">
+                                ¿Se puede anular una recepción que cargué mal?
+                            </button>
+                        </h2>
+                        <div id="faqOC4" class="accordion-collapse collapse" data-bs-parent="#faqAccOC">
+                            <div class="accordion-body">
+                                Sí, desde la pantalla de detalle de la OC — botón "Eliminar recepción" en la tabla
+                                de recepciones. Al anularla, el stock se revierte automáticamente. Solo se permite
+                                si la OC todavía no está facturada.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqOC5">
+                                Si el precio de la factura viene distinto al de la OC, ¿qué gana?
+                            </button>
+                        </h2>
+                        <div id="faqOC5" class="accordion-collapse collapse" data-bs-parent="#faqAccOC">
+                            <div class="accordion-body">
+                                Gana el precio de la factura. La OC es el precio pactado al momento del pedido
+                                (queda guardado como referencia), pero al facturar se usa lo que realmente se cobró.
+                                Esto sirve después para auditar si el proveedor respetó los precios acordados.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqOC6">
+                                ¿Puedo eliminar una OC del todo?
+                            </button>
+                        </h2>
+                        <div id="faqOC6" class="accordion-collapse collapse" data-bs-parent="#faqAccOC">
+                            <div class="accordion-body">
+                                Solo las que están en <strong>borrador</strong>. Las demás se cancelan (quedan en
+                                historia con su motivo) para mantener la trazabilidad — igual que no se pueden borrar
+                                facturas emitidas.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ NOTAS TÉCNICAS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-cog me-2"></i>Notas técnicas</h4>
+                <ul class="small text-muted">
+                    <li>Tablas: <code>orden_compra</code>, <code>orden_compra_detalle</code>,
+                        <code>orden_compra_recepcion</code>, <code>orden_compra_recepcion_detalle</code>,
+                        <code>orden_compra_numerador</code>.</li>
+                    <li>Numeración correlativa por PV con FOR UPDATE (igual que recibos de pago).</li>
+                    <li>FK al <code>factura_compra</code> (nullable) para vincular la factura cuando se genera.</li>
+                    <li>Impacto en stock: se hace en el endpoint de recepción, no en la factura (si viene de OC).</li>
+                </ul>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const modalAyuda = new bootstrap.Modal(document.getElementById('modalAyuda'));
+
+function fmt(v) {
+    return '$' + parseFloat(v || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function abrirAyuda() { modalAyuda.show(); }
+
+function nuevaOC() {
+    window.location.href = '/orden_compra/nueva';
+}
+
+function badgeEstado(est) {
+    const labels = {
+        'borrador':   'Borrador',
+        'enviada':    'Enviada',
+        'confirmada': 'Confirmada',
+        'parcial':    'Parcial',
+        'recibida':   'Recibida',
+        'facturada':  'Facturada',
+        'cerrada':    'Cerrada',
+        'cancelada':  'Cancelada',
+    };
+    return `<span class="badge estado-${est}">${labels[est] || est}</span>`;
+}
+
+function limpiarFiltros() {
+    document.getElementById('filtroProveedor').value = '';
+    document.getElementById('filtroDes').value = '';
+    document.getElementById('filtroHas').value = '';
+    document.getElementById('filtroEstado').value = '';
+    cargarOCs();
+}
+
+async function cargarOCs() {
+    const prov   = document.getElementById('filtroProveedor').value;
+    const desde  = document.getElementById('filtroDes').value;
+    const hasta  = document.getElementById('filtroHas').value;
+    const estado = document.getElementById('filtroEstado').value;
+
+    let url = '/api/ordenes_compra/listar?';
+    if (prov)   url += `proveedor_id=${prov}&`;
+    if (desde)  url += `desde=${desde}&`;
+    if (hasta)  url += `hasta=${hasta}&`;
+    if (estado) url += `estado=${estado}&`;
+
+    try {
+        const res  = await fetch(url);
+        const data = await res.json();
+        if (!data.success) { throw new Error(data.error || 'Error al cargar'); }
+
+        const ordenes = data.ordenes || [];
+        const tbody   = document.getElementById('bodyOCs');
+
+        if (!ordenes.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Sin órdenes de compra para los filtros actuales.</td></tr>';
+            document.getElementById('panelResumen').style.display = 'none';
+            return;
+        }
+
+        // Totales
+        let totPend = 0, totCerr = 0;
+        ordenes.forEach(o => {
+            if (['borrador','enviada','confirmada'].includes(o.estado)) totPend++;
+            if (o.estado === 'cerrada') totCerr++;
+        });
+
+        document.getElementById('totCant').textContent    = ordenes.length;
+        document.getElementById('totGeneral').textContent = fmt(data.resumen.total);
+        document.getElementById('totPend').textContent    = totPend;
+        document.getElementById('totCerr').textContent    = totCerr;
+        document.getElementById('panelResumen').style.display = '';
+
+        // Render
+        tbody.innerHTML = ordenes.map(o => `
+            <tr>
+                <td><strong>${o.numero_completo}</strong></td>
+                <td>${o.fecha_emision}</td>
+                <td><small>${o.proveedor}</small></td>
+                <td class="text-center">${o.cantidad_items}</td>
+                <td class="text-end fw-bold">${fmt(o.total)}</td>
+                <td class="text-center">${badgeEstado(o.estado)}</td>
+                <td><small>${o.fecha_entrega_estimada || '-'}</small></td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-info" onclick="verDetalleOC(${o.id})" title="Ver detalle">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    ${o.estado === 'borrador' ? `
+                    <a href="/orden_compra/${o.id}?edit=1" class="btn btn-sm btn-outline-primary ms-1" title="Editar borrador">
+                        <i class="fas fa-edit"></i>
+                    </a>` : ''}
+                </td>
+            </tr>`).join('');
+
+    } catch (e) {
+        document.getElementById('bodyOCs').innerHTML =
+            `<tr><td colspan="8" class="text-center text-danger py-4">Error: ${e.message}</td></tr>`;
+    }
+}
+
+function verDetalleOC(id) {
+    window.location.href = `/orden_compra/${id}`;
+}
+
+// Init: últimos 60 días por default
+(function init() {
+    const hoy = new Date();
+    const desde = new Date(hoy.getTime() - 60*24*60*60*1000);
+    document.getElementById('filtroDes').value = desde.toISOString().split('T')[0];
+    document.getElementById('filtroHas').value = hoy.toISOString().split('T')[0];
+    cargarOCs();
+})();
+</script>
+{% endblock %}

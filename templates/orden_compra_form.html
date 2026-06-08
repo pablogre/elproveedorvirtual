@@ -1,0 +1,1069 @@
+{% extends 'base.html' %}
+{% block title %}{% if modo == 'nueva' %}Nueva OC{% elif modo == 'editar' %}Editar OC{% else %}Detalle OC{% endif %}{% endblock %}
+
+{% block content %}
+<style>
+    .estado-borrador   { background: #e2e3e5; color: #383d41; }
+    .estado-enviada    { background: #cce5ff; color: #004085; }
+    .estado-confirmada { background: #d4edda; color: #155724; }
+    .estado-parcial    { background: #fff3cd; color: #856404; }
+    .estado-recibida   { background: #b8daff; color: #004085; }
+    .estado-facturada  { background: #c3e6cb; color: #155724; }
+    .estado-cerrada    { background: #6c757d; color: white; }
+    .estado-cancelada  { background: #f8d7da; color: #721c24; text-decoration: line-through; }
+
+    .ac-list {
+        position: absolute; z-index: 1000; background: white;
+        border: 1px solid #ced4da; border-radius: .25rem; max-height: 280px;
+        overflow-y: auto; width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,.1);
+    }
+    .ac-item { padding: .5rem .75rem; cursor: pointer; border-bottom: 1px solid #eee; }
+    .ac-item:hover { background: #e7f1ff; }
+    .ac-item.active { background: #0d6efd; color: white; }
+
+    .tot-row { font-size: 1.1rem; font-weight: 600; }
+    .sticky-footer {
+        position: sticky; bottom: 0; background: white;
+        border-top: 2px solid #0d6efd; padding: 12px; z-index: 10;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3 flex-wrap gap-2">
+    <h2>
+        <i class="fas fa-clipboard-list me-2"></i>
+        <span id="tituloPantalla">
+            {% if modo == 'nueva' %}Nueva Orden de Compra
+            {% elif modo == 'editar' %}Editar OC
+            {% else %}Detalle OC{% endif %}
+        </span>
+        <span id="badgeEstado" class="ms-2"></span>
+    </h2>
+    <div>
+        <a href="/ordenes_compra" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Volver al listado
+        </a>
+        <button class="btn btn-outline-info me-2" onclick="abrirAyuda()">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+    </div>
+</div>
+
+<!-- ═════════ Datos cabecera ═════════ -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Proveedor <span class="text-danger">*</span></label>
+                <select id="oc_proveedor" class="form-select">
+                    <option value="">Seleccionar...</option>
+                    {% for p in proveedores %}
+                    <option value="{{ p.id }}">{{ p.razon_social }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Fecha emisión <span class="text-danger">*</span></label>
+                <input type="date" id="oc_fecha_emision" class="form-control">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-bold">Entrega estimada</label>
+                <input type="date" id="oc_fecha_entrega" class="form-control">
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Condiciones de pago</label>
+                <input type="text" id="oc_cond_pago" class="form-control"
+                       placeholder="Ej: 30 días / Contado / 50% anticipo...">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Observaciones</label>
+                <textarea id="oc_observaciones" class="form-control" rows="1"></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═════════ Buscador de productos (solo edición) ═════════ -->
+<div class="card mb-3" id="cardBuscador">
+    <div class="card-body">
+        <label class="form-label fw-bold mb-2">
+            <i class="fas fa-search me-1"></i> Agregar producto
+        </label>
+        <div class="position-relative">
+            <input type="text" id="inputBuscador" class="form-control"
+                   placeholder="Escribí código o nombre (mínimo 2 caracteres)..." autocomplete="off">
+            <div id="listaAutocomplete" class="ac-list d-none"></div>
+        </div>
+        <small class="text-muted">Tab / flechas para navegar, Enter para agregar.</small>
+    </div>
+</div>
+
+<!-- ═════════ Tabla de ítems ═════════ -->
+<div class="card mb-3">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 100px">Código</th>
+                        <th>Producto</th>
+                        <th class="text-center" style="width: 140px">Cantidad</th>
+                        <th class="text-end" style="width: 140px">Precio unit.</th>
+                        <th class="text-end" style="width: 140px">Subtotal</th>
+                        <th class="text-center" style="width: 70px">IVA%</th>
+                        <th class="text-center" style="width: 50px"></th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyItems">
+                    <tr><td colspan="7" class="text-center py-4 text-muted">Sin ítems. Usá el buscador arriba para agregar.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ═════════ Recepciones (solo en modo ver) ═════════ -->
+<div class="card mb-3" id="cardRecepciones" style="display:none">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <strong><i class="fas fa-truck-ramp-box me-2"></i>Recepciones registradas</strong>
+        <span id="resumenRecepciones" class="text-muted small"></span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-secondary">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Nº Remito</th>
+                        <th class="text-center">Ítems</th>
+                        <th>Observaciones</th>
+                        <th class="text-center" style="width:90px">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyRecepciones"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ═════════ Totales ═════════ -->
+<div class="sticky-footer">
+    <div class="row align-items-center">
+        <div class="col-md-6">
+            <span class="text-muted">Ítems: <strong id="totItems">0</strong></span>
+        </div>
+        <div class="col-md-6 text-end">
+            <div class="d-inline-block me-4">Subtotal: <strong id="totSubtotal">$0,00</strong></div>
+            <div class="d-inline-block me-4">IVA: <strong id="totIva">$0,00</strong></div>
+            <div class="d-inline-block tot-row">Total: <strong id="totGeneral" class="text-primary">$0,00</strong></div>
+        </div>
+    </div>
+    <div class="mt-2 text-end" id="botonesAccion">
+        <!-- Se renderizan dinámicamente según modo/estado -->
+    </div>
+</div>
+
+<!-- ═════════ Modal AYUDA ═════════ -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Ayuda — Nueva / Editar OC</h5>
+                <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <h4 class="text-primary">¿Cómo armo una OC?</h4>
+                <ol>
+                    <li>Elegí el <strong>proveedor</strong>.</li>
+                    <li>Fecha de emisión (por default hoy).</li>
+                    <li>Opcional: fecha de entrega estimada y condiciones de pago.</li>
+                    <li>Usá el <strong>buscador de productos</strong> para agregar ítems: escribí código o nombre,
+                        elegí de la lista y el producto se agrega al carrito con su precio de costo.</li>
+                    <li>Ajustá la <strong>cantidad</strong> y el <strong>precio unitario</strong> (si negociaste
+                        un precio distinto al de costo).</li>
+                    <li>El IVA se aplica por ítem según el IVA del producto (21% / 10,5% / etc.).</li>
+                    <li>Guardá como <strong>borrador</strong>. Después podés editar libremente hasta enviarla al proveedor.</li>
+                </ol>
+
+                <hr>
+
+                <h4 class="text-primary">Reglas importantes</h4>
+                <ul>
+                    <li><strong>Borrador libre:</strong> mientras esté en borrador, podés cambiar todo (proveedor,
+                        ítems, cantidades, precios).</li>
+                    <li><strong>Precio por ítem:</strong> se precarga con el precio de costo actual del producto,
+                        pero lo podés editar libremente para esa OC.</li>
+                    <li><strong>IVA:</strong> se calcula automático con la alícuota que tenga cada producto.</li>
+                    <li><strong>Productos del catálogo:</strong> solo se pueden agregar productos que ya existan
+                        en el sistema. Si falta alguno, hay que crearlo primero en la pantalla de Productos.</li>
+                    <li><strong>Eliminar:</strong> solo se puede eliminar una OC en borrador. Las demás se cancelan
+                        (se mantienen en historia con su motivo).</li>
+                </ul>
+
+                <hr>
+
+                <h4 class="text-primary">Atajos de teclado en el buscador</h4>
+                <ul>
+                    <li><kbd>↓</kbd> / <kbd>↑</kbd>: moverse por la lista.</li>
+                    <li><kbd>Enter</kbd>: agregar el producto resaltado.</li>
+                    <li><kbd>Esc</kbd>: cerrar la lista.</li>
+                </ul>
+
+                <hr>
+
+                <h4 class="text-primary">Acciones por estado</h4>
+                <p>Según el estado de la OC, vas a ver botones distintos en la barra inferior cuando
+                    entrás en modo "ver" (click 👁️ en el listado). Esta es la guía completa:</p>
+
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:130px">Estado</th>
+                                <th>Acciones disponibles</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge estado-borrador">Borrador</span></td>
+                                <td>
+                                    <strong>Ver PDF</strong>: mirá/imprimí el borrador.<br>
+                                    <strong>Editar observaciones</strong>: texto libre.<br>
+                                    <strong>✏️ Editar</strong>: cambiar proveedor, ítems, cantidades, precios.<br>
+                                    <strong>📤 Enviar al proveedor</strong>: marca como "enviada" y abre PDF para mandar.<br>
+                                    <strong>🚫 Cancelar</strong>: descarta la OC (pide motivo).
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-enviada">Enviada</span></td>
+                                <td>
+                                    <strong>Ver PDF</strong>, <strong>Editar observaciones</strong>.<br>
+                                    <strong>✅ Confirmar</strong>: cuando el proveedor te confirmó que la acepta.<br>
+                                    <strong>🚫 Cancelar</strong>.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-confirmada">Confirmada</span></td>
+                                <td>
+                                    <strong>Ver PDF</strong>, <strong>Editar observaciones</strong>.<br>
+                                    <strong>📦 Registrar recepción</strong>: cuando llega mercadería (total o parcial).<br>
+                                    <strong>🚫 Cancelar</strong>.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-parcial">Parcial</span></td>
+                                <td>
+                                    Llegó parte. Mismas acciones que Confirmada.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-recibida">Recibida</span></td>
+                                <td>
+                                    <strong>Ver PDF</strong>, <strong>Editar observaciones</strong>.<br>
+                                    <strong>💵 Generar factura</strong>: crea la factura de compra asociada.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-facturada">Facturada</span></td>
+                                <td>
+                                    Solo consulta. Ver PDF.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-cerrada">Cerrada</span></td>
+                                <td>Solo consulta.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge estado-cancelada">Cancelada</span></td>
+                                <td>Solo consulta. Se muestra el motivo de cancelación en el PDF.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <hr>
+
+                <h4 class="text-primary">Flujo recomendado</h4>
+                <ol>
+                    <li>Creás la OC (queda en <strong>borrador</strong>).</li>
+                    <li>Revisás todo. Si hay que ajustar algo, lo editás (sigue en borrador).</li>
+                    <li>Click <strong>"Enviar al proveedor"</strong> → pasa a <strong>enviada</strong> + se abre el PDF.
+                        Ese PDF lo mandás por mail/WhatsApp o lo imprimís y lo llevás.</li>
+                    <li>Cuando el proveedor te confirma (por teléfono, mail, o como sea), click
+                        <strong>"Marcar como confirmada"</strong> → pasa a <strong>confirmada</strong>.</li>
+                    <li>Cuando llegue la mercadería, <strong>registrás la recepción</strong> (botón "Registrar recepción", suma al stock).</li>
+                    <li>Cuando tengas la factura, <strong>generás la factura desde la OC</strong> (pre-carga los datos, no duplica stock).</li>
+                </ol>
+
+                <div class="alert alert-info small mt-3">
+                    <strong>💡 Tip:</strong> si usás varios proveedores, podés mandar una OC por cada uno el mismo día
+                    y después filtrar en el listado por "enviada" para ver cuáles estás esperando respuesta.
+                </div>
+
+                <hr>
+
+                <h4 class="text-primary">Sobre el PDF</h4>
+                <ul>
+                    <li>Se genera al vuelo — cada vez que hacés "Ver PDF" sale actualizado.</li>
+                    <li>Incluye datos de tu empresa (logo, razón social, CUIT, dirección, tel, email)
+                        que tenés configurados en <code>config_cliente.py</code>.</li>
+                    <li>Si la OC está cancelada, el motivo aparece impreso en rojo.</li>
+                    <li>Podés reimprimirlo las veces que quieras, no hay límite.</li>
+                </ul>
+
+                <hr>
+
+                <h4 class="text-primary">📧 Envío por email automático</h4>
+                <p>
+                    Cuando hacés click en <strong>"Enviar al proveedor"</strong>, pasan estas cosas según
+                    si el proveedor tiene email cargado:
+                </p>
+                <ul>
+                    <li><strong>Proveedor CON email</strong> → el sistema genera el PDF y lo manda
+                        automáticamente al email del proveedor como adjunto. Te confirma con un mensaje
+                        verde "¡Enviada por email!".</li>
+                    <li><strong>Proveedor SIN email</strong> → el sistema marca la OC como "enviada" y
+                        abre el PDF en una pestaña nueva para que lo mandes a mano (WhatsApp, impreso,
+                        etc.). Te avisa con un mensaje azul.</li>
+                    <li><strong>Falla el envío</strong> (credenciales SMTP mal, proveedor caído, etc.) →
+                        la OC igual queda como "enviada" pero te muestra el motivo del error y abre el
+                        PDF para que lo mandes manual. Te avisa con un mensaje amarillo.</li>
+                </ul>
+                <div class="alert alert-warning small">
+                    <strong>Tip:</strong> si un proveedor importante no tiene email cargado, andá a
+                    <a href="/proveedores">Proveedores</a> y agregáselo. Así la próxima OC sale sola.
+                </div>
+
+                <hr>
+
+                <h4 class="text-primary">📦 Recepciones</h4>
+                <p>
+                    Cuando la OC está <span class="badge estado-confirmada">Confirmada</span> o
+                    <span class="badge estado-parcial">Parcial</span>, aparece el botón
+                    <strong>"Registrar recepción"</strong>. Te lleva a la pantalla de recepción donde:
+                </p>
+                <ul>
+                    <li>Ves todos los ítems con la cantidad pedida, ya recibida, y pendiente.</li>
+                    <li>Cargás la cantidad que llegó ahora (puede ser total o parcial).</li>
+                    <li>Opcionalmente cargás el Nº de remito del proveedor.</li>
+                    <li>Al guardar: se suma al stock lo recibido y la OC cambia a "recibida" o "parcial".</li>
+                </ul>
+                <p>
+                    En esta pantalla de detalle, abajo de la tabla de ítems, vas a ver una sección
+                    <strong>"Recepciones registradas"</strong> con todas las entregas anteriores.
+                    Si te equivocaste en alguna, podés borrarla con el 🗑️ — el stock se revierte solo.
+                </p>
+
+                <hr>
+
+                <h4 class="text-primary">💵 Generar factura</h4>
+                <p>
+                    Cuando la OC esté en <span class="badge estado-recibida">Recibida</span> aparece
+                    el botón <strong>"Generar factura"</strong>. Abre la pantalla de factura de compra
+                    con los datos pre-cargados del proveedor y los ítems. El checkbox "sumar stock"
+                    se destilda automáticamente (porque ya sumaste stock al registrar la recepción,
+                    no hay que duplicar).
+                </p>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ═════════ Config inicial desde el template ═════════
+const MODO  = {{ modo|tojson }};   // 'nueva' | 'editar' | 'ver'
+const OC_ID = {{ oc_id|tojson }};  // null si es nueva
+
+const modalAyuda = new bootstrap.Modal(document.getElementById('modalAyuda'));
+function abrirAyuda() { modalAyuda.show(); }
+
+function fmt(v) {
+    return '$' + parseFloat(v || 0).toLocaleString('es-AR',
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ═════════ Estado del formulario ═════════
+let items = [];  // {producto_id, codigo, nombre, cantidad, precio_unitario, iva_pct, observaciones}
+
+// ═════════ Render tabla de ítems ═════════
+function renderItems() {
+    const tbody = document.getElementById('tbodyItems');
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">Sin ítems. Usá el buscador arriba para agregar.</td></tr>';
+    } else {
+        const puedeEditar = (MODO === 'nueva' || MODO === 'editar');
+        tbody.innerHTML = items.map((it, idx) => {
+            const subtot = (parseFloat(it.cantidad) * parseFloat(it.precio_unitario)) || 0;
+            if (puedeEditar) {
+                return `
+                <tr>
+                    <td><small class="text-muted">${it.codigo}</small></td>
+                    <td>${it.nombre}</td>
+                    <td><input type="number" class="form-control form-control-sm text-center"
+                               value="${it.cantidad}" step="0.001" min="0"
+                               onchange="setCant(${idx}, this.value)"></td>
+                    <td><input type="number" class="form-control form-control-sm text-end"
+                               value="${it.precio_unitario}" step="0.01" min="0"
+                               onchange="setPrecio(${idx}, this.value)"></td>
+                    <td class="text-end fw-bold">${fmt(subtot)}</td>
+                    <td class="text-center"><small>${it.iva_pct}%</small></td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-danger" onclick="quitarItem(${idx})" title="Quitar">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            } else {
+                return `
+                <tr>
+                    <td><small class="text-muted">${it.codigo}</small></td>
+                    <td>${it.nombre}</td>
+                    <td class="text-center">${parseFloat(it.cantidad).toLocaleString('es-AR', {maximumFractionDigits: 3})}</td>
+                    <td class="text-end">${fmt(it.precio_unitario)}</td>
+                    <td class="text-end fw-bold">${fmt(subtot)}</td>
+                    <td class="text-center"><small>${it.iva_pct}%</small></td>
+                    <td></td>
+                </tr>`;
+            }
+        }).join('');
+    }
+    recalcularTotales();
+}
+
+function setCant(idx, v)  { items[idx].cantidad        = parseFloat(v) || 0; renderItems(); }
+function setPrecio(idx, v){ items[idx].precio_unitario = parseFloat(v) || 0; renderItems(); }
+function quitarItem(idx)  { items.splice(idx, 1); renderItems(); }
+
+function recalcularTotales() {
+    let subtotal = 0, iva = 0;
+    items.forEach(it => {
+        const sub = (parseFloat(it.cantidad) * parseFloat(it.precio_unitario)) || 0;
+        subtotal += sub;
+        iva      += sub * (parseFloat(it.iva_pct) || 21) / 100;
+    });
+    document.getElementById('totItems').textContent    = items.length;
+    document.getElementById('totSubtotal').textContent = fmt(subtotal);
+    document.getElementById('totIva').textContent      = fmt(iva);
+    document.getElementById('totGeneral').textContent  = fmt(subtotal + iva);
+}
+
+// ═════════ Buscador / autocomplete ═════════
+let bufferBusq = '';
+let acTimeout  = null;
+let acResults  = [];
+let acActive   = -1;
+
+const inputBusq = document.getElementById('inputBuscador');
+const listaAC   = document.getElementById('listaAutocomplete');
+
+if (inputBusq) {
+    inputBusq.addEventListener('input', () => {
+        clearTimeout(acTimeout);
+        const q = inputBusq.value.trim();
+        if (q.length < 2) { listaAC.classList.add('d-none'); return; }
+        acTimeout = setTimeout(() => buscarProductos(q), 180);
+    });
+
+    inputBusq.addEventListener('keydown', (e) => {
+        if (listaAC.classList.contains('d-none')) return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); moverAC(1);  }
+        else if (e.key === 'ArrowUp')   { e.preventDefault(); moverAC(-1); }
+        else if (e.key === 'Enter')     {
+            e.preventDefault();
+            if (acActive >= 0 && acActive < acResults.length) seleccionarAC(acActive);
+        }
+        else if (e.key === 'Escape')    { listaAC.classList.add('d-none'); acActive = -1; }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!inputBusq.contains(e.target) && !listaAC.contains(e.target)) {
+            listaAC.classList.add('d-none');
+        }
+    });
+}
+
+async function buscarProductos(q) {
+    try {
+        const res = await fetch('/api/ordenes_compra/productos_buscar?q=' + encodeURIComponent(q));
+        const data = await res.json();
+        if (!data.success) return;
+        acResults = data.productos || [];
+        acActive  = acResults.length ? 0 : -1;
+        renderAC();
+    } catch (e) { /* silencio */ }
+}
+
+function renderAC() {
+    if (!acResults.length) {
+        listaAC.innerHTML = '<div class="ac-item text-muted">Sin resultados</div>';
+        listaAC.classList.remove('d-none');
+        return;
+    }
+    listaAC.innerHTML = acResults.map((p, i) => `
+        <div class="ac-item ${i === acActive ? 'active' : ''}" onclick="seleccionarAC(${i})">
+            <div class="d-flex justify-content-between">
+                <span><strong>${p.codigo}</strong> — ${p.nombre}</span>
+                <span class="small">Costo: ${fmt(p.costo)} · IVA ${p.iva}%</span>
+            </div>
+        </div>`).join('');
+    listaAC.classList.remove('d-none');
+}
+
+function moverAC(delta) {
+    if (!acResults.length) return;
+    acActive = (acActive + delta + acResults.length) % acResults.length;
+    renderAC();
+    // Scroll del elemento activo a la vista
+    const el = listaAC.querySelectorAll('.ac-item')[acActive];
+    if (el) el.scrollIntoView({ block: 'nearest' });
+}
+
+function seleccionarAC(idx) {
+    const p = acResults[idx];
+    if (!p) return;
+
+    // Si ya está, solo aumento cantidad en 1
+    const yaEsta = items.findIndex(x => x.producto_id === p.id);
+    if (yaEsta >= 0) {
+        items[yaEsta].cantidad = parseFloat(items[yaEsta].cantidad) + 1;
+    } else {
+        items.push({
+            producto_id:     p.id,
+            codigo:          p.codigo,
+            nombre:          p.nombre,
+            cantidad:        1,
+            precio_unitario: parseFloat(p.costo) || 0,
+            iva_pct:         parseFloat(p.iva) || 21,
+            observaciones:   '',
+        });
+    }
+
+    renderItems();
+    inputBusq.value = '';
+    listaAC.classList.add('d-none');
+    inputBusq.focus();
+}
+
+// ═════════ Guardar ═════════
+function validarForm() {
+    if (!document.getElementById('oc_proveedor').value) {
+        Swal.fire('Falta proveedor', 'Seleccioná un proveedor antes de guardar.', 'warning');
+        return false;
+    }
+    if (!document.getElementById('oc_fecha_emision').value) {
+        Swal.fire('Falta fecha', 'Ingresá la fecha de emisión.', 'warning');
+        return false;
+    }
+    if (!items.length) {
+        Swal.fire('OC vacía', 'Agregá al menos un ítem antes de guardar.', 'warning');
+        return false;
+    }
+    for (const it of items) {
+        if (!it.cantidad || it.cantidad <= 0) {
+            Swal.fire('Cantidad inválida', `El producto ${it.nombre} tiene cantidad 0.`, 'warning');
+            return false;
+        }
+        if (it.precio_unitario < 0) {
+            Swal.fire('Precio inválido', `El producto ${it.nombre} tiene precio negativo.`, 'warning');
+            return false;
+        }
+    }
+    return true;
+}
+
+async function guardar() {
+    if (!validarForm()) return;
+
+    const payload = {
+        proveedor_id:           parseInt(document.getElementById('oc_proveedor').value),
+        fecha_emision:          document.getElementById('oc_fecha_emision').value,
+        fecha_entrega_estimada: document.getElementById('oc_fecha_entrega').value || null,
+        condiciones_pago:       document.getElementById('oc_cond_pago').value,
+        observaciones:          document.getElementById('oc_observaciones').value,
+        detalles: items.map(it => ({
+            producto_id:     it.producto_id,
+            cantidad:        it.cantidad,
+            precio_unitario: it.precio_unitario,
+            observaciones:   it.observaciones,
+        })),
+    };
+
+    const url = (MODO === 'nueva')
+        ? '/api/ordenes_compra/nueva'
+        : `/api/ordenes_compra/${OC_ID}/editar`;
+
+    try {
+        const res  = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!data.success) {
+            Swal.fire('Error', data.error || 'No se pudo guardar', 'error');
+            return;
+        }
+        await Swal.fire({
+            icon: 'success',
+            title: '¡Guardada!',
+            html: `OC <strong>${data.numero_completo || ''}</strong> guardada como borrador.`,
+            timer: 1500, timerProgressBar: true, showConfirmButton: false,
+        });
+        window.location.href = `/orden_compra/${data.oc_id}`;
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+async function eliminarOC() {
+    const conf = await Swal.fire({
+        title: '¿Eliminar esta OC?',
+        text: 'Solo se pueden eliminar borradores. Esta acción no se puede deshacer.',
+        icon: 'warning', showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar', cancelButtonText: 'No',
+        confirmButtonColor: '#dc3545',
+    });
+    if (!conf.isConfirmed) return;
+
+    try {
+        const res  = await fetch(`/api/ordenes_compra/${OC_ID}/eliminar`, { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) return Swal.fire('Error', data.error || 'No se pudo', 'error');
+
+        await Swal.fire({ icon: 'success', title: 'Eliminada', timer: 1000, timerProgressBar: true, showConfirmButton: false });
+        window.location.href = '/ordenes_compra';
+    } catch (e) { Swal.fire('Error', e.message, 'error'); }
+}
+
+function cancelar() {
+    window.location.href = '/ordenes_compra';
+}
+
+function irAEditar() {
+    window.location.href = `/orden_compra/${OC_ID}?edit=1`;
+}
+
+// ═════════ Estado actual de la OC (se setea al cargar) ═════════
+let estadoActual = null;
+
+// ═════════ Acciones de estado (Fase 3) ═════════
+
+async function verPDF() {
+    // Abre el PDF en pestaña nueva
+    window.open(`/api/ordenes_compra/${OC_ID}/pdf`, '_blank');
+}
+
+async function enviarOC() {
+    const conf = await Swal.fire({
+        title: '¿Enviar al proveedor?',
+        html: `Esto marca la OC como <strong>ENVIADA</strong>.<br>
+               <small class="text-muted">Si el proveedor tiene email cargado, el PDF se envía automáticamente.</small>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, enviar',
+        cancelButtonText: 'No',
+        confirmButtonColor: '#0d6efd',
+    });
+    if (!conf.isConfirmed) return;
+
+    // Loading
+    Swal.fire({
+        title: 'Enviando...',
+        html: 'Generando PDF y enviando por email (esto puede tardar unos segundos).',
+        allowOutsideClick: false, showConfirmButton: false,
+        didOpen: () => Swal.showLoading(),
+    });
+
+    try {
+        const res  = await fetch(`/api/ordenes_compra/${OC_ID}/enviar`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ intentar_mail: true }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+            Swal.close();
+            return Swal.fire('Error', data.error || 'No se pudo', 'error');
+        }
+
+        const mail = data.mail || {};
+        Swal.close();
+
+        if (mail.enviado) {
+            // Mail enviado OK
+            await Swal.fire({
+                icon: 'success',
+                title: '¡Enviada por email!',
+                html: `La OC fue enviada automáticamente a <strong>${mail.destino}</strong><br>
+                       <small class="text-muted">Podés revisar tu carpeta "Enviados" para confirmar.</small>`,
+                timer: 3000, timerProgressBar: true,
+            });
+        } else if (mail.intentado && !mail.enviado) {
+            // Se intentó pero falló
+            await Swal.fire({
+                icon: 'warning',
+                title: 'OC marcada como enviada, pero el mail falló',
+                html: `Motivo: <strong>${mail.motivo || 'desconocido'}</strong><br><br>
+                       Se abrirá el PDF para que lo envíes manualmente.`,
+            });
+            window.open(`/api/ordenes_compra/${OC_ID}/pdf`, '_blank');
+        } else {
+            // No se intentó (sin email del proveedor)
+            await Swal.fire({
+                icon: 'info',
+                title: 'OC marcada como enviada',
+                html: `El proveedor no tiene email cargado, así que no se envió mail automático.<br>
+                       <small class="text-muted">Se abre el PDF para que lo mandes por WhatsApp/impreso.</small>`,
+            });
+            window.open(`/api/ordenes_compra/${OC_ID}/pdf`, '_blank');
+        }
+
+        window.location.reload();
+    } catch (e) {
+        Swal.close();
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+async function generarFactura() {
+    const conf = await Swal.fire({
+        icon: 'question',
+        title: 'Generar factura desde esta OC',
+        html:
+            '<div class="text-start">' +
+            'Se va a abrir la pantalla de <strong>factura de compra con detalle</strong> con:' +
+            '<ul class="mb-2">' +
+            '  <li>El <strong>proveedor</strong> ya seleccionado y bloqueado.</li>' +
+            '  <li>Los <strong>ítems recibidos</strong> precargados en el carrito.</li>' +
+            '  <li>Los <strong>totales por alícuota</strong> sugeridos desde los ítems.</li>' +
+            '</ul>' +
+            'Importante: el <strong>stock NO se volverá a sumar</strong> (ya se sumó en la recepción). ' +
+            'Solo se actualizarán costo y precios de venta según los márgenes guardados.<br><br>' +
+            '<span class="text-muted small">Podés corregir precios/cantidades y también escanear la factura del proveedor con OCR si hace falta.</span>' +
+            '</div>',
+        showCancelButton: true,
+        confirmButtonText: 'Continuar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0d6efd',
+        width: '600px',
+    });
+    if (!conf.isConfirmed) return;
+    window.location.href = '/compras/nueva?oc_id=' + OC_ID;
+}
+
+async function confirmarOC() {
+    const conf = await Swal.fire({
+        title: '¿Marcar como confirmada?',
+        text: 'Usar cuando el proveedor confirmó que acepta la OC. Después vas a poder registrar recepciones.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, confirmar',
+        cancelButtonText: 'No',
+        confirmButtonColor: '#198754',
+    });
+    if (!conf.isConfirmed) return;
+
+    try {
+        const res  = await fetch(`/api/ordenes_compra/${OC_ID}/confirmar`, { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) return Swal.fire('Error', data.error || 'No se pudo', 'error');
+
+        await Swal.fire({ icon: 'success', title: 'Confirmada', timer: 1500, timerProgressBar: true, showConfirmButton: false });
+        window.location.reload();
+    } catch (e) { Swal.fire('Error', e.message, 'error'); }
+}
+
+async function cancelarOC() {
+    const conf = await Swal.fire({
+        title: '¿Cancelar esta OC?',
+        html: `Tenés que indicar un <strong>motivo</strong> (obligatorio).<br>
+               <small class="text-muted">La OC queda en historia con el motivo registrado.</small>`,
+        icon: 'warning',
+        input: 'textarea',
+        inputPlaceholder: 'Motivo de cancelación...',
+        inputAttributes: { 'aria-label': 'Motivo' },
+        showCancelButton: true,
+        confirmButtonText: 'Sí, cancelar OC',
+        cancelButtonText: 'No',
+        confirmButtonColor: '#dc3545',
+        inputValidator: (value) => {
+            if (!value || !value.trim()) return 'El motivo es obligatorio';
+        }
+    });
+    if (!conf.isConfirmed) return;
+
+    try {
+        const res  = await fetch(`/api/ordenes_compra/${OC_ID}/cancelar`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ motivo: conf.value }),
+        });
+        const data = await res.json();
+        if (!data.success) return Swal.fire('Error', data.error || 'No se pudo', 'error');
+
+        await Swal.fire({ icon: 'success', title: 'Cancelada', timer: 1500, timerProgressBar: true, showConfirmButton: false });
+        window.location.reload();
+    } catch (e) { Swal.fire('Error', e.message, 'error'); }
+}
+
+async function editarObservaciones() {
+    const valorActual = document.getElementById('oc_observaciones').value || '';
+    const r = await Swal.fire({
+        title: 'Editar observaciones',
+        input: 'textarea',
+        inputValue: valorActual,
+        inputPlaceholder: 'Observaciones sobre esta OC...',
+        showCancelButton: true,
+        confirmButtonText: 'Guardar',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!r.isConfirmed) return;
+
+    try {
+        const res  = await fetch(`/api/ordenes_compra/${OC_ID}/observaciones`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ observaciones: r.value || '' }),
+        });
+        const data = await res.json();
+        if (!data.success) return Swal.fire('Error', data.error || 'No se pudo', 'error');
+
+        document.getElementById('oc_observaciones').value = r.value || '';
+        Swal.fire({ icon: 'success', title: 'Observaciones guardadas', timer: 1200, timerProgressBar: true, showConfirmButton: false });
+    } catch (e) { Swal.fire('Error', e.message, 'error'); }
+}
+
+// ═════════ Renderizar botones según modo/estado ═════════
+function renderBotones() {
+    const cont = document.getElementById('botonesAccion');
+    if (MODO === 'nueva') {
+        cont.innerHTML = `
+            <button class="btn btn-outline-secondary me-2" onclick="cancelar()">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardar()">
+                <i class="fas fa-save me-1"></i> Guardar borrador
+            </button>
+        `;
+    } else if (MODO === 'editar') {
+        cont.innerHTML = `
+            <button class="btn btn-outline-danger me-2" onclick="eliminarOC()">
+                <i class="fas fa-trash me-1"></i> Eliminar
+            </button>
+            <button class="btn btn-outline-secondary me-2" onclick="cancelar()">Cancelar</button>
+            <button class="btn btn-primary" onclick="guardar()">
+                <i class="fas fa-save me-1"></i> Guardar cambios
+            </button>
+        `;
+    } else { // ver — botones según el estado
+        let html = `<button class="btn btn-outline-info me-2" onclick="verPDF()">
+                        <i class="fas fa-file-pdf me-1"></i> Ver PDF
+                    </button>`;
+
+        // Editar observaciones disponible en estados no finales
+        if (!['cerrada','cancelada'].includes(estadoActual)) {
+            html += `<button class="btn btn-outline-secondary me-2" onclick="editarObservaciones()">
+                        <i class="fas fa-pen me-1"></i> Editar observaciones
+                     </button>`;
+        }
+
+        // Botones por estado
+        if (estadoActual === 'borrador') {
+            html += `<a href="/orden_compra/${OC_ID}?edit=1" class="btn btn-outline-primary me-2">
+                        <i class="fas fa-edit me-1"></i> Editar
+                     </a>`;
+            html += `<button class="btn btn-primary me-2" onclick="enviarOC()">
+                        <i class="fas fa-paper-plane me-1"></i> Enviar al proveedor
+                     </button>`;
+            html += `<button class="btn btn-outline-danger" onclick="cancelarOC()">
+                        <i class="fas fa-ban me-1"></i> Cancelar
+                     </button>`;
+        } else if (estadoActual === 'enviada') {
+            html += `<button class="btn btn-success me-2" onclick="confirmarOC()">
+                        <i class="fas fa-check me-1"></i> Marcar como confirmada
+                     </button>`;
+            html += `<button class="btn btn-outline-danger" onclick="cancelarOC()">
+                        <i class="fas fa-ban me-1"></i> Cancelar
+                     </button>`;
+        } else if (['confirmada','parcial'].includes(estadoActual)) {
+            html += `<a href="/orden_compra/${OC_ID}/recibir" class="btn btn-info me-2">
+                        <i class="fas fa-truck-ramp-box me-1"></i> Registrar recepción
+                     </a>`;
+            html += `<button class="btn btn-outline-danger" onclick="cancelarOC()">
+                        <i class="fas fa-ban me-1"></i> Cancelar
+                     </button>`;
+        } else if (estadoActual === 'recibida') {
+            html += `<button class="btn btn-success me-2" onclick="generarFactura()">
+                        <i class="fas fa-file-invoice-dollar me-1"></i> Generar factura
+                     </button>`;
+        }
+        // cerrada / cancelada / facturada: solo Ver PDF
+
+        cont.innerHTML = html;
+    }
+}
+
+// ═════════ Bloquear campos en modo ver ═════════
+function aplicarSoloLectura() {
+    if (MODO === 'ver') {
+        ['oc_proveedor','oc_fecha_emision','oc_fecha_entrega','oc_cond_pago','oc_observaciones']
+            .forEach(id => document.getElementById(id).disabled = true);
+        document.getElementById('cardBuscador').style.display = 'none';
+    }
+}
+
+// ═════════ Badge de estado ═════════
+function setBadgeEstado(estado) {
+    if (!estado) return;
+    const labels = {
+        borrador:'Borrador', enviada:'Enviada', confirmada:'Confirmada', parcial:'Parcial',
+        recibida:'Recibida', facturada:'Facturada', cerrada:'Cerrada', cancelada:'Cancelada'
+    };
+    const el = document.getElementById('badgeEstado');
+    el.innerHTML = `<span class="badge estado-${estado}">${labels[estado] || estado}</span>`;
+}
+
+// ═════════ Cargar OC existente (editar / ver) ═════════
+async function cargarOCExistente() {
+    try {
+        const res  = await fetch(`/api/ordenes_compra/${OC_ID}/detalle`);
+        const data = await res.json();
+        if (!data.success) { Swal.fire('Error', data.error || 'No se pudo cargar', 'error'); return; }
+
+        const oc = data.orden;
+        estadoActual = oc.estado;  // para renderBotones
+        setBadgeEstado(oc.estado);
+        // Re-render botones con el estado ya cargado
+        renderBotones();
+        document.getElementById('tituloPantalla').textContent =
+            (MODO === 'editar' ? 'Editar ' : 'Detalle ') + oc.numero_completo;
+
+        document.getElementById('oc_proveedor').value     = oc.proveedor_id;
+        // Las fechas vienen en DD/MM/YYYY — convertirlas a YYYY-MM-DD
+        document.getElementById('oc_fecha_emision').value  = ddmmyyyyToIso(oc.fecha_emision);
+        document.getElementById('oc_fecha_entrega').value  = ddmmyyyyToIso(oc.fecha_entrega_estimada);
+        document.getElementById('oc_cond_pago').value      = oc.condiciones_pago || '';
+        document.getElementById('oc_observaciones').value  = oc.observaciones || '';
+
+        items = (data.detalles || []).map(d => ({
+            producto_id:     d.producto_id,
+            codigo:          d.producto_codigo || '',
+            nombre:          d.producto_nombre || `(#${d.producto_id})`,
+            cantidad:        d.cantidad_pedida,
+            precio_unitario: d.precio_unitario,
+            iva_pct:         21,
+            observaciones:   d.observaciones || '',
+        }));
+
+        // El IVA no se guarda por detalle todavía, lo refrescamos pidiendo cada producto.
+        // Para no hacer N fetchs, buscamos rápido por código en el buscador.
+        // Solución simple: dejamos 21 por default y recalculamos (aproximación aceptable).
+        renderItems();
+
+        // Recepciones (solo en modo ver)
+        if (MODO === 'ver') {
+            renderRecepciones(data.recepciones || []);
+        }
+
+        // Si la OC no está en borrador y modo=editar (no permitido), forzar a ver
+        if (MODO === 'editar' && oc.estado !== 'borrador') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'No editable',
+                text: `La OC está en estado "${oc.estado}". Solo se puede editar en borrador.`,
+            });
+            // Volvemos a modo ver
+            window.location.href = `/orden_compra/${OC_ID}`;
+        }
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+function renderRecepciones(recepciones) {
+    const card  = document.getElementById('cardRecepciones');
+    const tbody = document.getElementById('tbodyRecepciones');
+    const resumen = document.getElementById('resumenRecepciones');
+
+    if (!recepciones.length) {
+        card.style.display = 'none';
+        return;
+    }
+    card.style.display = '';
+    resumen.textContent = `${recepciones.length} recepción(es) registrada(s)`;
+
+    // Los botones de eliminar solo si la OC no está facturada/cerrada
+    const puedeEliminar = !['facturada','cerrada'].includes(estadoActual);
+
+    tbody.innerHTML = recepciones.map(r => `
+        <tr>
+            <td><strong>${r.fecha}</strong></td>
+            <td>${r.nro_remito || '<small class="text-muted">—</small>'}</td>
+            <td class="text-center">${r.cantidad_items}</td>
+            <td><small>${r.observaciones || ''}</small></td>
+            <td class="text-center">
+                ${puedeEliminar ? `
+                <button class="btn btn-sm btn-outline-danger" onclick="eliminarRecepcion(${r.id})" title="Eliminar recepción (revierte stock)">
+                    <i class="fas fa-trash"></i>
+                </button>` : '<small class="text-muted">—</small>'}
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function eliminarRecepcion(recId) {
+    const conf = await Swal.fire({
+        title: '¿Eliminar esta recepción?',
+        html: 'El stock de los productos recibidos se va a <strong>restar</strong> automáticamente.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'No',
+        confirmButtonColor: '#dc3545',
+    });
+    if (!conf.isConfirmed) return;
+
+    try {
+        const res  = await fetch(`/api/ordenes_compra/recepcion/${recId}/eliminar`, { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) return Swal.fire('Error', data.error || 'No se pudo', 'error');
+
+        await Swal.fire({
+            icon: 'success',
+            title: 'Recepción eliminada',
+            text: `La OC quedó en estado ${data.estado_nuevo}. Stock revertido.`,
+            timer: 2000, timerProgressBar: true, showConfirmButton: false,
+        });
+        window.location.reload();
+    } catch (e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+function ddmmyyyyToIso(s) {
+    if (!s) return '';
+    const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) return '';
+    return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
+// ═════════ Init ═════════
+(function init() {
+    renderBotones();
+
+    if (MODO === 'nueva') {
+        document.getElementById('oc_fecha_emision').value = new Date().toISOString().split('T')[0];
+        renderItems();
+    } else {
+        cargarOCExistente();
+        aplicarSoloLectura();
+    }
+})();
+</script>
+{% endblock %}

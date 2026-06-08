@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}Presupuesto {{ presu.numero_completo }}{% endblock %}
+
+{% block content %}
+{% set estado_colors = {'borrador':'secondary','enviado':'info','aceptado':'success','rechazado':'danger','convertido':'primary','vencido':'warning text-dark'} %}
+
+<div class="d-flex justify-content-between flex-wrap gap-2 pt-3 pb-2 mb-3 border-bottom">
+    <div>
+        <h1 class="h2 mb-0">
+            <i class="fas fa-file-alt"></i> {{ presu.numero_completo }}
+            <span class="badge bg-{{ estado_colors[presu.estado] }} ms-2">{{ presu.estado|upper }}</span>
+        </h1>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('presupuestos.listado') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Volver
+        </a>
+        <button class="btn btn-outline-primary" onclick="window.print()">
+            <i class="fas fa-print"></i> Imprimir
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Datos -->
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="fas fa-user"></i> Datos</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <strong>Cliente:</strong> {{ presu.cliente.nombre }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Documento:</strong>
+                        {{ presu.cliente.tipo_documento or '' }} {{ presu.cliente.documento or '-' }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Emisión:</strong> {{ presu.fecha_emision.strftime('%d/%m/%Y') }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Vigente hasta:</strong>
+                        {{ presu.fecha_validez.strftime('%d/%m/%Y') }}
+                        ({{ presu.validez_dias }} días)
+                        {% if presu.esta_vencido and presu.estado not in ['convertido','aceptado'] %}
+                            <span class="badge bg-warning text-dark ms-1">VENCIDO</span>
+                        {% endif %}
+                    </div>
+                    {% if presu.usuario_creacion %}
+                    <div class="col-md-6">
+                        <strong>Creado por:</strong> {{ presu.usuario_creacion }}
+                    </div>
+                    {% endif %}
+                    {% if presu.factura_id %}
+                    <div class="col-md-6">
+                        <strong>Facturado:</strong>
+                        {{ presu.fecha_conversion.strftime('%d/%m/%Y %H:%M') if presu.fecha_conversion else 'Sí' }}
+                    </div>
+                    {% endif %}
+                    {% if presu.observaciones %}
+                    <div class="col-12 mt-2">
+                        <strong>Observaciones:</strong>
+                        <div class="bg-light p-2 rounded mt-1">{{ presu.observaciones }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalle -->
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white">
+                <h6 class="mb-0"><i class="fas fa-list"></i> Detalle</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0 align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Código</th>
+                                <th>Descripción</th>
+                                <th class="text-end">Cantidad</th>
+                                <th class="text-end">P. Unit.</th>
+                                <th class="text-end">IVA%</th>
+                                <th class="text-end">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in presu.detalles %}
+                            <tr>
+                                <td><small class="text-muted">{{ d.codigo_producto or '-' }}</small></td>
+                                <td>{{ d.descripcion }}</td>
+                                <td class="text-end">{{ "%.3f"|format(d.cantidad) }}</td>
+                                <td class="text-end">${{ "%.2f"|format(d.precio_unitario) }}</td>
+                                <td class="text-end">{{ "%.1f"|format(d.iva_alicuota) }}%</td>
+                                <td class="text-end"><strong>${{ "%.2f"|format(d.subtotal) }}</strong></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Totales -->
+        <div class="card mb-3">
+            <div class="card-header bg-warning">
+                <h6 class="mb-0"><i class="fas fa-calculator"></i> Totales</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-1">
+                    <span>Subtotal:</span>
+                    <strong>${{ "%.2f"|format(presu.subtotal) }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span>IVA:</span>
+                    <strong>${{ "%.2f"|format(presu.iva) }}</strong>
+                </div>
+                <hr class="my-2">
+                <div class="d-flex justify-content-between">
+                    <span class="h5 mb-0">TOTAL:</span>
+                    <span class="h5 mb-0 text-success">${{ "%.2f"|format(presu.total) }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Acciones -->
+        {% if presu.estado != 'convertido' %}
+        <div class="card mb-3 d-print-none">
+            <div class="card-header bg-dark text-white">
+                <h6 class="mb-0"><i class="fas fa-tasks"></i> Estado y acciones</h6>
+            </div>
+            <div class="card-body d-grid gap-2">
+                {% if presu.estado != 'enviado' %}
+                <button class="btn btn-sm btn-outline-info" onclick="cambiar('enviado')">
+                    <i class="fas fa-paper-plane"></i> Marcar como Enviado
+                </button>
+                {% endif %}
+                {% if presu.estado != 'aceptado' %}
+                <button class="btn btn-sm btn-outline-success" onclick="cambiar('aceptado')">
+                    <i class="fas fa-check"></i> Marcar como Aceptado
+                </button>
+                {% endif %}
+                {% if presu.estado != 'rechazado' %}
+                <button class="btn btn-sm btn-outline-danger" onclick="cambiar('rechazado')">
+                    <i class="fas fa-times"></i> Marcar como Rechazado
+                </button>
+                {% endif %}
+
+                <hr class="my-1">
+
+                <button class="btn btn-primary"
+                        onclick="convertir()"
+                        {% if presu.estado != 'aceptado' %}disabled title="Solo se puede convertir un presupuesto aceptado"{% endif %}>
+                    <i class="fas fa-file-invoice-dollar"></i> Convertir a Factura
+                </button>
+
+                <button class="btn btn-outline-danger btn-sm" onclick="eliminar()">
+                    <i class="fas fa-trash"></i> Eliminar
+                </button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PRESU_ID = {{ presu.id }};
+const NUMERO = '{{ presu.numero_completo }}';
+
+function cambiar(estado) {
+    fetch(`/presupuestos/${PRESU_ID}/cambiar_estado`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({estado})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.success) {
+            Swal.fire({
+                title: 'Estado actualizado',
+                text: `Ahora es: ${estado.toUpperCase()}`,
+                icon: 'success',
+                timer: 1300,
+                showConfirmButton: false
+            }).then(() => window.location.reload());
+        } else {
+            Swal.fire('Error', d.error || 'No se pudo cambiar el estado', 'error');
+        }
+    })
+    .catch(err => Swal.fire('Error', String(err), 'error'));
+}
+
+function convertir() {
+    Swal.fire({
+        title: 'Próximamente',
+        text: 'La conversión a factura se habilita en la siguiente iteración del módulo.',
+        icon: 'info'
+    });
+}
+
+function eliminar() {
+    Swal.fire({
+        title: '¿Eliminar presupuesto?',
+        html: `Se eliminará <strong>${NUMERO}</strong>.<br>Esta acción no se puede deshacer.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        fetch(`/presupuestos/${PRESU_ID}/eliminar`, { method: 'POST' })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) {
+                    Swal.fire({
+                        title: 'Eliminado',
+                        icon: 'success',
+                        timer: 1200,
+                        showConfirmButton: false
+                    }).then(() => window.location.href = '{{ url_for("presupuestos.listado") }}');
+                } else {
+                    Swal.fire('Error', d.error || 'No se pudo eliminar', 'error');
+                }
+            });
+    });
+}
+</script>
+{% endblock %}

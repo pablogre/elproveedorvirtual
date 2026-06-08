@@ -1,0 +1,435 @@
+{% extends 'base.html' %}
+{% block title %}Gestión de Usuarios{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-4">
+    <h2><i class="fas fa-users me-2"></i>Gestión de Usuarios</h2>
+    {% if session.get('rol') == 'admin' %}
+    <button class="btn btn-primary" onclick="nuevoUsuario()">
+        <i class="fas fa-plus me-1"></i> Nuevo Usuario
+    </button>
+    {% endif %}
+</div>
+
+{% if session.get('rol') != 'admin' %}
+<div class="alert alert-warning">
+    <i class="fas fa-lock me-2"></i> Solo los administradores pueden gestionar usuarios.
+</div>
+{% else %}
+
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Usuario</th><th>Nombre</th>
+                    <th class="text-center">Rol</th>
+                    <th class="text-center">PV</th>
+                    <th class="text-center">Estado</th>
+                    <th class="text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tablaUsuarios">
+                <tr><td colspan="6" class="text-center py-4 text-muted">
+                    <i class="fas fa-spinner fa-spin me-2"></i>Cargando...
+                </td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="modalUsuario" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+            <h5 class="modal-title" id="modalUsuarioTitulo">Nuevo Usuario</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="usuarioId">
+            <div class="mb-3">
+                <label class="form-label fw-bold">Usuario <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="username" placeholder="ej: jperez">
+                <div class="form-text">Solo letras minúsculas, números y guión bajo. No se puede cambiar después.</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">Nombre completo <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="nombreUsuario" placeholder="ej: Juan Pérez">
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">Contraseña <span class="text-danger" id="passRequerido">*</span></label>
+                <input type="password" class="form-control" id="password" placeholder="Contraseña">
+                <div class="form-text" id="passHint"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">Rol</label>
+                <select class="form-select" id="rolUsuario">
+                    <option value="vendedor">Vendedor</option>
+                    <option value="admin">Administrador</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">
+                    Punto de Venta <span class="text-danger">*</span>
+                    <i class="fas fa-info-circle text-primary ms-1" 
+                       style="cursor:pointer" 
+                       onclick="abrirAyudaPV()" 
+                       title="¿Qué es un Punto de Venta? Click para ver explicación completa"></i>
+                </label>
+                <input type="number" class="form-control" id="puntoVentaUsuario" min="1" max="99999" value="1">
+                <div class="form-text">
+                    Número de PV que usa este usuario al emitir facturas (ej: 1, 2, 3...).
+                    Tiene que estar dado de alta en ARCA.
+                    <a href="#" onclick="abrirAyudaPV();return false;" class="text-decoration-none">
+                        <i class="fas fa-question-circle"></i> ¿Cómo elegir el PV?
+                    </a>
+                </div>
+            </div>
+            <div class="mb-3 p-3 border rounded" style="background-color:#f3eeff;border-color:#d4c5ff !important;">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="puedeLiquidarUsuario">
+                    <label class="form-check-label fw-bold" for="puedeLiquidarUsuario" style="color:#6f42c1;">
+                        <i class="fas fa-handshake"></i> Puede generar liquidaciones a intermediarios
+                    </label>
+                </div>
+                <small class="text-muted d-block mt-1">
+                    Permite acceder al módulo de Liquidaciones para pagar diferencias a intermediarios/consignatarios.
+                </small>
+            </div>
+            <div class="mb-3" id="divActivo" style="display:none">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="activoUsuario" checked>
+                    <label class="form-check-label" for="activoUsuario">Usuario activo</label>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="guardarUsuario()">
+                <i class="fas fa-save me-1"></i> Guardar
+            </button>
+        </div>
+    </div></div>
+</div>
+
+<div class="modal fade" id="modalPassword" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header bg-warning text-dark">
+            <h5 class="modal-title">Cambiar Contraseña</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <p>Cambiando contraseña de: <strong id="nombreCambioPass"></strong></p>
+            <input type="hidden" id="idCambioPass">
+            <div class="mb-3">
+                <label class="form-label fw-bold">Nueva contraseña <span class="text-danger">*</span></label>
+                <input type="password" class="form-control" id="nuevaPassword">
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-bold">Confirmar <span class="text-danger">*</span></label>
+                <input type="password" class="form-control" id="confirmarPassword">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-warning" onclick="guardarPassword()">
+                <i class="fas fa-key me-1"></i> Cambiar Contraseña
+            </button>
+        </div>
+    </div></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     MODAL: AYUDA SOBRE PUNTOS DE VENTA
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalAyudaPV" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-store me-2"></i> ¿Qué es un Punto de Venta?</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <div class="alert alert-info">
+                    <strong><i class="fas fa-lightbulb"></i> En 30 segundos:</strong>
+                    El <strong>Punto de Venta</strong> (PV) es un número que identifica desde dónde se emite una factura.
+                    Cada factura tiene formato <code>PV - NÚMERO</code>, ej: <code>00001-00000123</code>.
+                    Lo da AFIP cuando das de alta el comercio.
+                </div>
+
+                <h6 class="text-primary fw-bold mt-4"><i class="fas fa-history"></i> Antes vs Ahora</h6>
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Antes (controlador fiscal)</th>
+                            <th>Ahora (factura electrónica)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Cada PC atada a un PV físicamente</td>
+                            <td><strong>Cualquier PC puede facturar cualquier PV</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Impresora homologada por AFIP</td>
+                            <td>Impresora térmica común (no es fiscal)</td>
+                        </tr>
+                        <tr>
+                            <td>Mover de PC = trámite</td>
+                            <td>Mover de PC = sin trámite</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h6 class="text-primary fw-bold mt-4"><i class="fas fa-exclamation-triangle text-warning"></i> Reglas que SÍ impone AFIP</h6>
+                <ol>
+                    <li><strong>Numeración única por PV:</strong> No se pueden saltar números. AFIP los rechaza.</li>
+                    <li><strong>No emitir 2 facturas del mismo PV al mismo segundo:</strong> Si 2 cajeros del mismo PV facturan a la vez, una falla. <strong>Por eso conviene 1 PV distinto a cada usuario que facture en simultáneo.</strong></li>
+                    <li><strong>CAE único por factura:</strong> AFIP autoriza cada factura con un código único. Sin CAE, la factura no es válida.</li>
+                </ol>
+
+                <h6 class="text-primary fw-bold mt-4"><i class="fas fa-users-cog"></i> ¿Cómo asignar PVs según tu negocio?</h6>
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tu negocio es...</th>
+                            <th>Cómo asignar</th>
+                            <th>Ejemplo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Comercio chico, 1 caja, 1 cajero por turno</strong></td>
+                            <td>1 sólo PV para todos</td>
+                            <td>Todos los usuarios → PV 1</td>
+                        </tr>
+                        <tr>
+                            <td><strong>2+ cajas físicas funcionando a la vez</strong></td>
+                            <td>1 PV por caja</td>
+                            <td>Mostrador → PV 1<br>Despacho → PV 2</td>
+                        </tr>
+                        <tr>
+                            <td><strong>2+ cajeros simultáneos en la misma caja</strong></td>
+                            <td>1 PV por cajero</td>
+                            <td>Juan → PV 1<br>Pedro → PV 2</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Multi-sucursal (varias direcciones)</strong></td>
+                            <td>1 PV por sucursal <em>(lo exige AFIP)</em></td>
+                            <td>Sucursal Centro → PV 1<br>Sucursal Norte → PV 2</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h6 class="text-primary fw-bold mt-4"><i class="fas fa-question-circle"></i> Preguntas frecuentes</h6>
+
+                <div class="accordion" id="accordionFAQ">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                ¿Si cambio de PC, cambio de PV?
+                            </button>
+                        </h2>
+                        <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#accordionFAQ">
+                            <div class="accordion-body">
+                                <strong>NO.</strong> El PV depende del usuario que se loguea, no de la PC.
+                                Podés instalar el sistema en una netbook nueva y seguir facturando con tu mismo PV.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                ¿Puedo tener 2 PVs distintos en la misma PC?
+                            </button>
+                        </h2>
+                        <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#accordionFAQ">
+                            <div class="accordion-body">
+                                <strong>SÍ.</strong> Si Juan se loguea (PV 1) y después se va, y entra Pedro (PV 2),
+                                las facturas salen con el PV de quien esté logueado. La PC no importa.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                ¿Puedo dar de alta un PV nuevo desde el sistema?
+                            </button>
+                        </h2>
+                        <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#accordionFAQ">
+                            <div class="accordion-body">
+                                <strong>NO.</strong> Los PVs los da de alta <strong>AFIP/ARCA</strong> a través de su portal con clave fiscal.
+                                Una vez dado de alta en AFIP, lo configurás acá asignándolo a un usuario.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                                ¿La impresora térmica está atada a un PV?
+                            </button>
+                        </h2>
+                        <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#accordionFAQ">
+                            <div class="accordion-body">
+                                <strong>NO.</strong> La impresora térmica no es fiscal, solo imprime el ticket.
+                                Podés moverla de PC en PC sin avisar a AFIP.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                                ¿Qué pasa si cambio el PV de un usuario que ya emitió facturas?
+                            </button>
+                        </h2>
+                        <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#accordionFAQ">
+                            <div class="accordion-body">
+                                Las facturas históricas <strong>quedan con el PV viejo</strong> (no se modifican).
+                                Las nuevas se emitirán con el PV nuevo.<br><br>
+                                <strong>Importante:</strong> antes de cambiar el PV, asegurate de que el usuario
+                                no tenga caja abierta. Si la tiene, cerrala primero.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning mt-4 mb-0">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Tip:</strong> después de cambiar el PV de un usuario, este debe
+                    <strong>cerrar sesión y volver a entrar</strong> para que el cambio tome efecto.
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if session.get('rol') == 'admin' %}
+function abrirAyudaPV() {
+    new bootstrap.Modal(document.getElementById('modalAyudaPV')).show();
+}
+async function cargarUsuarios() {
+    const res = await fetch('/api/usuarios');
+    const data = await res.json();
+    if (!data.success) return;
+    const tbody = document.getElementById('tablaUsuarios');
+    if (!data.usuarios.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">Sin usuarios</td></tr>';
+        return;
+    }
+    tbody.innerHTML = data.usuarios.map(u => `
+        <tr class="${!u.activo ? 'table-secondary text-muted' : ''}">
+            <td><code>${u.username}</code> ${u.id == {{ session.user_id }} ? '<span class="badge bg-info">Vos</span>' : ''}</td>
+            <td>${u.nombre}</td>
+            <td class="text-center"><span class="badge ${u.rol==='admin'?'bg-danger':'bg-primary'}">${u.rol}</span></td>
+            <td class="text-center"><span class="badge bg-dark">${String(u.punto_venta || 1).padStart(4,'0')}</span></td>
+            <td class="text-center"><span class="badge ${u.activo?'bg-success':'bg-secondary'}">${u.activo?'Activo':'Inactivo'}</span></td>
+            <td class="text-center">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-warning" onclick="editarUsuario(${u.id})"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-info" onclick="abrirCambioPassword(${u.id},'${u.nombre}')"><i class="fas fa-key"></i></button>
+                    ${u.id != {{ session.user_id }} ? `<button class="btn ${u.activo?'btn-secondary':'btn-success'}" onclick="toggleActivo(${u.id},${u.activo})"><i class="fas ${u.activo?'fa-ban':'fa-check'}"></i></button>` : ''}
+                </div>
+            </td>
+        </tr>`).join('');
+}
+function nuevoUsuario() {
+    document.getElementById('modalUsuarioTitulo').textContent = 'Nuevo Usuario';
+    document.getElementById('usuarioId').value = '';
+    document.getElementById('username').value = '';
+    document.getElementById('username').disabled = false;
+    document.getElementById('nombreUsuario').value = '';
+    document.getElementById('password').value = '';
+    document.getElementById('password').placeholder = 'Contraseña';
+    document.getElementById('passRequerido').style.display = '';
+    document.getElementById('passHint').textContent = '';
+    document.getElementById('rolUsuario').value = 'vendedor';
+    document.getElementById('puntoVentaUsuario').value = 1;
+    document.getElementById('puedeLiquidarUsuario').checked = false;
+    document.getElementById('activoUsuario').checked = true;
+    document.getElementById('divActivo').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('modalUsuario')).show();
+}
+async function editarUsuario(id) {
+    const res = await fetch(`/api/usuario/${id}`);
+    const data = await res.json();
+    if (!data.success) { toast('Error cargando usuario', 'error'); return; }
+    const u = data.usuario;
+    document.getElementById('modalUsuarioTitulo').textContent = 'Editar Usuario';
+    document.getElementById('usuarioId').value = u.id;
+    document.getElementById('username').value = u.username;
+    document.getElementById('username').disabled = true;
+    document.getElementById('nombreUsuario').value = u.nombre;
+    document.getElementById('password').value = '';
+    document.getElementById('password').placeholder = 'Dejar vacío para no cambiar';
+    document.getElementById('passRequerido').style.display = 'none';
+    document.getElementById('passHint').textContent = 'Dejá en blanco para mantener la contraseña actual.';
+    document.getElementById('rolUsuario').value = u.rol;
+    document.getElementById('puntoVentaUsuario').value = u.punto_venta || 1;
+    document.getElementById('puedeLiquidarUsuario').checked = !!u.puede_liquidar;
+    document.getElementById('activoUsuario').checked = u.activo;
+    document.getElementById('divActivo').style.display = '';
+    new bootstrap.Modal(document.getElementById('modalUsuario')).show();
+}
+async function guardarUsuario() {
+    const id = document.getElementById('usuarioId').value;
+    const username = document.getElementById('username').value.trim();
+    const nombre = document.getElementById('nombreUsuario').value.trim();
+    const password = document.getElementById('password').value;
+    const rol = document.getElementById('rolUsuario').value;
+    const puntoVenta = parseInt(document.getElementById('puntoVentaUsuario').value, 10);
+    const puedeLiquidar = document.getElementById('puedeLiquidarUsuario').checked;
+    const activo = document.getElementById('activoUsuario').checked;
+    if (!nombre) { alertSwal('El nombre es obligatorio', 'info'); return; }
+    if (!id && !username) { alertSwal('El usuario es obligatorio', 'info'); return; }
+    if (!id && !password) { alertSwal('La contraseña es obligatoria para usuarios nuevos', 'info'); return; }
+    if (!puntoVenta || puntoVenta < 1 || puntoVenta > 99999) {
+        toast('El Punto de Venta debe ser un número entre 1 y 99999', 'error');
+        return;
+    }
+    const body = { nombre, rol, activo, punto_venta: puntoVenta, puede_liquidar: puedeLiquidar };
+    if (!id) body.username = username;
+    if (password) body.password = password;
+    if (id) body.id = parseInt(id);
+    const res = await fetch('/api/guardar_usuario', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (data.success) { bootstrap.Modal.getInstance(document.getElementById('modalUsuario')).hide(); cargarUsuarios(); }
+    else alertSwal('Error: ' + data.error, 'error');
+}
+function abrirCambioPassword(id, nombre) {
+    document.getElementById('idCambioPass').value = id;
+    document.getElementById('nombreCambioPass').textContent = nombre;
+    document.getElementById('nuevaPassword').value = '';
+    document.getElementById('confirmarPassword').value = '';
+    new bootstrap.Modal(document.getElementById('modalPassword')).show();
+}
+async function guardarPassword() {
+    const id = document.getElementById('idCambioPass').value;
+    const nueva = document.getElementById('nuevaPassword').value;
+    const confirmar = document.getElementById('confirmarPassword').value;
+    if (!nueva) { alertSwal('Ingresá la nueva contraseña', 'info'); return; }
+    if (nueva !== confirmar) { alertSwal('Las contraseñas no coinciden', 'info'); return; }
+    const res = await fetch('/api/cambiar_password', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: parseInt(id), password: nueva}) });
+    const data = await res.json();
+    if (data.success) { bootstrap.Modal.getInstance(document.getElementById('modalPassword')).hide(); toast('Contraseña cambiada correctamente', 'success'); }
+    else alertSwal('Error: ' + data.error, 'error');
+}
+async function toggleActivo(id, activo) {
+    if (!(await confirmSwal(`¿${activo?'Desactivar':'Activar'} este usuario?`))) return;
+    const res = await fetch('/api/toggle_usuario', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id, activo: !activo}) });
+    const data = await res.json();
+    if (data.success) cargarUsuarios();
+    else alertSwal('Error: ' + data.error, 'error');
+}
+cargarUsuarios();
+{% endif %}
+</script>
+{% endblock %}

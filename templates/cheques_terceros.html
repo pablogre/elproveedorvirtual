@@ -1,0 +1,1133 @@
+{% extends 'base.html' %}
+{% block title %}Cheques de Terceros{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3 flex-wrap gap-2">
+    <h2><i class="fas fa-hand-holding-usd me-2"></i>Cheques de Terceros</h2>
+    <div>
+        <a href="/cheques_propios" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-money-check me-1"></i> Cheques Propios
+        </a>
+        <a href="/proveedores" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-truck me-1"></i> Proveedores
+        </a>
+        <button class="btn btn-outline-info me-2" onclick="abrirAyuda()" title="Ayuda">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+        <button class="btn btn-primary" onclick="abrirModalNuevo()">
+            <i class="fas fa-plus me-1"></i> Nuevo Cheque
+        </button>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label small mb-1 fw-bold">Estado</label>
+                <select id="filtroEstado" class="form-select form-select-sm" onchange="cargar()">
+                    <option value="">Todos</option>
+                    <option value="en_cartera">En cartera</option>
+                    <option value="depositado">Depositado</option>
+                    <option value="endosado">Endosado</option>
+                    <option value="cobrado">Cobrado</option>
+                    <option value="rechazado">Rechazado</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1 fw-bold">Vto. desde</label>
+                <input type="date" id="filtroVtoDesde" class="form-control form-control-sm" onchange="cargar()">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1 fw-bold">Vto. hasta</label>
+                <input type="date" id="filtroVtoHasta" class="form-control form-control-sm" onchange="cargar()">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small mb-1 fw-bold">Buscar (banco / número / librador)</label>
+                <input type="text" id="filtroQ" class="form-control form-control-sm" placeholder="Banco, 12345, Juan Pérez...">
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="limpiarFiltros()">
+                    <i class="fas fa-eraser"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resumen -->
+<div class="row g-2 mb-3" id="resumen" style="display:none">
+    <div class="col-md-3"><div class="card text-bg-light"><div class="card-body py-2">
+        <small class="text-muted">En cartera</small>
+        <div class="fw-bold fs-5" id="r_cartera">0</div>
+    </div></div></div>
+    <div class="col-md-3"><div class="card text-bg-primary"><div class="card-body py-2">
+        <small>Depositados pendientes</small>
+        <div class="fw-bold fs-5" id="r_depositados">0</div>
+    </div></div></div>
+    <div class="col-md-3"><div class="card text-bg-warning"><div class="card-body py-2">
+        <small>Por vencer (7d)</small>
+        <div class="fw-bold fs-5" id="r_porvencer">0</div>
+    </div></div></div>
+    <div class="col-md-3"><div class="card text-bg-dark"><div class="card-body py-2">
+        <small>Total en cartera</small>
+        <div class="fw-bold fs-5" id="r_total">$0,00</div>
+    </div></div></div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Banco</th>
+                        <th>Nº Cheque</th>
+                        <th>Librador</th>
+                        <th>Cliente origen</th>
+                        <th>Vencimiento</th>
+                        <th class="text-end">Monto</th>
+                        <th class="text-center">Estado</th>
+                        <th>Destino</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="bodyCheques">
+                    <tr><td colspan="9" class="text-center py-4 text-muted">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Nuevo/Editar -->
+<div class="modal fade" id="modalCheque" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalChequeTitulo"><i class="fas fa-hand-holding-usd me-2"></i>Nuevo Cheque de Terceros</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="chId">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Banco <span class="text-danger">*</span></label>
+                        <input type="text" id="banco" class="form-control" placeholder="Banco Nación, Galicia, etc.">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Nº de Cheque <span class="text-danger">*</span></label>
+                        <input type="text" id="numero" class="form-control" placeholder="12345678">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Librador (quién firmó)</label>
+                        <input type="text" id="librador" class="form-control" placeholder="Nombre del librador">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">CUIT Librador</label>
+                        <input type="text" id="cuit_librador" class="form-control" placeholder="20-12345678-9">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Fecha Emisión</label>
+                        <input type="date" id="fecha_emision" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Fecha Vencimiento</label>
+                        <input type="date" id="fecha_vencimiento" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Monto <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="monto" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Cliente origen</label>
+                        <input type="text" id="cliente_origen_busqueda" class="form-control"
+                               list="listaClientes" placeholder="Escribí para buscar..."
+                               oninput="seleccionarClienteDeLista()">
+                        <datalist id="listaClientes"></datalist>
+                        <input type="hidden" id="cliente_origen_id">
+                        <div class="form-text" id="clienteSeleccionadoInfo">
+                            <i class="fas fa-info-circle"></i> Escribí el nombre y seleccionalo de la lista.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Fecha Recepción</label>
+                        <input type="date" id="fecha_recepcion" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Estado inicial</label>
+                        <select id="estado" class="form-select" onchange="toggleCamposEndosado()">
+                            <option value="en_cartera">En cartera</option>
+                            <option value="endosado">Endosado (carga manual)</option>
+                        </select>
+                        <div class="form-text">
+                            Para "depositado", "cobrado" o "rechazado", primero créalo y después cambiá estado.
+                        </div>
+                    </div>
+                    <div class="col-md-6" id="divFechaEndoso" style="display:none">
+                        <label class="form-label fw-bold">Fecha Endoso</label>
+                        <input type="date" id="fecha_endoso" class="form-control">
+                    </div>
+                    <div class="col-md-12" id="divProveedor" style="display:none">
+                        <div class="alert alert-warning py-2 small mb-2">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            <strong>Carga manual de cheque endosado:</strong> este cheque quedará marcado
+                            como "endosado" pero <u>sin vincular a un pago en el sistema</u>. Sirve para
+                            registrar cheques que ya estaban endosados cuando se empezó a usar el módulo.
+                            Aparecerá con un ícono <i class="fas fa-exclamation-triangle text-warning"></i>
+                            en el listado.
+                        </div>
+                        <label class="form-label fw-bold">Proveedor destinatario <span class="text-danger">*</span></label>
+                        <select id="proveedor_destino_id" class="form-select">
+                            <option value="">-- Seleccionar --</option>
+                            {% for p in proveedores %}
+                            <option value="{{ p.id }}">{{ p.razon_social }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold">Observaciones</label>
+                        <textarea id="observaciones" class="form-control" rows="2" placeholder="Notas internas..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardar()">
+                    <i class="fas fa-save me-1"></i> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Cambio Estado -->
+<div class="modal fade" id="modalEstado" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-exchange-alt me-2"></i>Cambiar Estado</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="estChId">
+                <p class="mb-3">Cheque <strong id="estChInfo"></strong></p>
+                <div id="estContenido"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary" onclick="confirmarCambioEstado()">
+                    <i class="fas fa-check me-1"></i> Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal AYUDA -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Ayuda — Cheques de Terceros</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- ═══════════ INTRO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-book me-2"></i>¿Qué es esta pantalla?</h4>
+                <p>
+                    Acá gestionás <strong>los cheques que te dan otros</strong> (tus clientes) cuando
+                    te pagan. Se les dice "cheques de terceros" porque no los emitís vos — los emitió
+                    un tercero y los recibís como pago. Desde esta pantalla podés administrar todo
+                    su ciclo: guardarlos en cartera, depositarlos al banco, endosarlos a un proveedor
+                    para pagarle, o registrar si el cheque fue finalmente cobrado o si rebotó.
+                </p>
+                <div class="alert alert-primary small">
+                    <strong><i class="fas fa-lightbulb me-1"></i> Analogía simple:</strong> imaginá un
+                    cajón donde vas guardando los cheques que los clientes te traen. Cada uno lo podés:
+                    llevar al banco (depositar), usarlo para pagarle a un proveedor (endosar), o esperar.
+                    Esta pantalla es el inventario digital de ese cajón.
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ DIFERENCIA CON CHEQUES PROPIOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-balance-scale me-2"></i>Diferencia con Cheques Propios</h4>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr><th></th><th>Cheques Propios</th><th>Cheques de Terceros (esta pantalla)</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="fw-bold">¿Quién lo emite?</td>
+                                <td>Vos (salen de tu cuenta corriente).</td>
+                                <td>Otros (clientes u otras personas que te los dan).</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">¿Qué hacés con él?</td>
+                                <td>Lo entregás para pagar deudas.</td>
+                                <td>Lo recibís como pago y luego lo depositás o endosás.</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Estados</td>
+                                <td>Pendiente → Entregado → Cobrado / Rechazado / Anulado.</td>
+                                <td>En cartera → Depositado / Endosado → Cobrado / Rechazado.</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Pantalla</td>
+                                <td><a href="/cheques_propios">Cheques Propios</a></td>
+                                <td>Esta pantalla.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ESTRUCTURA ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-th-large me-2"></i>Estructura de la pantalla</h4>
+
+                <h6 class="fw-bold mt-3">1) Header superior</h6>
+                <ul>
+                    <li><strong>Cheques Propios</strong>: link a la otra pantalla de cheques (los emitidos por vos).</li>
+                    <li><strong>Proveedores</strong>: vuelve al listado de proveedores.</li>
+                    <li><strong>Ayuda</strong>: este modal.</li>
+                    <li><strong>Nuevo Cheque</strong>: carga un cheque nuevo recibido.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">2) Filtros</h6>
+                <ul>
+                    <li><strong>Estado</strong>: filtrá por uno de los 5 estados posibles.</li>
+                    <li><strong>Vto. desde / hasta</strong>: rango de fechas de vencimiento.
+                        Útil para planificar depósitos.</li>
+                    <li><strong>Buscar</strong>: texto libre — busca sobre banco, número y librador.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">3) Cuatro tarjetas de resumen</h6>
+                <ul>
+                    <li><strong>En cartera</strong>: cantidad de cheques disponibles (los que podés depositar o endosar).</li>
+                    <li><strong>Depositados pendientes</strong>: los que ya depositaste pero el banco no acreditó todavía.</li>
+                    <li><strong>Por vencer (7d)</strong>: cuántos vencen en los próximos 7 días. Si tenés muchos sin depositar, prestá atención.</li>
+                    <li><strong>Total en cartera</strong>: suma en $ de todo lo que tenés disponible.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">4) Tabla de cheques</h6>
+                <p>Columnas: <code>Banco</code> · <code>Nº Cheque</code> · <code>Librador</code> · <code>Cliente origen</code> ·
+                    <code>Vencimiento</code> · <code>Monto</code> · <code>Estado</code> · <code>Destino</code> · <code>Acciones</code>.</p>
+                <p>Código de colores en el vencimiento:</p>
+                <ul>
+                    <li><strong class="text-danger">Rojo</strong>: ya vencido.</li>
+                    <li><strong class="text-warning">Amarillo</strong>: vence en 7 días o menos.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ LIBRADOR vs CLIENTE ORIGEN ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-users me-2"></i>"Librador" vs "Cliente origen" — por qué son distintos</h4>
+                <p>Es un punto importante que suele confundir. Son dos personas distintas:</p>
+                <ul>
+                    <li><strong>Librador</strong>: la persona que <u>firmó</u> el cheque (figura en la
+                        línea "Páguese a...").</li>
+                    <li><strong>Cliente origen</strong>: la persona que <u>te dio</u> el cheque en mano
+                        (un cliente tuyo del listado).</li>
+                </ul>
+
+                <div class="alert alert-primary">
+                    <strong>Ejemplo:</strong> Tu cliente Juan te viene a pagar y te da un cheque firmado
+                    por su tía María. En el sistema cargás:
+                    <ul class="mb-0">
+                        <li><strong>Librador</strong> = María (con su CUIT)</li>
+                        <li><strong>Cliente origen</strong> = Juan (lo seleccionás de la lista de clientes)</li>
+                    </ul>
+                    Si el cheque rebota, le reclamás a Juan (él fue quien te lo entregó) aunque lo
+                    haya firmado María.
+                </div>
+
+                <p>Cuando el librador es el mismo que el cliente que te paga (caso común), llenás
+                    los dos campos con los mismos datos. El cliente origen siempre sale de la lista
+                    de clientes del sistema; el librador es texto libre.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ESTADOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-list me-2"></i>Los 5 estados del cheque</h4>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr><th style="width:140px">Estado</th><th>Qué significa</th><th>Siguientes pasos permitidos</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge bg-secondary">En cartera</span></td>
+                                <td>Cheque que recibiste de un cliente, en tus manos. Todavía no hiciste nada con él.</td>
+                                <td>Depositado · Endosado · Rechazado</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-primary">Depositado</span></td>
+                                <td>Lo llevaste al banco, lo depositaste en una cuenta tuya. Pendiente de acreditación.</td>
+                                <td>Cobrado · Rechazado</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-warning text-dark">Endosado</span></td>
+                                <td>Lo firmaste al dorso y se lo pasaste a un proveedor tuyo como pago.
+                                    El cheque dejó de ser tuyo — ahora es del proveedor.</td>
+                                <td>Rechazado (si el proveedor lo rebota)</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-success">Cobrado</span></td>
+                                <td>El banco te acreditó el dinero. <strong>Estado final.</strong></td>
+                                <td>—</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-danger">Rechazado</span></td>
+                                <td>El cheque rebotó: sin fondos, mal firmado, etc.</td>
+                                <td>En cartera (si te lo devuelven y podés reclamarlo)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ALTA ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-plus-circle me-2"></i>Dar de alta un cheque recibido</h4>
+                <p>Botón <strong>+ Nuevo Cheque</strong>. Campos:</p>
+                <ul>
+                    <li><strong>Banco</strong> (obligatorio): banco emisor del cheque.</li>
+                    <li><strong>Nº Cheque</strong> (obligatorio): único por banco.</li>
+                    <li><strong>Librador</strong>: quién firmó el cheque (nombre).</li>
+                    <li><strong>CUIT Librador</strong>: CUIT de quien firmó (si lo tenés).</li>
+                    <li><strong>Fecha Emisión</strong>: la que figura en el cheque.</li>
+                    <li><strong>Fecha Vencimiento</strong>: importante para saber cuándo lo podés cobrar.</li>
+                    <li><strong>Monto</strong> (obligatorio).</li>
+                    <li><strong>Cliente origen</strong>: el cliente del sistema que te entregó el cheque.
+                        Escribís el nombre y aparece la lista — seleccioná la opción correcta.
+                        El sistema te muestra una tilde verde cuando lo reconoce.</li>
+                    <li><strong>Fecha Recepción</strong>: el día que lo recibiste (por default hoy).</li>
+                    <li><strong>Estado inicial</strong>: En cartera (default) o Endosado (carga manual — ver abajo).</li>
+                    <li><strong>Observaciones</strong>: notas libres.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ENDOSO MANUAL ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-handshake me-2"></i>Endoso manual — cuándo usarlo</h4>
+                <div class="alert alert-warning">
+                    <strong>Caso especial:</strong> podés dar de alta un cheque que <strong>ya estaba endosado</strong>
+                    directamente con estado "Endosado". Sirve para registrar cheques históricos que ya se
+                    entregaron a proveedores antes de empezar a usar el módulo.
+                </div>
+                <p>Al hacerlo:</p>
+                <ul>
+                    <li>El cheque queda marcado como "endosado" y vinculado al proveedor destino.</li>
+                    <li><strong>NO descuenta la deuda del proveedor</strong> — porque no se vincula a un pago
+                        del sistema. Es solo información histórica.</li>
+                    <li>Aparece con el ícono <i class="fas fa-exclamation-triangle text-warning"></i> en
+                        el listado, para diferenciarlos de los endosos hechos desde la Pantalla de Pago.</li>
+                </ul>
+                <p><strong>Regla:</strong> para cheques nuevos que usás para pagar — siempre usar la
+                    Pantalla de Pago. El endoso manual es solo para migrar situaciones preexistentes.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ DEPOSITAR ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-university me-2"></i>Depositar un cheque</h4>
+                <p>Cuando llevás el cheque al banco y lo depositás:</p>
+                <ol>
+                    <li>Botón <i class="fas fa-sync-alt text-info"></i> en la fila del cheque.</li>
+                    <li>Elegís "Depositar en el banco".</li>
+                    <li>Ingresás:
+                        <ul>
+                            <li><strong>Banco destino</strong>: en qué banco lo depositaste (puede ser diferente al banco del cheque).</li>
+                            <li><strong>Cuenta destino</strong>: tu número de cuenta.</li>
+                            <li><strong>Fecha de depósito</strong>: cuándo lo depositaste.</li>
+                        </ul>
+                    </li>
+                    <li>Confirmar. El cheque pasa a "Depositado" y estos datos quedan en las observaciones.</li>
+                </ol>
+                <p>El cheque queda "Depositado" hasta que:</p>
+                <ul>
+                    <li>El banco te acredita → vos cambiás el estado a "Cobrado".</li>
+                    <li>El banco te avisa que rebotó → lo cambiás a "Rechazado".</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ENDOSAR DESDE LA PANTALLA DE PAGO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-share me-2"></i>Endosar a un proveedor (forma recomendada)</h4>
+                <div class="alert alert-success">
+                    <strong><i class="fas fa-check me-1"></i> Forma recomendada — desde la Pantalla de Pago:</strong><br>
+                    Cuando querés usar un cheque de tercero para pagarle a un proveedor, andá a
+                    <strong>Compras → Pagar Proveedor</strong>. Como medio de pago, elegís
+                    <strong>"Cheque de tercero (endoso)"</strong>, seleccionás uno de tu cartera, y listo.
+                    El sistema descuenta la deuda del proveedor y marca el cheque como endosado automáticamente.
+                </div>
+                <p>Desde acá también hay un botón "Endosar" manual (ícono <i class="fas fa-sync-alt text-info"></i>),
+                    pero ese <strong>NO descuenta la deuda</strong> — es solo para casos históricos.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ CASOS DE USO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-tasks me-2"></i>Casos de uso típicos</h4>
+
+                <h6 class="fw-bold">Caso 1 — Un cliente me paga con cheque</h6>
+                <ol>
+                    <li>Botón <strong>Nuevo Cheque</strong>.</li>
+                    <li>Completo banco, número, librador, CUIT librador, fecha emisión, vencimiento, monto.</li>
+                    <li>En "Cliente origen" escribo el nombre del cliente y lo selecciono de la lista.</li>
+                    <li>Dejo estado en <strong>En cartera</strong> y guardo.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 2 — Deposito el cheque al banco</h6>
+                <ol>
+                    <li>Busco el cheque en el listado.</li>
+                    <li>Botón <i class="fas fa-sync-alt"></i> → "Depositar en el banco".</li>
+                    <li>Ingreso banco destino, cuenta destino, fecha de depósito.</li>
+                    <li>Confirmar. Pasa a "Depositado".</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 3 — El banco me acreditó el cheque depositado</h6>
+                <ol>
+                    <li>Busco el cheque en estado "Depositado".</li>
+                    <li>Botón <i class="fas fa-sync-alt"></i> → "Cobrado".</li>
+                    <li>Fecha de cobro. Confirmar.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 4 — Endoso un cheque de cartera a un proveedor</h6>
+                <p><strong>Forma recomendada:</strong></p>
+                <ol>
+                    <li>Ir a <strong>Compras → Pagar Proveedor</strong>.</li>
+                    <li>Elegir el proveedor, seleccionar facturas a pagar.</li>
+                    <li>Como medio de pago, elegir <strong>Cheque de tercero</strong>.</li>
+                    <li>Seleccionar el cheque de la cartera (aparece la lista de los que están "en cartera").</li>
+                    <li>Emitir el pago. El cheque pasa a "Endosado" automáticamente.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 5 — El cheque rebotó</h6>
+                <ol>
+                    <li>Busco el cheque (estado Depositado o Endosado).</li>
+                    <li>Botón <i class="fas fa-sync-alt"></i> → "Rechazado".</li>
+                    <li>Fecha y confirmar.</li>
+                    <li><strong>Importante:</strong>
+                        <ul>
+                            <li>Si era un cheque <strong>depositado</strong>: el dinero no te llegó. Reclamale al cliente origen.</li>
+                            <li>Si era un cheque <strong>endosado</strong> a un proveedor: el proveedor te lo va a devolver.
+                                Si querés, después podés cambiar su estado a "En cartera" (Rechazado → En cartera).
+                                Y el pago al proveedor sigue firme — si querés revertirlo, anulalo desde Pagos Emitidos.</li>
+                        </ul>
+                    </li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 6 — Migrar cheques viejos</h6>
+                <p>Si empezás a usar el módulo y tenés cheques de clientes guardados en cajón:</p>
+                <ol>
+                    <li>Por cada uno, botón <strong>Nuevo Cheque</strong>, completar datos.</li>
+                    <li>Si el cheque está en tu poder: estado <strong>En cartera</strong>.</li>
+                    <li>Si ya lo endosaste a un proveedor en el pasado: estado <strong>Endosado (carga manual)</strong>
+                        + seleccionar el proveedor destino.</li>
+                </ol>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ EDITAR Y ELIMINAR ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-edit me-2"></i>Editar y eliminar</h4>
+                <p><strong>Editar</strong> (botón <i class="fas fa-edit"></i>): libre mientras el cheque NO
+                    esté vinculado a un pago. Si fue endosado desde la Pantalla de Pago (tiene pago_id), solo
+                    podés editar observaciones.</p>
+                <p><strong>Eliminar</strong> (botón <i class="fas fa-trash"></i>): solo cheques en estado
+                    <strong>En cartera</strong> sin pago vinculado. Los depositados, endosados, cobrados o
+                    rechazados quedan en el historial permanente — si te arrepentiste, usá cambio de estado.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ FAQ ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-question-circle me-2"></i>Preguntas frecuentes</h4>
+                <div class="accordion" id="faqAccChT">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCT1">
+                                El cliente me dio un cheque firmado por otro. ¿Librador = cliente?
+                            </button>
+                        </h2>
+                        <div id="faqCT1" class="accordion-collapse collapse" data-bs-parent="#faqAccChT">
+                            <div class="accordion-body">
+                                No. El <strong>librador</strong> es quien firmó el cheque. El <strong>cliente origen</strong>
+                                es quien te lo entregó físicamente. Pueden ser personas distintas (ver la sección
+                                "Librador vs Cliente origen" arriba). Si rebota, reclamás al cliente origen.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCT2">
+                                ¿Un cheque de terceros depositado puede volver a cartera?
+                            </button>
+                        </h2>
+                        <div id="faqCT2" class="accordion-collapse collapse" data-bs-parent="#faqAccChT">
+                            <div class="accordion-body">
+                                No directamente. Si rebotó (Rechazado), sí podés pasarlo de Rechazado → En cartera.
+                                Si ya fue cobrado, es estado final. Si lo depositaste por error y querés sacarlo,
+                                por ahora no hay transición directa — contactá a Pablo para ajuste manual.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCT3">
+                                ¿Qué pasa con la deuda del cliente cuando me da un cheque?
+                            </button>
+                        </h2>
+                        <div id="faqCT3" class="accordion-collapse collapse" data-bs-parent="#faqAccChT">
+                            <div class="accordion-body">
+                                <strong>Esta pantalla no descuenta deuda del cliente automáticamente.</strong>
+                                Para eso hay que registrar el pago del cliente desde el módulo de ventas
+                                (cuenta corriente de clientes). Esta pantalla solo hace el seguimiento del
+                                cheque como objeto físico.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCT4">
+                                ¿Por qué no me aparece el cliente en el buscador?
+                            </button>
+                        </h2>
+                        <div id="faqCT4" class="accordion-collapse collapse" data-bs-parent="#faqAccChT">
+                            <div class="accordion-body">
+                                El buscador carga la lista desde el módulo de Clientes. Si el cliente no
+                                existe en el sistema, hay que crearlo primero desde
+                                <strong>Clientes → Nuevo Cliente</strong>, y después volver acá.
+                                Alternativamente podés dejar el cliente origen vacío y registrarlo después.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCT5">
+                                Endosé un cheque a un proveedor y el proveedor me lo devolvió porque rebotó. ¿Qué hago?
+                            </button>
+                        </h2>
+                        <div id="faqCT5" class="accordion-collapse collapse" data-bs-parent="#faqAccChT">
+                            <div class="accordion-body">
+                                Dos acciones:
+                                <ol class="mb-0">
+                                    <li>En esta pantalla: cambiar estado del cheque de "Endosado" a "Rechazado".</li>
+                                    <li>Si querés revertir el pago al proveedor (para que vuelva a deber): ir a
+                                        <strong>Compras → Pagos Emitidos</strong>, buscar el pago correspondiente,
+                                        botón Anular. Eso devuelve la deuda al proveedor y te deja el cheque
+                                        (ahora rechazado) para reclamarle al cliente original.</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCT6">
+                                ¿Qué pasa si cargo dos veces el mismo cheque por error?
+                            </button>
+                        </h2>
+                        <div id="faqCT6" class="accordion-collapse collapse" data-bs-parent="#faqAccChT">
+                            <div class="accordion-body">
+                                El sistema no permite dos cheques con <strong>mismo banco + mismo número</strong>.
+                                Te va a mostrar un error claro al intentar guardar el segundo. Si te pasa, revisá
+                                si no lo cargaste antes (filtrá por número en el buscador).
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCT7">
+                                ¿Puedo imprimir un reporte de cheques en cartera?
+                            </button>
+                        </h2>
+                        <div id="faqCT7" class="accordion-collapse collapse" data-bs-parent="#faqAccChT">
+                            <div class="accordion-body">
+                                Hoy no hay botón de export directo acá. Estamos por agregar exports PDF/Excel
+                                en la próxima iteración. Mientras tanto, podés filtrar por "Estado = En cartera"
+                                y hacer una captura de pantalla o imprimir con Ctrl+P del navegador.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ERRORES COMUNES ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-exclamation-triangle me-2"></i>Errores comunes</h4>
+                <ul>
+                    <li><strong>"Ya existe un cheque con ese número para ese banco"</strong>: revisá si no
+                        lo cargaste antes. Buscá por número.</li>
+                    <li><strong>"No se puede pasar de X a Y"</strong>: la transición no está permitida
+                        (ver tabla de estados).</li>
+                    <li><strong>"Para depositar hay que indicar banco y cuenta de destino"</strong>: son
+                        campos obligatorios para el depósito.</li>
+                    <li><strong>"Para endosar hay que indicar el proveedor destino"</strong>: idem.</li>
+                    <li><strong>"No se puede eliminar: cheque vinculado a un pago"</strong>: usá "Cambiar estado"
+                        en vez de eliminar.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ RELACIÓN CON OTROS MÓDULOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-link me-2"></i>Relación con otros módulos</h4>
+                <ul>
+                    <li><strong>Clientes</strong>: el cliente origen se toma de tu lista de clientes.</li>
+                    <li><strong>Proveedores</strong>: al endosar, seleccionás un proveedor como destino.</li>
+                    <li><strong>Pantalla de Pago a Proveedor</strong>: es la forma recomendada de endosar.
+                        Seleccionás cheques de cartera como medio de pago y el sistema los endosa + descuenta
+                        deuda en la cta cte.</li>
+                    <li><strong>Cta Cte Proveedor</strong>: al endosar desde pantalla de pago, el movimiento
+                        aparece en la cta cte como parte de un pago normal.</li>
+                    <li><strong>Anulación de pagos</strong>: si anulás un pago donde se endosaron cheques,
+                        esos cheques vuelven automáticamente a "En cartera".</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ NOTAS TÉCNICAS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-cog me-2"></i>Notas técnicas</h4>
+                <ul class="small text-muted">
+                    <li>Tabla: <code>cheque_tercero</code>. Unicidad: <code>(banco, numero)</code>.</li>
+                    <li>FK <code>cliente_origen_id</code> → <code>cliente.id</code>.</li>
+                    <li>FK <code>proveedor_destino_id</code> → <code>proveedor.id</code> (nullable).</li>
+                    <li>FK <code>pago_id</code> → <code>pago_proveedor.id</code> (nullable) cuando se endosa
+                        desde la pantalla de pago.</li>
+                    <li>Transiciones validadas en backend (<code>api_cheque_tercero_estado</code>).</li>
+                </ul>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const modalCheque = new bootstrap.Modal(document.getElementById('modalCheque'));
+const modalEstado = new bootstrap.Modal(document.getElementById('modalEstado'));
+const modalAyuda  = new bootstrap.Modal(document.getElementById('modalAyuda'));
+
+let cheques = [];
+let clientesCache = [];
+
+function fmt(v) {
+    return '$' + parseFloat(v || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function badgeEstado(est) {
+    const map = {
+        'en_cartera': 'bg-secondary',
+        'depositado': 'bg-primary',
+        'endosado':   'bg-warning text-dark',
+        'cobrado':    'bg-success',
+        'rechazado':  'bg-danger',
+    };
+    const labels = {
+        'en_cartera': 'En cartera',
+        'depositado': 'Depositado',
+        'endosado':   'Endosado',
+        'cobrado':    'Cobrado',
+        'rechazado':  'Rechazado',
+    };
+    return `<span class="badge ${map[est] || 'bg-secondary'}">${labels[est] || est}</span>`;
+}
+
+function abrirAyuda() { modalAyuda.show(); }
+
+function limpiarFiltros() {
+    document.getElementById('filtroEstado').value = '';
+    document.getElementById('filtroVtoDesde').value = '';
+    document.getElementById('filtroVtoHasta').value = '';
+    document.getElementById('filtroQ').value = '';
+    cargar();
+}
+
+async function cargarClientes() {
+    try {
+        const res = await fetch('/api/clientes');
+        const data = await res.json();
+        if (data.success) {
+            clientesCache = data.clientes || [];
+            const datalist = document.getElementById('listaClientes');
+            datalist.innerHTML = clientesCache.map(c =>
+                `<option data-id="${c.id}" value="${c.nombre.replace(/"/g, '&quot;')}">`
+            ).join('');
+        }
+    } catch(e) { console.error('Error cargando clientes:', e); }
+}
+
+function seleccionarClienteDeLista() {
+    const input = document.getElementById('cliente_origen_busqueda');
+    const nombre = input.value.trim();
+    const info = document.getElementById('clienteSeleccionadoInfo');
+    if (!nombre) {
+        document.getElementById('cliente_origen_id').value = '';
+        info.innerHTML = '<i class="fas fa-info-circle"></i> Escribí el nombre y seleccionalo de la lista.';
+        info.className = 'form-text';
+        return;
+    }
+    const cli = clientesCache.find(c => c.nombre.toLowerCase() === nombre.toLowerCase());
+    if (cli) {
+        document.getElementById('cliente_origen_id').value = cli.id;
+        info.innerHTML = `<i class="fas fa-check-circle text-success"></i> Cliente seleccionado: <strong>${cli.nombre}</strong> (ID ${cli.id})`;
+        info.className = 'form-text text-success';
+    } else {
+        document.getElementById('cliente_origen_id').value = '';
+        info.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i> Cliente no encontrado — seleccionalo de la lista.';
+        info.className = 'form-text text-warning';
+    }
+}
+
+async function cargar() {
+    const params = new URLSearchParams({
+        estado:    document.getElementById('filtroEstado').value,
+        vto_desde: document.getElementById('filtroVtoDesde').value,
+        vto_hasta: document.getElementById('filtroVtoHasta').value,
+        q:         document.getElementById('filtroQ').value,
+    });
+    const res = await fetch('/api/cheques_terceros/listar?' + params.toString());
+    const data = await res.json();
+    if (!data.success) { Swal.fire('Error', data.error || 'No se pudo cargar', 'error'); return; }
+    cheques = data.cheques;
+    render();
+    renderResumen();
+}
+
+function render() {
+    const tbody = document.getElementById('bodyCheques');
+    if (!cheques.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">Sin resultados</td></tr>';
+        return;
+    }
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    tbody.innerHTML = cheques.map(c => {
+        let warn = '';
+        if (c.estado === 'endosado' && !c.pago_id) {
+            warn = ' <i class="fas fa-exclamation-triangle text-warning" title="Endosado sin pago vinculado (carga manual)"></i>';
+        }
+        let vtoClass = '';
+        if (c.fecha_vencimiento && (c.estado === 'en_cartera' || c.estado === 'depositado')) {
+            const partes = c.fecha_vencimiento.split('/');
+            const fv = new Date(parseInt(partes[2]), parseInt(partes[1])-1, parseInt(partes[0]));
+            const diff = Math.round((fv - hoy) / (1000*60*60*24));
+            if (diff < 0)       vtoClass = 'text-danger fw-bold';
+            else if (diff <= 7) vtoClass = 'text-warning fw-bold';
+        }
+        let destino = '-';
+        if (c.proveedor_destino) destino = `<small>${c.proveedor_destino}</small>`;
+        return `
+        <tr>
+            <td><strong>${c.banco}</strong></td>
+            <td><code>${c.numero}</code>${warn}</td>
+            <td>${c.librador || '<small class="text-muted">-</small>'}</td>
+            <td>${c.cliente_origen_nombre || '<small class="text-muted">-</small>'}</td>
+            <td class="${vtoClass}">${c.fecha_vencimiento || '-'}</td>
+            <td class="text-end fw-bold">${fmt(c.monto)}</td>
+            <td class="text-center">${badgeEstado(c.estado)}</td>
+            <td>${destino}</td>
+            <td class="text-center">
+                <button class="btn btn-sm btn-outline-info me-1" onclick="cambiarEstado(${c.id})" title="Cambiar estado">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="editar(${c.id})" title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="eliminar(${c.id})" title="Eliminar">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderResumen() {
+    const resumen = document.getElementById('resumen');
+    if (!cheques.length) { resumen.style.display = 'none'; return; }
+    resumen.style.display = '';
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const en7 = new Date(); en7.setDate(en7.getDate() + 7); en7.setHours(23,59,59,0);
+    let cartera = 0, depositados = 0, porVencer = 0, total = 0;
+    cheques.forEach(c => {
+        if (c.estado === 'en_cartera') { cartera++; total += parseFloat(c.monto); }
+        if (c.estado === 'depositado') depositados++;
+        if ((c.estado === 'en_cartera' || c.estado === 'depositado') && c.fecha_vencimiento) {
+            const partes = c.fecha_vencimiento.split('/');
+            const fv = new Date(parseInt(partes[2]), parseInt(partes[1])-1, parseInt(partes[0]));
+            if (fv >= hoy && fv <= en7) porVencer++;
+        }
+    });
+    document.getElementById('r_cartera').textContent     = cartera;
+    document.getElementById('r_depositados').textContent = depositados;
+    document.getElementById('r_porvencer').textContent   = porVencer;
+    document.getElementById('r_total').textContent       = fmt(total);
+}
+
+// ─── ALTA / EDICIÓN ──────────────────────────────────────────────────
+function abrirModalNuevo() {
+    document.getElementById('modalChequeTitulo').innerHTML = '<i class="fas fa-hand-holding-usd me-2"></i>Nuevo Cheque de Terceros';
+    document.getElementById('chId').value = '';
+    ['banco','numero','librador','cuit_librador','fecha_emision','fecha_vencimiento',
+     'monto','cliente_origen_busqueda','cliente_origen_id','fecha_recepcion',
+     'fecha_endoso','proveedor_destino_id','observaciones'].forEach(f => {
+         const el = document.getElementById(f);
+         if (el) el.value = '';
+     });
+    const estSel = document.getElementById('estado');
+    estSel.value = 'en_cartera';
+    estSel.disabled = false;
+    document.getElementById('fecha_recepcion').valueAsDate = new Date();
+    document.getElementById('clienteSeleccionadoInfo').innerHTML =
+        '<i class="fas fa-info-circle"></i> Escribí el nombre y seleccionalo de la lista.';
+    document.getElementById('clienteSeleccionadoInfo').className = 'form-text';
+    toggleCamposEndosado();
+    modalCheque.show();
+    setTimeout(() => document.getElementById('banco').focus(), 300);
+}
+
+function toggleCamposEndosado() {
+    const est = document.getElementById('estado').value;
+    document.getElementById('divProveedor').style.display   = (est === 'endosado') ? '' : 'none';
+    document.getElementById('divFechaEndoso').style.display = (est === 'endosado') ? '' : 'none';
+    if (est === 'endosado') {
+        const fe = document.getElementById('fecha_endoso');
+        if (!fe.value) fe.valueAsDate = new Date();
+    }
+}
+
+async function editar(id) {
+    const res = await fetch('/api/cheque_tercero/' + id);
+    const data = await res.json();
+    if (!data.success) { Swal.fire('Error', data.error, 'error'); return; }
+    const c = data.cheque;
+    document.getElementById('modalChequeTitulo').innerHTML = '<i class="fas fa-edit me-2"></i>Editar Cheque';
+    document.getElementById('chId').value = c.id;
+    document.getElementById('banco').value             = c.banco || '';
+    document.getElementById('numero').value            = c.numero || '';
+    document.getElementById('librador').value          = c.librador || '';
+    document.getElementById('cuit_librador').value     = c.cuit_librador || '';
+    document.getElementById('monto').value             = c.monto;
+    document.getElementById('observaciones').value     = c.observaciones || '';
+    document.getElementById('fecha_emision').value     = c.fecha_emision     ? c.fecha_emision.split('/').reverse().join('-')     : '';
+    document.getElementById('fecha_vencimiento').value = c.fecha_vencimiento ? c.fecha_vencimiento.split('/').reverse().join('-') : '';
+    document.getElementById('fecha_recepcion').value   = c.fecha_recepcion   ? c.fecha_recepcion.split('/').reverse().join('-')   : '';
+    document.getElementById('fecha_endoso').value      = c.fecha_endoso      ? c.fecha_endoso.split('/').reverse().join('-')      : '';
+    document.getElementById('cliente_origen_id').value = c.cliente_origen_id || '';
+    document.getElementById('cliente_origen_busqueda').value = c.cliente_origen_nombre || '';
+    document.getElementById('proveedor_destino_id').value = c.proveedor_destino_id || '';
+
+    const sel = document.getElementById('estado');
+    sel.value    = c.estado;
+    sel.disabled = true;
+
+    toggleCamposEndosado();
+    if (c.cliente_origen_nombre) {
+        const info = document.getElementById('clienteSeleccionadoInfo');
+        info.innerHTML = `<i class="fas fa-check-circle text-success"></i> Cliente: <strong>${c.cliente_origen_nombre}</strong>`;
+        info.className = 'form-text text-success';
+    }
+    modalCheque.show();
+}
+
+async function guardar() {
+    const id = document.getElementById('chId').value;
+    document.getElementById('estado').disabled = false;   // reactivar para leer
+
+    const payload = {
+        banco:                document.getElementById('banco').value.trim(),
+        numero:               document.getElementById('numero').value.trim(),
+        librador:             document.getElementById('librador').value.trim(),
+        cuit_librador:        document.getElementById('cuit_librador').value.trim(),
+        fecha_emision:        document.getElementById('fecha_emision').value,
+        fecha_vencimiento:    document.getElementById('fecha_vencimiento').value,
+        monto:                document.getElementById('monto').value,
+        estado:               document.getElementById('estado').value,
+        cliente_origen_id:    document.getElementById('cliente_origen_id').value || null,
+        proveedor_destino_id: document.getElementById('proveedor_destino_id').value || null,
+        fecha_recepcion:      document.getElementById('fecha_recepcion').value,
+        fecha_endoso:         document.getElementById('fecha_endoso').value,
+        observaciones:        document.getElementById('observaciones').value.trim(),
+    };
+
+    if (!payload.banco)  { Swal.fire('Error', 'El banco es obligatorio', 'warning'); return; }
+    if (!payload.numero) { Swal.fire('Error', 'El número es obligatorio', 'warning'); return; }
+    if (!payload.monto || parseFloat(payload.monto) <= 0) {
+        Swal.fire('Error', 'El monto debe ser mayor a 0', 'warning'); return;
+    }
+
+    const url = id ? `/api/cheque_tercero/${id}/editar` : '/api/cheque_tercero/nuevo';
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!data.success) { Swal.fire('Error', data.error, 'error'); return; }
+    modalCheque.hide();
+    Swal.fire({ icon:'success', title:'Guardado', timer:1200, timerProgressBar:true, showConfirmButton:false });
+    cargar();
+}
+
+// ─── CAMBIO DE ESTADO ────────────────────────────────────────────────
+function cambiarEstado(id) {
+    const c = cheques.find(x => x.id === id);
+    if (!c) return;
+    document.getElementById('estChId').value = id;
+    document.getElementById('estChInfo').textContent = `${c.banco} Nº ${c.numero} — ${fmt(c.monto)}`;
+
+    const trans = {
+        'en_cartera': [
+            {v:'depositado', t:'Depositar en el banco'},
+            {v:'endosado',   t:'Endosar a un proveedor'},
+            {v:'rechazado',  t:'Marcar rechazado'},
+        ],
+        'depositado': [
+            {v:'cobrado',   t:'Cobrado (el banco acreditó)'},
+            {v:'rechazado', t:'Rechazado (rebotó)'},
+        ],
+        'endosado':  [{v:'rechazado', t:'Rechazado (rebotó tras endoso)'}],
+        'cobrado':   [],
+        'rechazado': [{v:'en_cartera', t:'Volver a cartera (recuperado)'}],
+    };
+    const opciones = trans[c.estado] || [];
+    if (!opciones.length) {
+        Swal.fire('Sin transiciones', `El estado "${c.estado}" es final, no se puede cambiar.`, 'info');
+        return;
+    }
+
+    let html = '<div class="mb-3"><label class="form-label fw-bold">Acción</label>';
+    html += '<select id="estNuevoValor" class="form-select" onchange="renderExtraEstado()">';
+    opciones.forEach(o => html += `<option value="${o.v}">${o.t}</option>`);
+    html += '</select></div>';
+    html += '<div id="estExtra"></div>';
+
+    document.getElementById('estContenido').innerHTML = html;
+    renderExtraEstado();
+    modalEstado.show();
+}
+
+function renderExtraEstado() {
+    const v = document.getElementById('estNuevoValor').value;
+    const extra = document.getElementById('estExtra');
+    if (v === 'depositado') {
+        extra.innerHTML = `
+            <div class="mb-2">
+                <label class="form-label fw-bold small">Banco destino <span class="text-danger">*</span></label>
+                <input type="text" id="estBancoDep" class="form-control form-control-sm" placeholder="Galicia, Nación, etc.">
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-bold small">Cuenta destino <span class="text-danger">*</span></label>
+                <input type="text" id="estCuentaDep" class="form-control form-control-sm" placeholder="Nº de cuenta">
+            </div>
+            <div class="mb-2">
+                <label class="form-label fw-bold small">Fecha depósito</label>
+                <input type="date" id="estFecha" class="form-control form-control-sm">
+            </div>`;
+        document.getElementById('estFecha').valueAsDate = new Date();
+    } else if (v === 'endosado') {
+        let html = `<div class="alert alert-warning py-2 small">
+            <i class="fas fa-exclamation-triangle me-1"></i>
+            Endoso manual: no descuenta la deuda del proveedor. Para eso usar la pantalla de pago (próximamente).
+        </div>
+        <div class="mb-2">
+            <label class="form-label fw-bold small">Proveedor destino <span class="text-danger">*</span></label>
+            <select id="estProvId" class="form-select form-select-sm">
+                <option value="">-- Seleccionar --</option>`;
+        {% for p in proveedores %}
+        html += `<option value="{{ p.id }}">{{ p.razon_social }}</option>`;
+        {% endfor %}
+        html += `</select></div>
+        <div class="mb-2">
+            <label class="form-label fw-bold small">Fecha endoso</label>
+            <input type="date" id="estFecha" class="form-control form-control-sm">
+        </div>`;
+        extra.innerHTML = html;
+        document.getElementById('estFecha').valueAsDate = new Date();
+    } else {
+        extra.innerHTML = `<div class="mb-2">
+            <label class="form-label fw-bold small">Fecha</label>
+            <input type="date" id="estFecha" class="form-control form-control-sm">
+        </div>`;
+        document.getElementById('estFecha').valueAsDate = new Date();
+    }
+}
+
+async function confirmarCambioEstado() {
+    const id = document.getElementById('estChId').value;
+    const nuevo = document.getElementById('estNuevoValor').value;
+    const payload = { estado: nuevo };
+
+    const fechaInput = document.getElementById('estFecha');
+    if (fechaInput) payload.fecha = fechaInput.value;
+
+    if (nuevo === 'depositado') {
+        const bancoDep  = document.getElementById('estBancoDep').value.trim();
+        const cuentaDep = document.getElementById('estCuentaDep').value.trim();
+        if (!bancoDep || !cuentaDep) {
+            Swal.fire('Error', 'Banco y cuenta de destino son obligatorios', 'warning'); return;
+        }
+        payload.banco_deposito  = bancoDep;
+        payload.cuenta_deposito = cuentaDep;
+    }
+    if (nuevo === 'endosado') {
+        const prov = document.getElementById('estProvId').value;
+        if (!prov) { Swal.fire('Error', 'Tenés que seleccionar un proveedor', 'warning'); return; }
+        payload.proveedor_destino_id = prov;
+    }
+
+    const res = await fetch(`/api/cheque_tercero/${id}/estado`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!data.success) { Swal.fire('Error', data.error, 'error'); return; }
+    modalEstado.hide();
+    Swal.fire({ icon:'success', title:'Estado actualizado', timer:1200, timerProgressBar:true, showConfirmButton:false });
+    cargar();
+}
+
+// ─── ELIMINAR ────────────────────────────────────────────────────────
+async function eliminar(id) {
+    const c = cheques.find(x => x.id === id);
+    const conf = await Swal.fire({
+        title: '¿Eliminar cheque?',
+        html: `<strong>${c.banco} Nº ${c.numero}</strong><br>Monto: ${fmt(c.monto)}`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'No',
+        confirmButtonColor: '#dc3545',
+    });
+    if (!conf.isConfirmed) return;
+    const res = await fetch(`/api/cheque_tercero/${id}/eliminar`, { method: 'POST' });
+    const data = await res.json();
+    if (!data.success) { Swal.fire('Error', data.error, 'error'); return; }
+    Swal.fire({ icon:'success', title:'Eliminado', timer:1200, timerProgressBar:true, showConfirmButton:false });
+    cargar();
+}
+
+// ─── BUSCADOR debounce ──────────────────────────────────────────────
+let timer;
+document.getElementById('filtroQ').addEventListener('input', function() {
+    clearTimeout(timer);
+    timer = setTimeout(cargar, 300);
+});
+
+// ─── INIT ────────────────────────────────────────────────────────────
+cargarClientes();
+cargar();
+</script>
+{% endblock %}

@@ -1,0 +1,899 @@
+{% extends 'base.html' %}
+{% block title %}Cta Cte — {{ proveedor.razon_social }}{% endblock %}
+
+{% block content %}
+<style>
+    .mov-factura      { }
+    .mov-pago         { }
+    .mov-nota_credito { background: #e7f5ff; }
+    .mov-nota_debito  { background: #fff4e5; }
+    .mov-saldo_inicial{ background: #FFF2CC; }
+    .mov-ajuste       { background: #F2E9E4; }
+    .badge-tipo       { font-size: 0.7rem; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3 flex-wrap gap-2">
+    <h2><i class="fas fa-list-alt me-2"></i>Cta Cte — {{ proveedor.razon_social }}</h2>
+    <div>
+        <a href="/pagar_proveedor?proveedor_id={{ proveedor.id }}" class="btn btn-success me-2">
+            <i class="fas fa-hand-holding-dollar me-1"></i> Pagar
+        </a>
+        <button class="btn btn-outline-success me-2" data-bs-toggle="modal" data-bs-target="#modalPagoACuenta">
+            <i class="fas fa-piggy-bank me-1"></i> Pago a cuenta
+        </button>
+        {% if session.get('rol') == 'admin' %}
+        <button class="btn btn-warning me-2" onclick="abrirModalAjuste()" title="Ajuste manual de saldo (solo admin)">
+            <i class="fas fa-balance-scale me-1"></i> Ajustar saldo
+        </button>
+        {% endif %}
+        <a href="/proveedores" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-arrow-left me-1"></i> Volver
+        </a>
+        <button class="btn btn-outline-info" onclick="abrirAyuda()">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+    </div>
+</div>
+
+<!-- Info del proveedor -->
+<div class="card mb-3">
+    <div class="card-body py-3">
+        <div class="row g-2 text-center">
+            <div class="col-md-4">
+                <small class="text-muted">Razón social</small>
+                <div class="fw-bold">{{ proveedor.razon_social }}</div>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted">CUIT</small>
+                <div class="fw-bold">{{ proveedor.cuit or '-' }}</div>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted">Saldo actual (cta cte)</small>
+                <div class="fw-bold fs-4 text-danger" id="saldoActual">$0,00</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros + exports -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small mb-1 fw-bold">Desde</label>
+                <input type="date" id="filtroDesde" class="form-control form-control-sm" onchange="cargar()">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1 fw-bold">Hasta</label>
+                <input type="date" id="filtroHasta" class="form-control form-control-sm" onchange="cargar()">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="limpiarFiltros()">
+                    <i class="fas fa-eraser"></i> Limpiar
+                </button>
+            </div>
+            <div class="col-md-2">
+                <a href="#" id="btnExportPdf" class="btn btn-outline-danger btn-sm w-100" target="_blank">
+                    <i class="fas fa-file-pdf"></i> PDF
+                </a>
+            </div>
+            <div class="col-md-2">
+                <a href="#" id="btnExportXlsx" class="btn btn-outline-success btn-sm w-100">
+                    <i class="fas fa-file-excel"></i> Excel
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resumen del período -->
+<div class="row g-2 mb-3" id="resumen" style="display:none">
+    <div class="col-md-3"><div class="card text-bg-light"><div class="card-body py-2">
+        <small class="text-muted">Saldo inicial</small>
+        <div class="fw-bold fs-5" id="r_inicial">$0,00</div>
+    </div></div></div>
+    <div class="col-md-3"><div class="card text-bg-danger"><div class="card-body py-2">
+        <small>Total debe</small>
+        <div class="fw-bold fs-5" id="r_debe">$0,00</div>
+    </div></div></div>
+    <div class="col-md-3"><div class="card text-bg-success"><div class="card-body py-2">
+        <small>Total haber</small>
+        <div class="fw-bold fs-5" id="r_haber">$0,00</div>
+    </div></div></div>
+    <div class="col-md-3"><div class="card text-bg-dark"><div class="card-body py-2">
+        <small>Saldo final</small>
+        <div class="fw-bold fs-5" id="r_final">$0,00</div>
+    </div></div></div>
+</div>
+
+<!-- Tabla de movimientos -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width:100px">Fecha</th>
+                        <th style="width:130px">Tipo</th>
+                        <th>Descripción</th>
+                        <th class="text-end" style="width:130px">Debe</th>
+                        <th class="text-end" style="width:130px">Haber</th>
+                        <th class="text-end" style="width:140px">Saldo</th>
+                        <th class="text-center" style="width:60px">Ver</th>
+                    </tr>
+                </thead>
+                <tbody id="bodyMovs">
+                    <tr><td colspan="7" class="text-center py-4 text-muted">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal AYUDA -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Ayuda — Cuenta Corriente Proveedor</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- ══════════════ INTRO ══════════════ -->
+                <h4 class="text-primary"><i class="fas fa-book me-2"></i>¿Qué es la Cuenta Corriente del Proveedor?</h4>
+                <p>
+                    Es el <strong>libro contable</strong> del proveedor dentro del sistema. Muestra,
+                    ordenados por fecha, todos los movimientos que impactan en la deuda:
+                    facturas que te emitieron, pagos que hiciste, notas de crédito, anulaciones, etc.
+                </p>
+                <p>
+                    Al final de cada fila hay un <strong>saldo acumulado</strong> que representa
+                    cuánto le debés al proveedor <em>hasta ese momento</em>. El saldo final
+                    (última fila) debe coincidir con el "Saldo actual" que se ve arriba.
+                </p>
+
+                <div class="alert alert-primary small">
+                    <strong><i class="fas fa-lightbulb me-1"></i> Analogía simple:</strong> pensalo como
+                    el <em>resumen de cuenta del banco</em>, pero al revés. Acá cada movimiento
+                    de "debe" aumenta lo que <u>le</u> debés al proveedor, y cada "haber" lo reduce.
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ══════════════ ESTRUCTURA DE LA PANTALLA ══════════════ -->
+                <h4 class="text-primary"><i class="fas fa-th-large me-2"></i>Estructura de la pantalla</h4>
+
+                <h6 class="fw-bold mt-3">1) Encabezado superior</h6>
+                <ul>
+                    <li><strong>Razón social</strong> y <strong>CUIT</strong> del proveedor.</li>
+                    <li><strong>Saldo actual</strong> (en rojo, grande): lo que le debés <u>hoy</u>.
+                        <em>No se ve afectado por los filtros de fecha de abajo.</em> Es el mismo
+                        valor que aparece en el listado de proveedores.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">2) Barra de filtros + exportar</h6>
+                <ul>
+                    <li><strong>Desde / Hasta</strong>: fechas para acotar qué movimientos ver.</li>
+                    <li><strong>Limpiar</strong>: borra los filtros y muestra todo el historial.</li>
+                    <li><strong>PDF</strong> (rojo) y <strong>Excel</strong> (verde): descargan el reporte
+                        con los filtros aplicados. Más detalle más abajo.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">3) Cuatro tarjetas de resumen del período</h6>
+                <ul>
+                    <li><strong>Saldo inicial</strong>: cuánto debías al comienzo del período (antes de la fecha "Desde"). Si no pusiste "Desde", es $0,00.</li>
+                    <li><strong>Total Debe</strong>: suma de todo lo que se sumó a la deuda en el período (facturas nuevas, ajustes de anulación de pagos).</li>
+                    <li><strong>Total Haber</strong>: suma de todo lo que redujo la deuda en el período (pagos emitidos, notas de crédito).</li>
+                    <li><strong>Saldo final</strong>: Saldo inicial + Debe − Haber. Debería coincidir con el saldo de la última fila de la tabla.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">4) Tabla de movimientos</h6>
+                <p>Columnas: <code>Fecha</code> · <code>Tipo</code> · <code>Descripción</code> ·
+                    <code>Debe</code> · <code>Haber</code> · <code>Saldo</code>. Si hay filtro "Desde",
+                    la tabla comienza con una fila destacada en gris claro que muestra el
+                    <strong>saldo inicial del período</strong>.</p>
+
+                <hr class="my-4">
+
+                <!-- ══════════════ TIPOS DE MOVIMIENTO ══════════════ -->
+                <h4 class="text-primary"><i class="fas fa-list me-2"></i>Tipos de movimiento</h4>
+                <p>Cada fila tiene una etiqueta de color que identifica el tipo. Entender esto es clave
+                    para leer la cta cte.</p>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr><th style="width:140px">Tipo</th><th>Qué significa</th><th>De dónde viene</th><th>Impacta en</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge badge-tipo bg-warning text-dark">Saldo inicial</span></td>
+                                <td>Deuda migrada del sistema anterior al activarse este módulo. Es el punto de partida.</td>
+                                <td>Lo cargó automáticamente el sistema al instalarse el módulo. Hay uno (y solo uno) por cada proveedor que tenía deuda cuando migramos.</td>
+                                <td><strong>Debe</strong> (si debías) o <strong>Haber</strong> (si te debían).</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-tipo bg-danger">Factura</span></td>
+                                <td>Factura de compra que cargaste o escaneaste en el sistema.</td>
+                                <td>Pantalla <em>Facturas de Compra</em> (manual o por OCR).</td>
+                                <td><strong>Debe</strong> — aumenta la deuda por el total de la factura.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-tipo bg-success">Pago</span></td>
+                                <td>Orden de pago emitida al proveedor.</td>
+                                <td>Pantalla <em>Pagar Proveedor</em>.</td>
+                                <td><strong>Haber</strong> — reduce la deuda por el total del pago.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-tipo bg-info text-dark">N. Crédito</span></td>
+                                <td>Nota de crédito del proveedor (te devuelve algo, te hace una bonificación, te anula una factura parcialmente, etc).</td>
+                                <td>Hoy se carga como factura tipo NC en Facturas de Compra (módulo futuro lo va a hacer más prolijo).</td>
+                                <td><strong>Haber</strong> — reduce la deuda.</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-tipo bg-secondary">Ajuste</span></td>
+                                <td>Corrección al libro mayor. Puede sumar o restar.</td>
+                                <td>Se genera automáticamente cuando: <br>
+                                    — Anulás un pago (ajuste en Debe).<br>
+                                    — Eliminás una factura que tenía movimiento (ajuste en Haber).</td>
+                                <td>Depende del caso — mirar la columna Debe/Haber de la fila.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ══════════════ CÓMO SE LEE ══════════════ -->
+                <h4 class="text-primary"><i class="fas fa-glasses me-2"></i>Cómo se lee una cta cte — ejemplo</h4>
+                <p>Supongamos esta cta cte:</p>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead class="table-light">
+                            <tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th class="text-end">Debe</th><th class="text-end">Haber</th><th class="text-end">Saldo</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>01/04</td><td><span class="badge bg-warning text-dark">Saldo inicial</span></td><td>Saldo migrado</td><td class="text-end text-danger">$81.000,00</td><td>—</td><td class="text-end fw-bold">$81.000,00</td></tr>
+                            <tr><td>05/04</td><td><span class="badge bg-danger">Factura</span></td><td>Factura A 0006-5500</td><td class="text-end text-danger">$50.000,00</td><td>—</td><td class="text-end fw-bold">$131.000,00</td></tr>
+                            <tr><td>10/04</td><td><span class="badge bg-success">Pago</span></td><td>Pago OP R 0001-1</td><td>—</td><td class="text-end text-success">$40.000,00</td><td class="text-end fw-bold">$91.000,00</td></tr>
+                            <tr><td>12/04</td><td><span class="badge bg-secondary">Ajuste</span></td><td>Anulación OP R 0001-1 — motivo</td><td class="text-end text-danger">$40.000,00</td><td>—</td><td class="text-end fw-bold">$131.000,00</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p>Cómo se interpreta:</p>
+                <ol>
+                    <li>El 1 de abril tenía una deuda inicial migrada de <strong>$81.000</strong>.</li>
+                    <li>El 5 le cargaron una factura nueva de $50.000 → la deuda pasa a <strong>$131.000</strong>.</li>
+                    <li>El 10 le pagué $40.000 → la deuda baja a <strong>$91.000</strong>.</li>
+                    <li>El 12 anulé ese pago (por el motivo que sea) → la deuda vuelve a <strong>$131.000</strong>.</li>
+                </ol>
+                <p>En cualquier momento podés auditar: "si sumo todos los Debe y le resto todos los Haber,
+                    ¿me da el saldo final?". Si no da, hay algo mal cargado.</p>
+
+                <hr class="my-4">
+
+                <!-- ══════════════ FILTROS ══════════════ -->
+                <h4 class="text-primary"><i class="fas fa-filter me-2"></i>Cómo usar los filtros de fecha</h4>
+
+                <h6 class="fw-bold">Caso 1 — Ver un mes específico</h6>
+                <p>Poné <code>Desde = 01/04/2026</code> y <code>Hasta = 30/04/2026</code>. Vas a ver:</p>
+                <ul>
+                    <li>Fila destacada con el <strong>saldo al 31/03/2026</strong> (saldo inicial del período).</li>
+                    <li>Todos los movimientos de abril.</li>
+                    <li>El saldo final es el saldo al 30/04/2026.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">Caso 2 — Desde una fecha hasta hoy</h6>
+                <p>Poné solo <code>Desde</code> y dejá <code>Hasta</code> vacío. Te muestra desde esa
+                    fecha hasta el último movimiento registrado.</p>
+
+                <h6 class="fw-bold mt-3">Caso 3 — Ver todo el historial</h6>
+                <p>Click en <strong>Limpiar</strong> (o dejá los dos campos vacíos). Muestra todos
+                    los movimientos desde el inicio (incluyendo el saldo inicial migrado).</p>
+
+                <h6 class="fw-bold mt-3">Caso 4 — Conciliar con el contador</h6>
+                <p>El contador te pide "el mayor del proveedor X en marzo". Poné las fechas y exportá a
+                    <strong>PDF</strong> o <strong>Excel</strong>. Listo.</p>
+
+                <hr class="my-4">
+
+                <!-- ══════════════ EXPORTS ══════════════ -->
+                <h4 class="text-primary"><i class="fas fa-download me-2"></i>Exportar a PDF y Excel</h4>
+
+                <h6 class="fw-bold">Exportar a PDF (botón rojo)</h6>
+                <ul>
+                    <li>Se abre en una pestaña nueva del navegador.</li>
+                    <li>Tiene formato A4, encabezado con tu razón social y CUIT (del <code>config_cliente.py</code>), datos del proveedor y tabla del libro mayor.</li>
+                    <li>Al final tiene fila de totales (Debe / Haber / Saldo final).</li>
+                    <li>Respeta los filtros de fecha que tenías puestos.</li>
+                    <li>Imprimible directo desde el navegador (Ctrl+P).</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">Exportar a Excel (botón verde)</h6>
+                <ul>
+                    <li>Descarga un archivo <code>.xlsx</code>.</li>
+                    <li>Los números quedan como <strong>números</strong> (no texto), así podés sumar, filtrar, etc.</li>
+                    <li>Tiene columnas de ancho calibrado y encabezado azul.</li>
+                    <li>Al final fila de totales con fondo verde claro.</li>
+                    <li>Nombre del archivo: <code>CtaCte_&lt;Proveedor&gt;_&lt;fecha&gt;.xlsx</code></li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ══════════════ ACCIONES RÁPIDAS ══════════════ -->
+                <h4 class="text-primary"><i class="fas fa-bolt me-2"></i>Acciones rápidas desde esta pantalla</h4>
+                <ul>
+                    <li><strong>Pagar</strong> (botón verde arriba): te lleva a <em>Pagar Proveedor</em>
+                        con este proveedor ya seleccionado. Así ves la deuda y le pagás en dos clicks.</li>
+                    <li><strong>Volver</strong>: vuelve al listado de Proveedores.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ══════════════ FAQ ══════════════ -->
+                <h4 class="text-primary"><i class="fas fa-question-circle me-2"></i>Preguntas frecuentes</h4>
+
+                <div class="accordion" id="faqAcc">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                ¿Por qué el "Saldo actual" de arriba no coincide con el saldo final de abajo?
+                            </button>
+                        </h2>
+                        <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAcc">
+                            <div class="accordion-body">
+                                Porque seguro tenés un <strong>filtro de fecha aplicado</strong>. El "Saldo actual" es
+                                el de hoy (sin filtros); el "Saldo final" es el del período filtrado. Si sacás los filtros
+                                (botón Limpiar), los dos deberían coincidir. Si aún sin filtros no coinciden, es un síntoma
+                                de algo desincronizado — avisame.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                ¿Puedo cargar un movimiento manual en la cta cte?
+                            </button>
+                        </h2>
+                        <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAcc">
+                            <div class="accordion-body">
+                                No desde esta pantalla. Todos los movimientos se generan automáticamente cuando cargás
+                                facturas, emitís pagos, o anulás pagos. Es a propósito: la cta cte es una
+                                <strong>consecuencia</strong> de lo que hacés en otras pantallas, no se edita a mano. Si
+                                necesitás corregir algo puntual, habría que hacer un ajuste por SQL (consultar con Pablo).
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                ¿Qué pasa si elimino una factura que ya tiene movimiento?
+                            </button>
+                        </h2>
+                        <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAcc">
+                            <div class="accordion-body">
+                                El sistema no borra el movimiento original; genera un <strong>Ajuste</strong> inverso.
+                                Así queda toda la historia trazable. Si la factura tenía pagos imputados, directamente no
+                                te deja eliminarla — primero hay que anular los pagos desde <em>Pagos Emitidos</em>.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                                ¿Por qué aparece un "Saldo inicial" con una fecha rara?
+                            </button>
+                        </h2>
+                        <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAcc">
+                            <div class="accordion-body">
+                                Ese es el saldo que el proveedor tenía cuando se activó este módulo. Se migró una sola vez,
+                                con la fecha que se definió en ese momento (ej. 01/04/2026 o 30/04/2026). No es un error.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                                No veo facturas viejas que sí figuraban antes en la cta cte. ¿Qué pasó?
+                            </button>
+                        </h2>
+                        <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAcc">
+                            <div class="accordion-body">
+                                Esas facturas siguen en la base (podés verlas en <em>Facturas de Compra</em> o en el libro
+                                de <em>IVA Compras</em>) pero no se ven acá porque su saldo ya estaba incluido en el
+                                "Saldo inicial" al migrar. Desde la activación del módulo, solo se muestran movimientos
+                                nuevos. Esto evita duplicar la deuda.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">
+                                ¿El proveedor puede ver esta pantalla?
+                            </button>
+                        </h2>
+                        <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#faqAcc">
+                            <div class="accordion-body">
+                                No directamente. Esta pantalla es para uso interno. Si querés compartirla con el
+                                proveedor (ej. para conciliar saldos), usá <strong>Exportar PDF</strong> y mandale el
+                                archivo por mail o WhatsApp.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq7">
+                                ¿Cómo reimprimo el recibo/OP de un pago que se ve en la cta cte?
+                            </button>
+                        </h2>
+                        <div id="faq7" class="accordion-collapse collapse" data-bs-parent="#faqAcc">
+                            <div class="accordion-body">
+                                Desde esta pantalla no se puede directamente. Andá a
+                                <strong>Compras → Pagos Emitidos</strong>, buscás el pago (filtrás por proveedor si querés)
+                                y tocás el ícono del PDF en esa fila.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ══════════════ ERRORES COMUNES ══════════════ -->
+                <h4 class="text-primary"><i class="fas fa-exclamation-triangle me-2"></i>Errores comunes</h4>
+                <ul>
+                    <li><strong>"No me aparece ningún movimiento"</strong> → revisá que no tengas
+                        filtros de fecha puestos. Hacé click en <em>Limpiar</em>.</li>
+                    <li><strong>"El PDF sale vacío o raro"</strong> → avisame y pasame el ID del
+                        proveedor + los filtros que usaste.</li>
+                    <li><strong>"El saldo me da distinto al real"</strong> → primero limpiá filtros.
+                        Si aún sin filtros el saldo final de la última fila no coincide con el
+                        "Saldo actual" de arriba, es un síntoma a reportar — no es algo que
+                        tengas que corregir a mano.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ══════════════ PAGO A CUENTA ══════════════ -->
+                <h4 class="text-primary"><i class="fas fa-piggy-bank me-2"></i>Pago a cuenta / Adelanto</h4>
+                <p>
+                    Si querés pagarle al proveedor sin tener una factura específica para imputar —
+                    por ejemplo, un adelanto para una compra futura — usá el botón
+                    <strong>🐷 Pago a cuenta</strong> que está arriba a la derecha.
+                </p>
+                <p>
+                    El importe queda registrado como <strong>Haber</strong> en la CTA.CTE y reduce el saldo
+                    que le debés al proveedor. Cuando llegue la factura, el sistema la imputará normalmente
+                    y el saldo se ajustará.
+                </p>
+                <div class="alert alert-info small">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <strong>¿Cómo usarlo?</strong><br>
+                    1. Hacé clic en <strong>Pago a cuenta</strong><br>
+                    2. Elegí el medio de pago (efectivo, transferencia, cheque)<br>
+                    3. Ingresá el importe y una observación opcional<br>
+                    4. Hacé clic en <strong>Registrar</strong> — el saldo se actualiza automáticamente
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ══════════════ NOTAS TÉCNICAS ══════════════ -->
+                <h4 class="text-primary"><i class="fas fa-cog me-2"></i>Notas técnicas (para Pablo / desarrolladores)</h4>
+                <ul class="small text-muted">
+                    <li>La cta cte lee de la tabla <code>proveedor_movimiento</code> (fuente de verdad).</li>
+                    <li><code>proveedor.saldo</code> es un caché que se sincroniza en cada operación.</li>
+                    <li>Los movimientos se crean desde:
+                        <ul>
+                            <li><code>api_factura_compra_nueva</code> (tipo factura)</li>
+                            <li><code>api_pagar_proveedor</code> (tipo pago)</li>
+                            <li><code>api_pago_proveedor_anular</code> (tipo ajuste)</li>
+                            <li><code>api_factura_compra_eliminar</code> (tipo ajuste)</li>
+                        </ul>
+                    </li>
+                    <li>Si hay desincronización entre caché y mayor, corresponde correr un recálculo (no implementado todavía).</li>
+                </ul>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- Modal Ver Factura Compra -->
+<div class="modal fade" id="modalVerFacturaCompra" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#0A2140; color:white;">
+                <h5 class="modal-title"><i class="fas fa-file-invoice me-2"></i>Factura de Compra</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="bodyFacturaCompra">
+                <div class="text-center py-4"><span class="spinner-border text-primary"></span></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Pago a cuenta proveedor -->
+<div class="modal fade" id="modalPagoACuenta" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#198754; color:white;">
+                <h5 class="modal-title"><i class="fas fa-piggy-bank me-2"></i>Pago a cuenta / Adelanto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">Registrá un pago al proveedor sin imputarlo a ninguna factura. Quedará como saldo a favor tuyo.</p>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Medio de pago</label>
+                    <select id="pacMedio" class="form-select">
+                        <option value="efectivo">💵 Efectivo</option>
+                        <option value="transferencia">🏦 Transferencia</option>
+                        <option value="cheque">📋 Cheque</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Importe <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" id="pacImporte" class="form-control" step="0.01" min="0.01" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Observaciones</label>
+                    <input type="text" id="pacObs" class="form-control" placeholder="Opcional">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-success" onclick="confirmarPagoACuenta()">
+                    <i class="fas fa-piggy-bank me-1"></i> Registrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal AJUSTE SALDO -->                           -->
+<!-- ══════════════════════════════════════════════════════════ -->
+{% if session.get('rol') == 'admin' %}
+<div class="modal fade" id="modalAjuste" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="fas fa-balance-scale me-2"></i>Ajustar saldo manualmente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning small">
+                    <strong>⚠️ Operación administrativa.</strong> Esto ajusta el saldo del proveedor sin
+                    pasar por una factura ni un pago real. Quedará registrado como "Ajuste" en la cta cte.
+                    Usalo solo para regularizar saldos históricos o errores que no se puedan corregir
+                    eliminando facturas/pagos.
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Operación <span class="text-danger">*</span></label>
+                    <div class="form-check">
+                        <input type="radio" name="ajusteSigno" id="ajusteReducir" value="reducir" class="form-check-input" checked>
+                        <label class="form-check-label" for="ajusteReducir">
+                            <strong>Reducir deuda</strong> <small class="text-muted">(el proveedor te debe menos / blanqueo de saldo histórico)</small>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input type="radio" name="ajusteSigno" id="ajusteAumentar" value="aumentar" class="form-check-input">
+                        <label class="form-check-label" for="ajusteAumentar">
+                            <strong>Aumentar deuda</strong> <small class="text-muted">(le debés más)</small>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Monto <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" id="ajusteMonto" class="form-control" step="0.01" min="0.01" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label fw-bold">Motivo <span class="text-danger">*</span></label>
+                    <textarea id="ajusteMotivo" class="form-control" rows="2" maxlength="180"
+                              placeholder="Ej: Blanqueo de saldo histórico sin factura de respaldo"></textarea>
+                    <div class="form-text">Va a quedar visible en la cta cte. Sé claro para que se entienda en el futuro.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-warning" onclick="aplicarAjuste()">
+                    <i class="fas fa-check me-1"></i> Aplicar ajuste
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const PROV_ID = {{ proveedor.id }};
+const modalAyuda = new bootstrap.Modal(document.getElementById('modalAyuda'));
+
+function fmt(v) {
+    return '$' + parseFloat(v || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function abrirAyuda() { modalAyuda.show(); }
+
+function limpiarFiltros() {
+    document.getElementById('filtroDesde').value = '';
+    document.getElementById('filtroHasta').value = '';
+    cargar();
+}
+
+function badgeTipo(tipo) {
+    const map = {
+        'factura':       'bg-danger',
+        'pago':          'bg-success',
+        'nota_credito':  'bg-info text-dark',
+        'nota_debito':   'bg-warning text-dark',
+        'saldo_inicial': 'bg-warning text-dark',
+        'ajuste':        'bg-secondary',
+    };
+    const labels = {
+        'factura':       'Factura',
+        'pago':          'Pago',
+        'nota_credito':  'N. Crédito',
+        'nota_debito':   'N. Débito',
+        'saldo_inicial': 'Saldo inicial',
+        'ajuste':        'Ajuste',
+    };
+    return `<span class="badge badge-tipo ${map[tipo] || 'bg-secondary'}">${labels[tipo] || tipo}</span>`;
+}
+
+async function cargar() {
+    const desde = document.getElementById('filtroDesde').value;
+    const hasta = document.getElementById('filtroHasta').value;
+    const params = new URLSearchParams();
+    if (desde) params.set('desde', desde);
+    if (hasta) params.set('hasta', hasta);
+
+    const url = '/api/cta_cte_proveedor/' + PROV_ID + (params.toString() ? '?' + params.toString() : '');
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.success) { Swal.fire('Error', data.error || 'No se pudo cargar', 'error'); return; }
+
+    document.getElementById('saldoActual').textContent = fmt(data.saldo_actual);
+
+    // Resumen del período
+    const r = document.getElementById('resumen');
+    r.style.display = '';
+    document.getElementById('r_inicial').textContent = fmt(data.saldo_inicial_periodo);
+    document.getElementById('r_debe').textContent    = fmt(data.total_debe);
+    document.getElementById('r_haber').textContent   = fmt(data.total_haber);
+    document.getElementById('r_final').textContent   = fmt(data.saldo_final_periodo);
+
+    // Tabla
+    const tbody = document.getElementById('bodyMovs');
+    if (!data.movimientos.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">Sin movimientos en el período.</td></tr>';
+    } else {
+        let rows = '';
+        // Fila de saldo inicial (si hay filtros)
+        if (desde) {
+            rows += `
+            <tr class="table-light fw-bold">
+                <td colspan="5" class="text-end">Saldo inicial del período:</td>
+                <td class="text-end">${fmt(data.saldo_inicial_periodo)}</td>
+            </tr>`;
+        }
+        data.movimientos.forEach(m => {
+            let btnVer = '';
+            if (m.tipo === 'factura' && m.referencia_id) {
+                btnVer = `<button class="btn btn-sm btn-outline-primary py-0" onclick="verFacturaCompra(${m.referencia_id})" title="Ver factura">
+                    <i class="fas fa-file-invoice"></i></button>`;
+            } else if (m.tipo === 'pago' && m.referencia_id) {
+                btnVer = `<button class="btn btn-sm btn-outline-success py-0" onclick="verPago(${m.referencia_id})" title="Ver pago">
+                    <i class="fas fa-file-alt"></i></button>
+                    <button class="btn btn-sm btn-outline-danger py-0 ms-1" onclick="borrarPago(${m.referencia_id})" title="Borrar pago">
+                    <i class="fas fa-trash-alt"></i></button>`;
+            } else if (m.tipo === 'nota_credito' && m.referencia_id) {
+                btnVer = `<button class="btn btn-sm btn-outline-primary py-0" onclick="verFacturaCompra(${m.referencia_id})" title="Ver NC">
+                    <i class="fas fa-file-invoice"></i></button>
+                    <a href="/imputar_nc_compra/${m.referencia_id}" class="btn btn-sm btn-outline-success py-0 ms-1" title="Imputar a facturas">
+                    <i class="fas fa-link"></i></a>`;
+            }
+            rows += `
+            <tr class="mov-${m.tipo}">
+                <td>${m.fecha}</td>
+                <td>${badgeTipo(m.tipo)}</td>
+                <td><small>${m.descripcion || ''}</small></td>
+                <td class="text-end ${m.debe  > 0 ? 'text-danger fw-bold'  : 'text-muted'}">${m.debe  > 0 ? fmt(m.debe)  : '-'}</td>
+                <td class="text-end ${m.haber > 0 ? 'text-success fw-bold' : 'text-muted'}">${m.haber > 0 ? fmt(m.haber) : '-'}</td>
+                <td class="text-end fw-bold">${fmt(m.saldo_acumulado)}</td>
+                <td class="text-center">${btnVer}</td>
+            </tr>`;
+        });
+        tbody.innerHTML = rows;
+    }
+
+    // Actualizar enlaces de export con los mismos filtros
+    const qs = params.toString() ? '?' + params.toString() : '';
+    document.getElementById('btnExportPdf').href  = '/api/cta_cte_proveedor/' + PROV_ID + '/exportar_pdf'  + qs;
+    document.getElementById('btnExportXlsx').href = '/api/cta_cte_proveedor/' + PROV_ID + '/exportar_excel' + qs;
+}
+
+cargar();
+
+cargar();
+
+// ════════════════════════════════════════════════════════════
+// VER COMPROBANTES
+// ════════════════════════════════════════════════════════════
+
+async function verFacturaCompra(facturaId) {
+    document.getElementById('bodyFacturaCompra').innerHTML = '<div class="text-center py-4"><span class="spinner-border text-primary"></span></div>';
+    new bootstrap.Modal(document.getElementById('modalVerFacturaCompra')).show();
+    try {
+        const r = await fetch(`/api/factura_compra/${facturaId}`);
+        const data = await r.json();
+        if (!data.success) throw new Error(data.error);
+        const f = data.factura;
+        document.getElementById('bodyFacturaCompra').innerHTML = `
+            <div class="row g-2 mb-3">
+                <div class="col-6"><strong>Comprobante:</strong> ${f.tipo_comprobante || ''} ${f.punto_venta || ''}-${f.numero || ''}</div>
+                <div class="col-6"><strong>Fecha:</strong> ${f.fecha || ''}</div>
+                <div class="col-6"><strong>Proveedor:</strong> ${f.proveedor || ''}</div>
+                <div class="col-6"><strong>CUIT:</strong> ${f.cuit || '—'}</div>
+                ${f.cae ? `<div class="col-12"><strong>CAE:</strong> <code>${f.cae}</code></div>` : ''}
+            </div>
+            <hr>
+            <table class="table table-sm">
+                <tr><td>Subtotal:</td><td class="text-end">$${parseFloat(f.subtotal||0).toLocaleString('es-AR',{minimumFractionDigits:2})}</td></tr>
+                <tr><td>IVA:</td><td class="text-end">$${parseFloat(f.iva||0).toLocaleString('es-AR',{minimumFractionDigits:2})}</td></tr>
+                <tr class="fw-bold"><td>Total:</td><td class="text-end">$${parseFloat(f.total||0).toLocaleString('es-AR',{minimumFractionDigits:2})}</td></tr>
+                <tr><td>Saldo pendiente:</td><td class="text-end text-danger">$${parseFloat(f.saldo_pendiente||0).toLocaleString('es-AR',{minimumFractionDigits:2})}</td></tr>
+            </table>`;
+    } catch(e) {
+        document.getElementById('bodyFacturaCompra').innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+    }
+}
+
+async function verPago(pagoId) {
+    window.open(`/api/pago_proveedor/${pagoId}/recibo_pdf`, '_blank');
+}
+
+async function borrarPago(pagoId) {
+    const conf = await Swal.fire({
+        icon: 'warning',
+        title: '¿Borrar este pago?',
+        html: 'Se va a <strong>eliminar el pago</strong> y revertir todos sus efectos:<br><br>'
+            + '<small class="text-start d-block">'
+            + '• Las facturas imputadas vuelven a quedar <strong>pendientes</strong>.<br>'
+            + '• Los cheques entregados se liberan.<br>'
+            + '• El saldo del proveedor se recalcula.<br>'
+            + '• El pago desaparece de la cuenta corriente (sin rastro).'
+            + '</small><br>'
+            + '<strong class="text-danger">Esta acción no se puede deshacer.</strong>',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, borrar pago',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        reverseButtons: true,
+        focusCancel: true
+    });
+    if (!conf.isConfirmed) return;
+
+    try {
+        const r = await fetch(`/api/pago_proveedor/${pagoId}/eliminar`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await r.json();
+        if (data.success) {
+            await Swal.fire({
+                icon: 'success',
+                title: 'Pago borrado',
+                timer: 1500,
+                timerProgressBar: true,
+                showConfirmButton: false
+            });
+            cargar();
+        } else {
+            Swal.fire('Error', data.error || 'No se pudo borrar el pago', 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+async function confirmarPagoACuenta() {
+    const importe = parseFloat(document.getElementById('pacImporte').value || 0);
+    const medio   = document.getElementById('pacMedio').value;
+    const obs     = document.getElementById('pacObs').value;
+    if (importe <= 0) { Swal.fire('Error', 'Ingresá un importe válido', 'warning'); return; }
+    try {
+        const r = await fetch('/api/proveedor/pago_a_cuenta', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ proveedor_id: PROV_ID, importe, medio, observaciones: obs })
+        });
+        const data = await r.json();
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('modalPagoACuenta')).hide();
+            Swal.fire({ icon:'success', title:'Registrado', html:`Pago a cuenta de <strong>$${importe.toLocaleString('es-AR',{minimumFractionDigits:2})}</strong> registrado.`, confirmButtonColor:'#198754' });
+            document.getElementById('pacImporte').value = '';
+            document.getElementById('pacObs').value = '';
+            cargar();
+        } else {
+            Swal.fire('Error', data.error, 'error');
+        }
+    } catch(e) {
+        Swal.fire('Error', e.message, 'error');
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// AJUSTAR SALDO (solo admin)
+// ════════════════════════════════════════════════════════════
+{% if session.get('rol') == 'admin' %}
+const modalAjuste = new bootstrap.Modal(document.getElementById('modalAjuste'));
+
+function abrirModalAjuste() {
+    document.getElementById('ajusteMonto').value = '';
+    document.getElementById('ajusteMotivo').value = '';
+    document.getElementById('ajusteReducir').checked = true;
+    modalAjuste.show();
+    setTimeout(() => document.getElementById('ajusteMonto').focus(), 300);
+}
+
+async function aplicarAjuste() {
+    const monto  = parseFloat(document.getElementById('ajusteMonto').value || 0);
+    const motivo = document.getElementById('ajusteMotivo').value.trim();
+    const signo  = document.querySelector('input[name="ajusteSigno"]:checked').value;
+
+    if (monto <= 0)  { Swal.fire('Error', 'Ingresá un monto mayor a 0', 'warning'); return; }
+    if (!motivo)     { Swal.fire('Error', 'El motivo es obligatorio', 'warning'); return; }
+
+    const accionTxt = signo === 'reducir' ? 'reducir la deuda' : 'aumentar la deuda';
+    const conf = await Swal.fire({
+        title: '¿Confirmar ajuste?',
+        html: `Vas a <strong>${accionTxt}</strong> en <strong>$${monto.toFixed(2)}</strong>.<br>
+               <small class="text-muted">Motivo: ${motivo}</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, aplicar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#ffc107',
+    });
+    if (!conf.isConfirmed) return;
+
+    const res = await fetch('/api/proveedor/' + PROV_ID + '/ajustar_saldo', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ monto, signo, motivo }),
+    });
+    const data = await res.json();
+    if (!data.success) {
+        Swal.fire('Error', data.error || 'No se pudo aplicar el ajuste', 'error');
+        return;
+    }
+    modalAjuste.hide();
+    Swal.fire({ icon:'success', title:'Ajuste aplicado', timer:1300, timerProgressBar:true, showConfirmButton:false });
+    cargar();
+}
+{% endif %}
+</script>
+{% endblock %}

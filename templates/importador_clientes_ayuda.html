@@ -1,0 +1,295 @@
+<!-- Modal Ayuda - Importador de Clientes -->
+<div class="modal fade" id="modalAyudaImportadorClientes" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-users"></i> Importar Clientes — Manual completo
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+
+                <div class="bg-light p-3 border-bottom">
+                    <strong><i class="fas fa-list"></i> Índice:</strong>
+                    <small class="ms-2">
+                        1. ¿Para qué sirve? · 2. Backup primero · 3. Cómo exportar de mi sistema viejo · 4. Opciones (Excel propio o plantilla) · 5. Columnas reconocidas · 6. Manejo de duplicados · 7. Validaciones · 8. Errores comunes · 9. Después de importar · 10. Soporte
+                    </small>
+                </div>
+
+                <div class="accordion" id="accImpCli">
+
+                    <!-- 1. PARA QUE SIRVE -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#cli_c1">
+                                <i class="fas fa-info-circle text-info me-2"></i> <strong>1. ¿Para qué sirve esta pantalla?</strong>
+                            </button>
+                        </h2>
+                        <div id="cli_c1" class="accordion-collapse collapse show" data-bs-parent="#accImpCli">
+                            <div class="accordion-body">
+                                <p>Te permite cargar masivamente <strong>el listado de clientes</strong> desde un archivo Excel/CSV. Pensado para:</p>
+                                <ul class="mb-0">
+                                    <li><strong>Migrar del sistema viejo</strong> al instalar FactuFácil/SCHIRO por primera vez.</li>
+                                    <li><strong>Cargar una lista nueva</strong> que te pasó el contador o un colaborador.</li>
+                                    <li><strong>Replicar clientes</strong> entre sucursales.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. BACKUP -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cli_c2">
+                                <i class="fas fa-shield-alt text-danger me-2"></i> <strong>2. Antes de empezar — Backup</strong>
+                            </button>
+                        </h2>
+                        <div id="cli_c2" class="accordion-collapse collapse" data-bs-parent="#accImpCli">
+                            <div class="accordion-body">
+                                <div class="alert alert-danger">
+                                    <strong><i class="fas fa-exclamation-triangle"></i> Hacé un backup de la BD antes de importar masivamente.</strong>
+                                </div>
+                                <p>Aunque el sistema NO sobrescribe nada, una importación grande agrega muchos registros nuevos. Si después decidís borrar todo, querés tener la BD anterior intacta.</p>
+                                <p class="mb-0"><strong>Recomendación práctica:</strong> probá primero con un Excel de 10 clientes. Si todo sale bien, repetís con el archivo completo.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. EXPORTAR DE MI SISTEMA VIEJO -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cli_c3">
+                                <i class="fas fa-file-export text-success me-2"></i> <strong>3. Cómo exportar clientes de mi sistema viejo</strong>
+                            </button>
+                        </h2>
+                        <div id="cli_c3" class="accordion-collapse collapse" data-bs-parent="#accImpCli">
+                            <div class="accordion-body">
+                                <p>Cada sistema tiene su forma. Acá los más comunes:</p>
+
+                                <div class="card mb-2"><div class="card-body small">
+                                    <strong>Tango Gestión</strong><br>
+                                    Listados → Maestro de clientes → Botón "Exportar a Excel". Tilda todos los campos.
+                                </div></div>
+
+                                <div class="card mb-2"><div class="card-body small">
+                                    <strong>Bejerman</strong><br>
+                                    Tablas → Clientes → Imprimir → Elegí formato Excel/CSV.
+                                </div></div>
+
+                                <div class="card mb-2"><div class="card-body small">
+                                    <strong>Sistema en planilla Excel propia</strong><br>
+                                    Si llevás los clientes a mano en un Excel, ya lo tenés. Solo verificá que la primera fila tenga los nombres de columna (Nombre, CUIT, etc.).
+                                </div></div>
+
+                                <div class="card mb-0"><div class="card-body small">
+                                    <strong>Sistemas que solo dan PDF</strong><br>
+                                    Si tu sistema viejo solo imprime PDFs y no permite exportar a Excel, contactanos. A veces se puede extraer con OCR pero requiere preparación previa.
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. DOS OPCIONES -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cli_c4">
+                                <i class="fas fa-route text-primary me-2"></i> <strong>4. Dos opciones para cargar el archivo</strong>
+                            </button>
+                        </h2>
+                        <div id="cli_c4" class="accordion-collapse collapse" data-bs-parent="#accImpCli">
+                            <div class="accordion-body">
+                                <h6><span class="badge bg-success">OPCIÓN A</span> Subir el Excel tal cual te lo dio tu sistema viejo</h6>
+                                <p class="ms-4 small">El detector automático intenta reconocer las columnas. Funciona bien si los headers son nombres comunes (CUIT, Nombre, etc.). Si no acierta todo, lo corregís a mano en el paso 2.</p>
+
+                                <h6><span class="badge bg-info">OPCIÓN B</span> Descargar la plantilla y completarla</h6>
+                                <p class="ms-4 small mb-0">Hay un botón <strong>"Descargar Plantilla"</strong> arriba a la derecha. Te da un Excel con las columnas ya etiquetadas. Lo llenás (a mano o copiando datos) y lo subís. <strong>El detector lo reconoce al 100%.</strong></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 5. COLUMNAS RECONOCIDAS -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cli_c5">
+                                <i class="fas fa-columns text-info me-2"></i> <strong>5. Columnas que el sistema reconoce</strong>
+                            </button>
+                        </h2>
+                        <div id="cli_c5" class="accordion-collapse collapse" data-bs-parent="#accImpCli">
+                            <div class="accordion-body">
+                                <p>Estos son los campos del sistema y los <strong>sinónimos</strong> que el detector reconoce automáticamente:</p>
+
+                                <table class="table table-sm">
+                                    <thead class="table-light">
+                                        <tr><th>Campo</th><th>Obligatorio</th><th>Sinónimos reconocidos</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td><strong>Nombre / Razón Social</strong></td><td><span class="badge bg-danger">Sí</span></td><td class="small">nombre, razón social, cliente, denominación, apellido y nombre</td></tr>
+                                        <tr><td><strong>CUIT / DNI</strong></td><td>No</td><td class="small">cuit, c.u.i.t., dni, documento, doc, nro documento</td></tr>
+                                        <tr><td><strong>Tipo Documento</strong></td><td>No</td><td class="small">tipo doc, tipo documento</td></tr>
+                                        <tr><td><strong>Email</strong></td><td>No</td><td class="small">email, e-mail, mail, correo</td></tr>
+                                        <tr><td><strong>Teléfono</strong></td><td>No</td><td class="small">teléfono, tel, celular, móvil, whatsapp</td></tr>
+                                        <tr><td><strong>Dirección</strong></td><td>No</td><td class="small">dirección, domicilio, calle</td></tr>
+                                        <tr><td><strong>Condición IVA</strong></td><td>No</td><td class="small">condición iva, cond iva, iva, situación iva</td></tr>
+                                        <tr><td><strong>Lista de Precios</strong></td><td>No</td><td class="small">lista, lista precio, lista de precios, precio lista</td></tr>
+                                    </tbody>
+                                </table>
+
+                                <div class="alert alert-info small mb-0">
+                                    <i class="fas fa-lightbulb"></i> <strong>¿Tu Excel tiene una columna con un nombre raro?</strong>
+                                    No pasa nada. En el paso 2 elegís manualmente con un dropdown qué columna corresponde a cada campo.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 6. DUPLICADOS -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cli_c6">
+                                <i class="fas fa-clone text-warning me-2"></i> <strong>6. ¿Cómo se manejan los duplicados?</strong>
+                            </button>
+                        </h2>
+                        <div id="cli_c6" class="accordion-collapse collapse" data-bs-parent="#accImpCli">
+                            <div class="accordion-body">
+                                <p>El sistema <strong>NO sobrescribe</strong> clientes existentes:</p>
+                                <ul>
+                                    <li>Si en el Excel viene un cliente con un <strong>CUIT/DNI que ya existe</strong> en tu BD → la fila se saltea.</li>
+                                    <li>Si el cliente <strong>no tiene documento</strong>, se compara por <strong>nombre exacto</strong> (no importa mayúsculas/minúsculas).</li>
+                                    <li>Las filas saltadas figuran en el reporte final con su número de fila.</li>
+                                </ul>
+                                <div class="alert alert-info small mb-0">
+                                    <i class="fas fa-lightbulb"></i> <strong>¿Necesitás actualizar datos de clientes ya existentes?</strong>
+                                    Por ahora el importador solo crea nuevos. Para actualizar masivamente, contactanos.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 7. VALIDACIONES -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cli_c7">
+                                <i class="fas fa-check-double text-success me-2"></i> <strong>7. Validaciones que hace el sistema</strong>
+                            </button>
+                        </h2>
+                        <div id="cli_c7" class="accordion-collapse collapse" data-bs-parent="#accImpCli">
+                            <div class="accordion-body">
+                                <h6>Documento (CUIT/DNI):</h6>
+                                <ul>
+                                    <li>Si tiene 11 dígitos → CUIT. Verifica el <strong>dígito verificador</strong> (algoritmo oficial de AFIP). Si está mal, se carga igual pero con advertencia.</li>
+                                    <li>Si tiene 7 u 8 dígitos → DNI. Sin validación adicional.</li>
+                                    <li>Otros largos → se cargan como "OTRO".</li>
+                                    <li>El sistema <strong>limpia automáticamente</strong> guiones, puntos y espacios. Da igual si viene "20-12345678-9" o "20123456789".</li>
+                                </ul>
+
+                                <h6>Email:</h6>
+                                <ul>
+                                    <li>Verifica que tenga <strong>@</strong> y un <strong>dominio con punto</strong>. Si está mal, se carga con advertencia.</li>
+                                </ul>
+
+                                <h6>Condición IVA:</h6>
+                                <ul>
+                                    <li>Acepta variantes y las normaliza al valor canónico:</li>
+                                    <li class="ms-3">"RI", "Resp Inscripto", "responsable inscripto" → <strong>Responsable Inscripto</strong></li>
+                                    <li class="ms-3">"Mono", "MT", "monotributo" → <strong>Monotributista</strong></li>
+                                    <li class="ms-3">"CF", "final", "consumidor final" → <strong>Consumidor Final</strong></li>
+                                    <li class="ms-3">"exento", "no responsable" → <strong>Exento</strong></li>
+                                    <li>Si la columna está vacía o no se reconoce, asigna <strong>Consumidor Final</strong> por default.</li>
+                                </ul>
+
+                                <h6>Lista de Precios:</h6>
+                                <ul class="mb-0">
+                                    <li>Tiene que ser un número <strong>del 1 al 5</strong> (las 5 listas que tiene el sistema).</li>
+                                    <li>Si viene fuera de rango o vacía, se asigna <strong>Lista 1</strong> (default).</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 8. ERRORES COMUNES -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cli_c8">
+                                <i class="fas fa-exclamation-triangle text-danger me-2"></i> <strong>8. Errores comunes específicos de Clientes</strong>
+                            </button>
+                        </h2>
+                        <div id="cli_c8" class="accordion-collapse collapse" data-bs-parent="#accImpCli">
+                            <div class="accordion-body">
+
+                                <div class="card mb-2"><div class="card-header py-2 bg-light">
+                                    <strong>❓ "Falta nombre" (la mayoría)</strong>
+                                </div><div class="card-body small">
+                                    El detector mapeó mal el campo "Nombre". Andá al paso 2 y verificá qué columna del Excel está mapeada a "Nombre / Razón Social".
+                                </div></div>
+
+                                <div class="card mb-2"><div class="card-header py-2 bg-light">
+                                    <strong>❓ Casi todos los CUITs tienen advertencia</strong>
+                                </div><div class="card-body small">
+                                    Probablemente el Excel tiene los CUITs como texto y se rompió algún cero. Abrí el Excel, formato → texto en esa columna y verificá los valores. O simplemente ignoralo si la mayoría son válidos — la advertencia no impide la carga.
+                                </div></div>
+
+                                <div class="card mb-2"><div class="card-header py-2 bg-light">
+                                    <strong>❓ Todos quedaron como "Consumidor Final"</strong>
+                                </div><div class="card-body small">
+                                    No se mapeó la columna "Condición IVA" o sus valores no coinciden con los esperados. Andá al paso 2 y mapealo manualmente.
+                                </div></div>
+
+                                <div class="card mb-0"><div class="card-header py-2 bg-light">
+                                    <strong>❓ Importé y los teléfonos quedan vacíos</strong>
+                                </div><div class="card-body small">
+                                    Posiblemente la columna "Teléfono" del Excel se mapeó a otro campo, o no se mapeó. Andá al paso 2 y verificá.
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 9. DESPUES DE IMPORTAR -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cli_c9">
+                                <i class="fas fa-check-circle text-success me-2"></i> <strong>9. Después de importar — verificación</strong>
+                            </button>
+                        </h2>
+                        <div id="cli_c9" class="accordion-collapse collapse" data-bs-parent="#accImpCli">
+                            <div class="accordion-body">
+                                <ol class="mb-0">
+                                    <li><strong>Revisá el reporte final</strong>: cuántos importados, cuántos duplicados, cuántos errores.</li>
+                                    <li><strong>Andá al ABM de Clientes</strong> y verificá que aparezcan. Buscá uno por nombre o CUIT específico.</li>
+                                    <li><strong>Probá facturar</strong> a un cliente importado. Verificá que la condición IVA y la lista de precios estén bien.</li>
+                                    <li>Si encontrás varios mal cargados, podemos <strong>borrarlos masivamente</strong> y volver a importar el Excel corregido. Pedinos ayuda.</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 10. SOPORTE -->
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cli_c10">
+                                <i class="fas fa-headset text-primary me-2"></i> <strong>10. Soporte</strong>
+                            </button>
+                        </h2>
+                        <div id="cli_c10" class="accordion-collapse collapse" data-bs-parent="#accImpCli">
+                            <div class="accordion-body">
+                                <p>Si tenés un Excel rebelde, mandalo y lo revisamos:</p>
+                                <div class="card"><div class="card-body">
+                                    <p class="mb-1"><strong>Pablo Ré</strong> — Desarrollador</p>
+                                    <p class="mb-1"><i class="fas fa-envelope"></i> pablogustavore@gmail.com</p>
+                                    <p class="mb-1"><i class="fab fa-whatsapp text-success"></i> +54 9 3364 537093</p>
+                                    <p class="mb-0"><i class="fas fa-globe"></i> pablore.com.ar</p>
+                                </div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

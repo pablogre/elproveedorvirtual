@@ -1,0 +1,979 @@
+{% extends 'base.html' %}
+{% block title %}Cheques Propios{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3 flex-wrap gap-2">
+    <h2><i class="fas fa-money-check me-2"></i>Cheques Propios</h2>
+    <div>
+        <a href="/proveedores" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-truck me-1"></i> Proveedores
+        </a>
+        <button class="btn btn-outline-info me-2" onclick="abrirAyuda()" title="Ayuda">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+        <button class="btn btn-primary" onclick="abrirModalNuevo()">
+            <i class="fas fa-plus me-1"></i> Nuevo Cheque
+        </button>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label small mb-1 fw-bold">Estado</label>
+                <select id="filtroEstado" class="form-select form-select-sm" onchange="cargar()">
+                    <option value="">Todos</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="entregado">Entregado</option>
+                    <option value="cobrado">Cobrado</option>
+                    <option value="rechazado">Rechazado</option>
+                    <option value="anulado">Anulado</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1 fw-bold">Vto. desde</label>
+                <input type="date" id="filtroVtoDesde" class="form-control form-control-sm" onchange="cargar()">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1 fw-bold">Vto. hasta</label>
+                <input type="date" id="filtroVtoHasta" class="form-control form-control-sm" onchange="cargar()">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small mb-1 fw-bold">Buscar (banco / número)</label>
+                <input type="text" id="filtroQ" class="form-control form-control-sm" placeholder="Banco Nación, 12345...">
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="limpiarFiltros()">
+                    <i class="fas fa-eraser"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resumen -->
+<div class="row g-2 mb-3" id="resumen" style="display:none">
+    <div class="col-md-3"><div class="card text-bg-light"><div class="card-body py-2">
+        <small class="text-muted">Pendientes</small>
+        <div class="fw-bold fs-5" id="r_pendientes">0</div>
+    </div></div></div>
+    <div class="col-md-3"><div class="card text-bg-primary"><div class="card-body py-2">
+        <small>Entregados</small>
+        <div class="fw-bold fs-5" id="r_entregados">0</div>
+    </div></div></div>
+    <div class="col-md-3"><div class="card text-bg-warning"><div class="card-body py-2">
+        <small>Por vencer (7d)</small>
+        <div class="fw-bold fs-5" id="r_porvencer">0</div>
+    </div></div></div>
+    <div class="col-md-3"><div class="card text-bg-dark"><div class="card-body py-2">
+        <small>Total en circulación</small>
+        <div class="fw-bold fs-5" id="r_total">$0,00</div>
+    </div></div></div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Banco / Cuenta</th>
+                        <th>Nº Cheque</th>
+                        <th>Emisión</th>
+                        <th>Vencimiento</th>
+                        <th class="text-end">Monto</th>
+                        <th class="text-center">Estado</th>
+                        <th>Proveedor</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="bodyCheques">
+                    <tr><td colspan="8" class="text-center py-4 text-muted">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- Modal Nuevo / Editar                                               -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalCheque" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalChequeTitulo"><i class="fas fa-money-check me-2"></i>Nuevo Cheque</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="chId">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Banco <span class="text-danger">*</span></label>
+                        <input type="text" id="banco" class="form-control" placeholder="Banco Nación, Galicia, etc.">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Cuenta</label>
+                        <input type="text" id="cuenta" class="form-control" placeholder="Nº de cuenta corriente">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Nº de Cheque <span class="text-danger">*</span></label>
+                        <input type="text" id="numero" class="form-control" placeholder="12345678">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Fecha Emisión <span class="text-danger">*</span></label>
+                        <input type="date" id="fecha_emision" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Fecha Vencimiento</label>
+                        <input type="date" id="fecha_vencimiento" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Monto <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" id="monto" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Estado inicial</label>
+                        <select id="estado" class="form-select" onchange="toggleCamposEntregado()">
+                            <option value="pendiente">Pendiente</option>
+                            <option value="entregado">Entregado (carga manual)</option>
+                            <option value="anulado">Anulado</option>
+                        </select>
+                        <div class="form-text">
+                            Para marcar "cobrado" o "rechazado", primero créalo y después cambiá el estado.
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Fecha Entrega</label>
+                        <input type="date" id="fecha_entrega" class="form-control" disabled>
+                    </div>
+                    <div class="col-md-12" id="divProveedor" style="display:none">
+                        <div class="alert alert-warning py-2 small mb-2">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            <strong>Carga manual de cheque entregado:</strong> este cheque quedará marcado como "entregado"
+                            pero <u>sin vincular a un pago en el sistema</u>. Sirve para registrar cheques que ya estaban
+                            en circulación cuando se empezó a usar el módulo. Aparecerá con un ícono
+                            <i class="fas fa-exclamation-triangle text-warning"></i> en el listado.
+                        </div>
+                        <label class="form-label fw-bold">Proveedor destinatario <span class="text-danger">*</span></label>
+                        <select id="proveedor_id" class="form-select">
+                            <option value="">-- Seleccionar --</option>
+                            {% for p in proveedores %}
+                            <option value="{{ p.id }}">{{ p.razon_social }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold">Observaciones</label>
+                        <textarea id="observaciones" class="form-control" rows="2" placeholder="Notas internas..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary" onclick="guardar()">
+                    <i class="fas fa-save me-1"></i> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- Modal Cambio de Estado                                             -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalEstado" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-exchange-alt me-2"></i>Cambiar Estado</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="estChId">
+                <p class="mb-3">Cheque <strong id="estChInfo"></strong></p>
+                <div id="estContenido"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary" onclick="confirmarCambioEstado()">
+                    <i class="fas fa-check me-1"></i> Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal AYUDA -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Ayuda — Cheques Propios</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- ═══════════ INTRO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-book me-2"></i>¿Qué es esta pantalla?</h4>
+                <p>
+                    Acá gestionás la <strong>chequera propia</strong> de tu empresa: todos los cheques
+                    que emitís desde tu cuenta corriente bancaria para pagarle a proveedores u otros.
+                    El sistema lleva el seguimiento completo del ciclo de vida de cada cheque, desde
+                    que lo emitís (lo firmás) hasta que el banco lo cobra, lo rechaza, o lo anulás.
+                </p>
+                <div class="alert alert-primary small">
+                    <strong><i class="fas fa-lightbulb me-1"></i> Analogía simple:</strong> es como un
+                    cuaderno donde anotás cada cheque de tu chequera y vas marcando qué pasó con él
+                    (si se lo diste a alguien, si lo cobraron, si rebotó, si lo rompiste). La ventaja
+                    es que está todo cruzado con los pagos a proveedores y la cta cte.
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ESTRUCTURA ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-th-large me-2"></i>Estructura de la pantalla</h4>
+
+                <h6 class="fw-bold mt-3">1) Header superior</h6>
+                <ul>
+                    <li><strong>Proveedores</strong>: vuelve al listado de proveedores.</li>
+                    <li><strong>Ayuda</strong>: abre este modal (gracias por leerlo).</li>
+                    <li><strong>Nuevo Cheque</strong>: abre el modal de alta (ver más abajo).</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">2) Barra de filtros</h6>
+                <ul>
+                    <li><strong>Estado</strong>: filtra por uno de los 5 estados posibles.</li>
+                    <li><strong>Vto. desde / hasta</strong>: rango de fechas de vencimiento.
+                        Útil para ver qué cheques vencen en la semana o en el mes.</li>
+                    <li><strong>Buscar</strong>: texto libre sobre banco o número.</li>
+                    <li><strong>Limpiar (escoba)</strong>: resetea todos los filtros.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">3) Cuatro tarjetas de resumen</h6>
+                <ul>
+                    <li><strong>Pendientes</strong>: cantidad de cheques emitidos pero todavía no entregados.</li>
+                    <li><strong>Entregados</strong>: cantidad de cheques en circulación (ya entregados, todavía no cobrados).</li>
+                    <li><strong>Por vencer (7d)</strong>: cuántos cheques entregados vencen en los próximos 7 días. Prestá atención para tener fondos.</li>
+                    <li><strong>Total en circulación</strong>: suma en pesos de todos los cheques entregados pendientes de cobro.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">4) Tabla de cheques</h6>
+                <p>Columnas: <code>Banco/Cuenta</code> · <code>Nº Cheque</code> · <code>Emisión</code> ·
+                    <code>Vencimiento</code> · <code>Monto</code> · <code>Estado</code> · <code>Proveedor</code> · <code>Acciones</code>.</p>
+                <p>Código de colores en la fecha de vencimiento:</p>
+                <ul>
+                    <li><strong class="text-danger">Rojo</strong>: cheque ya vencido.</li>
+                    <li><strong class="text-warning">Amarillo</strong>: vence en los próximos 7 días.</li>
+                    <li>Normal: vence más adelante o todavía no fue entregado.</li>
+                </ul>
+                <p class="mb-0">
+                    <i class="fas fa-exclamation-triangle text-warning"></i> Si ves este ícono al lado del número:
+                    es un cheque marcado como "entregado" por alta manual (no tiene pago vinculado).
+                    Ver la sección "Alta manual" más abajo.
+                </p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ESTADOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-list me-2"></i>Los 5 estados del cheque</h4>
+                <p>Un cheque pasa por varios estados a lo largo de su vida. Cada uno permite
+                    ciertas transiciones hacia otros estados.</p>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:140px">Estado</th>
+                                <th>Qué significa</th>
+                                <th>Siguientes pasos permitidos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge bg-secondary">Pendiente</span></td>
+                                <td>Cheque emitido (firmado, completado) pero <strong>todavía no entregado</strong>
+                                    al beneficiario. Ej: ya lo completaste pero aún no pasó el proveedor a retirarlo.</td>
+                                <td>Entregado · Anulado</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-primary">Entregado</span></td>
+                                <td>El cheque ya está en manos del beneficiario (proveedor) o circulando.
+                                    Pendiente de que el banco lo debite de tu cuenta.</td>
+                                <td>Cobrado · Rechazado</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-success">Cobrado</span></td>
+                                <td>El banco ya te debitó el monto. El cheque cumplió su ciclo normal.
+                                    <strong>Estado final.</strong></td>
+                                <td>—</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-danger">Rechazado</span></td>
+                                <td>El cheque rebotó: sin fondos suficientes, mal firmado, error formal, etc.</td>
+                                <td>Entregado (solo si le das otro físico en reemplazo — raro)</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge bg-dark">Anulado</span></td>
+                                <td>Cheque que se rompió o canceló antes de entregarlo.
+                                    <strong>Estado final.</strong></td>
+                                <td>—</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ DOS FORMAS DE ALTA ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-plus-circle me-2"></i>Dos formas de dar de alta un cheque</h4>
+
+                <div class="alert alert-success">
+                    <strong><i class="fas fa-check me-1"></i> Forma recomendada — desde la Pantalla de Pago:</strong><br>
+                    Cuando pagás una factura a un proveedor con un cheque, lo cargás <u>durante</u> la
+                    emisión del pago (Compras → Pagar Proveedor). El sistema crea el cheque automáticamente,
+                    lo marca como "entregado" y lo vincula al pago. <strong>Todo queda trazado y auditable.</strong>
+                </div>
+
+                <div class="alert alert-warning">
+                    <strong><i class="fas fa-exclamation-triangle me-1"></i> Alta manual (esta pantalla):</strong><br>
+                    Se usa en <strong>casos especiales</strong>:
+                    <ul class="mb-0">
+                        <li>Cargar cheques que ya estaban en circulación antes de empezar a usar el sistema
+                            (migración inicial o cheques históricos).</li>
+                        <li>Registrar cheques de la chequera que están "pendientes" (ya los firmaste pero no los entregaste todavía).</li>
+                        <li>Registrar un cheque que anulaste físicamente (se rompió, se canceló).</li>
+                    </ul>
+                </div>
+
+                <h6 class="fw-bold mt-3">¿Qué pasa si lo cargo a mano como "entregado"?</h6>
+                <p>
+                    El sistema lo permite, pero el cheque quedará <strong>sin vincular a ningún pago</strong>
+                    en la cta cte del proveedor. Vas a verlo marcado con el ícono
+                    <i class="fas fa-exclamation-triangle text-warning"></i> en el listado. Esto es útil
+                    para cheques históricos (que ya están en la calle) pero <strong>no conviene para
+                    cheques nuevos</strong> porque la deuda del proveedor no se va a descontar
+                    automáticamente. Para cheques nuevos, siempre usar la pantalla de Pagar Proveedor.
+                </p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ALTA - CAMPOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-keyboard me-2"></i>Al dar de alta — campos</h4>
+                <ul>
+                    <li><strong>Banco</strong> (obligatorio): banco emisor del cheque (el tuyo).</li>
+                    <li><strong>Cuenta</strong>: número de tu cuenta corriente.</li>
+                    <li><strong>Nº de Cheque</strong> (obligatorio): es único por banco. No podés tener
+                        dos cheques con mismo banco y mismo número.</li>
+                    <li><strong>Fecha Emisión</strong> (obligatoria): la que figura en el cheque.</li>
+                    <li><strong>Fecha Vencimiento</strong>: si es un cheque diferido. Si lo dejás vacío,
+                        se asume "a la vista" (cobrable desde la emisión).</li>
+                    <li><strong>Monto</strong> (obligatorio): importe del cheque, mayor a 0.</li>
+                    <li><strong>Estado inicial</strong>: Pendiente (default) / Entregado / Anulado.
+                        No se pueden cargar como "Cobrado" ni "Rechazado" directamente — primero lo
+                        creás en otro estado y después le cambiás.</li>
+                    <li><strong>Fecha entrega</strong>: solo si lo creás como "Entregado".</li>
+                    <li><strong>Proveedor destinatario</strong>: solo si lo creás como "Entregado"
+                        (obligatorio en ese caso).</li>
+                    <li><strong>Observaciones</strong>: notas libres para referencia interna.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ EDITAR ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-edit me-2"></i>Editar un cheque</h4>
+                <p>Botón <i class="fas fa-edit text-primary"></i> en la fila del cheque.</p>
+                <p><strong>Si el cheque NO tiene pago vinculado</strong> (pago_id vacío): podés editar todos los campos.</p>
+                <p><strong>Si el cheque SÍ tiene pago vinculado</strong> (se creó desde la pantalla de pago): solo podés editar:</p>
+                <ul>
+                    <li>Fecha de cobro (cuando el banco te lo debita).</li>
+                    <li>Observaciones.</li>
+                </ul>
+                <p>Los datos del cheque propiamente dichos (banco, número, monto, etc.) quedan bloqueados
+                    porque alterarlos rompería la consistencia con la cta cte del proveedor. Si necesitás
+                    cambiar esos datos hay que anular el pago y rehacerlo.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ CAMBIO DE ESTADO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-exchange-alt me-2"></i>Cambiar estado (ciclo normal del cheque)</h4>
+                <p>Botón <i class="fas fa-sync-alt text-info"></i>. Las transiciones permitidas son:</p>
+                <ul>
+                    <li><strong>Pendiente → Entregado</strong>: cuando le diste el cheque al proveedor.
+                        Te pide proveedor destino y fecha de entrega.</li>
+                    <li><strong>Pendiente → Anulado</strong>: si se rompió o cancelaste antes de entregarlo.</li>
+                    <li><strong>Entregado → Cobrado</strong>: cuando el banco te notifica que lo debitaron.
+                        Te pide fecha de cobro. <strong>Es el cierre normal del ciclo.</strong></li>
+                    <li><strong>Entregado → Rechazado</strong>: si rebotó.</li>
+                    <li><strong>Rechazado → Entregado</strong>: raro — solo si le das al proveedor otro
+                        cheque físico en reemplazo y querés seguir el rastro del mismo registro.</li>
+                </ul>
+                <p><strong>Estados finales:</strong> Cobrado y Anulado. No se pueden cambiar.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ELIMINAR ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-trash me-2"></i>Eliminar un cheque</h4>
+                <p>Botón <i class="fas fa-trash text-danger"></i>.</p>
+                <p>
+                    <strong>Solo se pueden eliminar cheques en estado "pendiente" o "anulado" que no estén
+                    vinculados a ningún pago.</strong> Los cheques entregados, cobrados o rechazados no
+                    se eliminan nunca — queda en historia. Si te arrepentiste de uno entregado que no
+                    correspondía, primero revertilo con un cambio de estado o marcá como anulado.
+                </p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ CASOS DE USO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-tasks me-2"></i>Casos de uso típicos</h4>
+
+                <h6 class="fw-bold">Caso 1 — Pagar a un proveedor con cheque (recomendado)</h6>
+                <ol>
+                    <li>Ir a <strong>Compras → Pagar Proveedor</strong>.</li>
+                    <li>Seleccionar el proveedor.</li>
+                    <li>Elegir las facturas a imputar.</li>
+                    <li>Como medio de pago, clickear <strong>Cheque propio nuevo</strong> y completar datos.</li>
+                    <li>Emitir el pago. El cheque aparece acá automáticamente con estado "entregado" + vinculado al pago.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 2 — Registrar un cheque pendiente (cheque ya firmado pero no entregado)</h6>
+                <ol>
+                    <li>Botón <strong>Nuevo Cheque</strong>.</li>
+                    <li>Completar banco, cuenta, número, fecha emisión, vencimiento, monto.</li>
+                    <li>Dejar estado en <strong>Pendiente</strong>.</li>
+                    <li>Guardar. Queda en la cartera listo para usar.</li>
+                    <li>Cuando lo vas a entregar al proveedor → usar la Pantalla de Pago y elegir
+                        <strong>"Cheque propio de cartera"</strong>.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 3 — El banco te notifica que debitó un cheque</h6>
+                <ol>
+                    <li>Buscás el cheque en el listado (por banco o número).</li>
+                    <li>Botón <i class="fas fa-sync-alt"></i> → "Cobrado".</li>
+                    <li>Ponés la fecha de cobro.</li>
+                    <li>Confirmar. El cheque queda en estado final.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 4 — Un cheque rebotó</h6>
+                <ol>
+                    <li>Buscás el cheque en el listado.</li>
+                    <li>Botón <i class="fas fa-sync-alt"></i> → "Rechazado".</li>
+                    <li>Ponés la fecha.</li>
+                    <li>Confirmar. <strong>Importante:</strong> esto NO revierte automáticamente el pago al proveedor.
+                        Si corresponde, hay que ir a <strong>Compras → Pagos Emitidos</strong> y anular el pago.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 5 — Migrar cheques viejos al sistema</h6>
+                <p>Si empezaste a usar el módulo y tenés cheques ya entregados en la calle:</p>
+                <ol>
+                    <li>Botón <strong>Nuevo Cheque</strong>.</li>
+                    <li>Completar datos.</li>
+                    <li>Estado inicial: <strong>Entregado (carga manual)</strong>.</li>
+                    <li>Elegir proveedor destino + fecha de entrega.</li>
+                    <li>Guardar. Va a aparecer con el ícono <i class="fas fa-exclamation-triangle text-warning"></i>
+                        para diferenciar que es una migración manual.</li>
+                </ol>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ FAQ ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-question-circle me-2"></i>Preguntas frecuentes</h4>
+                <div class="accordion" id="faqAccChP">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCP1">
+                                ¿Por qué no puedo elegir "Cobrado" cuando creo un cheque nuevo?
+                            </button>
+                        </h2>
+                        <div id="faqCP1" class="accordion-collapse collapse" data-bs-parent="#faqAccChP">
+                            <div class="accordion-body">
+                                Porque para llegar a "cobrado" primero tuvo que pasar por "entregado". El sistema
+                                fuerza ese orden para mantener la trazabilidad. Primero creá el cheque como
+                                entregado (con proveedor destino) y después cambiale a cobrado.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCP2">
+                                Tengo dos cheques con el mismo número de cheque. ¿Es un error?
+                            </button>
+                        </h2>
+                        <div id="faqCP2" class="accordion-collapse collapse" data-bs-parent="#faqAccChP">
+                            <div class="accordion-body">
+                                El sistema no permite dos cheques con <strong>mismo banco + mismo número</strong>.
+                                Pero sí permite dos con el mismo número si son de distinto banco (ej. Nación Nº 001
+                                y Galicia Nº 001). Si te tira error de duplicado, revisá que el banco sea diferente.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCP3">
+                                ¿Puedo re-entregar un cheque que rebotó?
+                            </button>
+                        </h2>
+                        <div id="faqCP3" class="accordion-collapse collapse" data-bs-parent="#faqAccChP">
+                            <div class="accordion-body">
+                                Técnicamente sí (Rechazado → Entregado), pero solo tiene sentido si le
+                                entregás físicamente el mismo cheque otra vez al proveedor (lo cual es muy raro,
+                                porque si rebotó ya lo tiene él). Normalmente lo que hacés es anular el pago
+                                correspondiente en Pagos Emitidos y rehacer el pago con otro medio.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCP4">
+                                ¿Por qué aparece un ícono de advertencia al lado de algunos cheques?
+                            </button>
+                        </h2>
+                        <div id="faqCP4" class="accordion-collapse collapse" data-bs-parent="#faqAccChP">
+                            <div class="accordion-body">
+                                El ícono <i class="fas fa-exclamation-triangle text-warning"></i> significa
+                                que el cheque está en estado "entregado" pero no tiene pago asociado en el sistema.
+                                Es un cheque cargado manualmente (por migración o por registro de cheques históricos).
+                                No es un error, solo una marca para distinguirlos.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCP5">
+                                Cargué mal los datos de un cheque. ¿Puedo corregirlos?
+                            </button>
+                        </h2>
+                        <div id="faqCP5" class="accordion-collapse collapse" data-bs-parent="#faqAccChP">
+                            <div class="accordion-body">
+                                Sí, siempre que el cheque <strong>no tenga pago vinculado</strong>. Botón
+                                <i class="fas fa-edit"></i> y editás los campos libremente. Si el cheque
+                                está vinculado a un pago (se creó desde la pantalla de pago), solo podés
+                                editar fecha de cobro y observaciones.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCP6">
+                                Quiero ver cuáles cheques vencen esta semana
+                            </button>
+                        </h2>
+                        <div id="faqCP6" class="accordion-collapse collapse" data-bs-parent="#faqAccChP">
+                            <div class="accordion-body">
+                                Poné <strong>Vto. hasta</strong> en la fecha 7 días adelante (ej. si hoy es 20/04,
+                                poné 27/04). Vas a ver todos los cheques que vencen entre hoy y esa fecha.
+                                Si querés solo los entregados (los que efectivamente te van a debitar),
+                                filtrá además por <strong>Estado = Entregado</strong>.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqCP7">
+                                ¿Cuál es la diferencia entre Cheques Propios y Cheques de Terceros?
+                            </button>
+                        </h2>
+                        <div id="faqCP7" class="accordion-collapse collapse" data-bs-parent="#faqAccChP">
+                            <div class="accordion-body">
+                                <strong>Cheques Propios</strong>: los que vos emitís desde tu chequera (salen de tu cuenta).<br>
+                                <strong>Cheques de Terceros</strong>: los que te dan los clientes cuando te pagan a vos
+                                (son cheques de OTROS que vos recibís). Esos se manejan en otra pantalla:
+                                <a href="/cheques_terceros">Cheques de Terceros</a>.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ERRORES COMUNES ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-exclamation-triangle me-2"></i>Errores comunes</h4>
+                <ul>
+                    <li><strong>"Ya existe un cheque con ese número para ese banco"</strong> →
+                        revisá si no lo cargaste antes, o si te equivocaste de número.</li>
+                    <li><strong>"No se puede pasar de X a Y"</strong> → es una transición no permitida
+                        (ver tabla de estados arriba). Por ejemplo, no podés ir de Cobrado a otro estado
+                        porque es estado final.</li>
+                    <li><strong>"No se puede eliminar: cheque vinculado a un pago"</strong> → ese cheque
+                        se usó en un pago a proveedor. Si querés eliminarlo, primero anulá el pago
+                        en Pagos Emitidos.</li>
+                    <li><strong>"Para marcar entregado hay que indicar un proveedor"</strong> → al pasar
+                        a estado entregado es obligatorio elegir a quién se le entregó.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ RELACIÓN CON OTROS MÓDULOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-link me-2"></i>Relación con otros módulos</h4>
+                <ul>
+                    <li><strong>Pantalla de Pago a Proveedor</strong>: al pagar con cheque, el sistema
+                        crea el cheque acá automáticamente (o usa uno existente de la cartera).</li>
+                    <li><strong>Cta Cte del Proveedor</strong>: el pago con cheque descuenta la deuda
+                        automáticamente cuando se emite el recibo, NO cuando el banco lo cobra.
+                        Es decir: el día que entregás el cheque, contablemente ya está pagado.</li>
+                    <li><strong>Recibo de Pago (PDF)</strong>: el detalle del cheque (banco, número, vto.)
+                        aparece impreso en el recibo que le entregás al proveedor.</li>
+                    <li><strong>Anulación de pagos</strong>: si anulás un pago, los cheques usados vuelven
+                        a estado "pendiente" y quedan disponibles nuevamente en la cartera.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ NOTAS TÉCNICAS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-cog me-2"></i>Notas técnicas</h4>
+                <ul class="small text-muted">
+                    <li>Tabla: <code>cheque_propio</code>. Unicidad: <code>(banco, numero)</code>.</li>
+                    <li>Campo <code>pago_id</code> vincula al pago donde se usó (nullable).</li>
+                    <li>Transiciones validadas en backend (<code>api_cheque_propio_estado</code>).</li>
+                    <li>Crear cheques nuevos desde la pantalla de pago pasa por
+                        <code>api_pagar_proveedor</code> (medio <code>cheque_propio_nuevo</code>).</li>
+                </ul>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const modalCheque = new bootstrap.Modal(document.getElementById('modalCheque'));
+const modalEstado = new bootstrap.Modal(document.getElementById('modalEstado'));
+const modalAyuda  = new bootstrap.Modal(document.getElementById('modalAyuda'));
+
+let cheques = [];
+
+function fmt(v) {
+    return '$' + parseFloat(v || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function badgeEstado(est) {
+    const map = {
+        'pendiente': 'bg-secondary',
+        'entregado': 'bg-primary',
+        'cobrado':   'bg-success',
+        'rechazado': 'bg-danger',
+        'anulado':   'bg-dark',
+    };
+    return `<span class="badge ${map[est] || 'bg-secondary'}">${est.charAt(0).toUpperCase() + est.slice(1)}</span>`;
+}
+
+function abrirAyuda() {
+    modalAyuda.show();
+}
+
+function limpiarFiltros() {
+    document.getElementById('filtroEstado').value = '';
+    document.getElementById('filtroVtoDesde').value = '';
+    document.getElementById('filtroVtoHasta').value = '';
+    document.getElementById('filtroQ').value = '';
+    cargar();
+}
+
+async function cargar() {
+    const params = new URLSearchParams({
+        estado:    document.getElementById('filtroEstado').value,
+        vto_desde: document.getElementById('filtroVtoDesde').value,
+        vto_hasta: document.getElementById('filtroVtoHasta').value,
+        q:         document.getElementById('filtroQ').value,
+    });
+    const res = await fetch('/api/cheques_propios/listar?' + params.toString());
+    const data = await res.json();
+    if (!data.success) {
+        Swal.fire('Error', data.error || 'No se pudo cargar', 'error');
+        return;
+    }
+    cheques = data.cheques;
+    render();
+    renderResumen();
+}
+
+function render() {
+    const tbody = document.getElementById('bodyCheques');
+    if (!cheques.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Sin resultados</td></tr>';
+        return;
+    }
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    tbody.innerHTML = cheques.map(c => {
+        // Ícono de advertencia si entregado sin pago
+        let warn = '';
+        if (c.estado === 'entregado' && !c.pago_id) {
+            warn = ' <i class="fas fa-exclamation-triangle text-warning" title="Entregado sin pago vinculado (carga manual)"></i>';
+        }
+        // Color vencimiento
+        let vtoClass = '';
+        if (c.fecha_vencimiento && c.estado === 'entregado') {
+            const partes = c.fecha_vencimiento.split('/');
+            const fv = new Date(parseInt(partes[2]), parseInt(partes[1])-1, parseInt(partes[0]));
+            const diff = Math.round((fv - hoy) / (1000*60*60*24));
+            if (diff < 0)       vtoClass = 'text-danger fw-bold';
+            else if (diff <= 7) vtoClass = 'text-warning fw-bold';
+        }
+        return `
+        <tr>
+            <td><strong>${c.banco}</strong>${c.cuenta ? '<br><small class="text-muted">' + c.cuenta + '</small>' : ''}</td>
+            <td><code>${c.numero}</code>${warn}</td>
+            <td>${c.fecha_emision}</td>
+            <td class="${vtoClass}">${c.fecha_vencimiento || '-'}</td>
+            <td class="text-end fw-bold">${fmt(c.monto)}</td>
+            <td class="text-center">${badgeEstado(c.estado)}</td>
+            <td>${c.proveedor || '<small class="text-muted">-</small>'}</td>
+            <td class="text-center">
+                <button class="btn btn-sm btn-outline-info me-1" onclick="cambiarEstado(${c.id})" title="Cambiar estado">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="editar(${c.id})" title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="eliminar(${c.id})" title="Eliminar">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderResumen() {
+    const resumen = document.getElementById('resumen');
+    if (!cheques.length) { resumen.style.display = 'none'; return; }
+    resumen.style.display = '';
+
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const en7 = new Date(); en7.setDate(en7.getDate() + 7); en7.setHours(23,59,59,0);
+
+    let pendientes = 0, entregados = 0, porVencer = 0, total = 0;
+    cheques.forEach(c => {
+        if (c.estado === 'pendiente') pendientes++;
+        if (c.estado === 'entregado') {
+            entregados++;
+            total += parseFloat(c.monto);
+            if (c.fecha_vencimiento) {
+                const partes = c.fecha_vencimiento.split('/');
+                const fv = new Date(parseInt(partes[2]), parseInt(partes[1])-1, parseInt(partes[0]));
+                if (fv >= hoy && fv <= en7) porVencer++;
+            }
+        }
+    });
+    document.getElementById('r_pendientes').textContent = pendientes;
+    document.getElementById('r_entregados').textContent = entregados;
+    document.getElementById('r_porvencer').textContent  = porVencer;
+    document.getElementById('r_total').textContent      = fmt(total);
+}
+
+// ─── ALTA / EDICIÓN ──────────────────────────────────────────────────
+function abrirModalNuevo() {
+    document.getElementById('modalChequeTitulo').innerHTML = '<i class="fas fa-money-check me-2"></i>Nuevo Cheque';
+    document.getElementById('chId').value = '';
+    ['banco','cuenta','numero','fecha_emision','fecha_vencimiento','monto','fecha_entrega','proveedor_id','observaciones']
+        .forEach(f => document.getElementById(f).value = '');
+    document.getElementById('estado').value = 'pendiente';
+    toggleCamposEntregado();
+    // Default fecha emisión = hoy
+    document.getElementById('fecha_emision').valueAsDate = new Date();
+    modalCheque.show();
+    setTimeout(() => document.getElementById('banco').focus(), 300);
+}
+
+function toggleCamposEntregado() {
+    const est = document.getElementById('estado').value;
+    const divProv  = document.getElementById('divProveedor');
+    const fechaEnt = document.getElementById('fecha_entrega');
+    if (est === 'entregado') {
+        divProv.style.display = '';
+        fechaEnt.disabled = false;
+        if (!fechaEnt.value) fechaEnt.valueAsDate = new Date();
+    } else {
+        divProv.style.display = 'none';
+        fechaEnt.disabled = true;
+        fechaEnt.value = '';
+    }
+}
+
+async function editar(id) {
+    const res = await fetch('/api/cheque_propio/' + id);
+    const data = await res.json();
+    if (!data.success) { Swal.fire('Error', data.error, 'error'); return; }
+    const c = data.cheque;
+    document.getElementById('modalChequeTitulo').innerHTML = '<i class="fas fa-edit me-2"></i>Editar Cheque';
+    document.getElementById('chId').value = c.id;
+    document.getElementById('banco').value   = c.banco || '';
+    document.getElementById('cuenta').value  = c.cuenta || '';
+    document.getElementById('numero').value  = c.numero || '';
+    document.getElementById('monto').value   = c.monto;
+    document.getElementById('observaciones').value = c.observaciones || '';
+    document.getElementById('fecha_emision').value = c.fecha_emision ? c.fecha_emision.split('/').reverse().join('-') : '';
+    document.getElementById('fecha_vencimiento').value = c.fecha_vencimiento ? c.fecha_vencimiento.split('/').reverse().join('-') : '';
+    document.getElementById('fecha_entrega').value = c.fecha_entrega ? c.fecha_entrega.split('/').reverse().join('-') : '';
+    document.getElementById('proveedor_id').value = c.proveedor_id || '';
+
+    // En edición no se permite cambiar el estado desde acá
+    const selEstado = document.getElementById('estado');
+    selEstado.value = c.estado;
+    selEstado.disabled = true;
+
+    toggleCamposEntregado();
+    modalCheque.show();
+}
+
+async function guardar() {
+    const id = document.getElementById('chId').value;
+    const payload = {
+        banco:             document.getElementById('banco').value.trim(),
+        cuenta:            document.getElementById('cuenta').value.trim(),
+        numero:            document.getElementById('numero').value.trim(),
+        fecha_emision:     document.getElementById('fecha_emision').value,
+        fecha_vencimiento: document.getElementById('fecha_vencimiento').value,
+        monto:             document.getElementById('monto').value,
+        estado:            document.getElementById('estado').value,
+        proveedor_id:      document.getElementById('proveedor_id').value || null,
+        fecha_entrega:     document.getElementById('fecha_entrega').value,
+        observaciones:     document.getElementById('observaciones').value.trim(),
+    };
+
+    // Re-habilitar select de estado después de leer el valor (estaba disabled en edición)
+    document.getElementById('estado').disabled = false;
+
+    if (!payload.banco) { Swal.fire('Error', 'El banco es obligatorio', 'warning'); return; }
+    if (!payload.numero) { Swal.fire('Error', 'El número es obligatorio', 'warning'); return; }
+    if (!payload.fecha_emision) { Swal.fire('Error', 'La fecha de emisión es obligatoria', 'warning'); return; }
+    if (!payload.monto || parseFloat(payload.monto) <= 0) { Swal.fire('Error', 'El monto debe ser mayor a 0', 'warning'); return; }
+
+    const url = id ? `/api/cheque_propio/${id}/editar` : '/api/cheque_propio/nuevo';
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!data.success) { Swal.fire('Error', data.error, 'error'); return; }
+    modalCheque.hide();
+    Swal.fire({ icon:'success', title:'Guardado', timer:1200, timerProgressBar:true, showConfirmButton:false });
+    cargar();
+}
+
+// ─── CAMBIO DE ESTADO ────────────────────────────────────────────────
+function cambiarEstado(id) {
+    const c = cheques.find(x => x.id === id);
+    if (!c) return;
+    document.getElementById('estChId').value = id;
+    document.getElementById('estChInfo').textContent = `${c.banco} Nº ${c.numero} — ${fmt(c.monto)}`;
+
+    const trans = {
+        'pendiente': [{v:'entregado', t:'Entregado (a un proveedor)'}, {v:'anulado', t:'Anulado (se rompió o canceló)'}],
+        'entregado': [{v:'cobrado', t:'Cobrado (el banco lo debitó)'}, {v:'rechazado', t:'Rechazado (rebotó)'}],
+        'cobrado':   [],
+        'rechazado': [{v:'entregado', t:'Entregado (se vuelve a dar físicamente)'}],
+        'anulado':   [],
+    };
+    const opciones = trans[c.estado] || [];
+
+    if (!opciones.length) {
+        Swal.fire('Sin transiciones', `El estado "${c.estado}" es final, no se puede cambiar.`, 'info');
+        return;
+    }
+
+    let html = '<div class="mb-3"><label class="form-label fw-bold">Nuevo estado</label>';
+    html += '<select id="estNuevoValor" class="form-select" onchange="renderExtraEstado()">';
+    opciones.forEach(o => html += `<option value="${o.v}">${o.t}</option>`);
+    html += '</select></div>';
+    html += '<div id="estExtra"></div>';
+
+    document.getElementById('estContenido').innerHTML = html;
+    renderExtraEstado();
+    modalEstado.show();
+}
+
+function renderExtraEstado() {
+    const v = document.getElementById('estNuevoValor').value;
+    const extra = document.getElementById('estExtra');
+    if (v === 'entregado') {
+        let html = `<div class="mb-2">
+            <label class="form-label fw-bold small">Proveedor destinatario <span class="text-danger">*</span></label>
+            <select id="estProvId" class="form-select form-select-sm">
+                <option value="">-- Seleccionar --</option>`;
+        {% for p in proveedores %}
+        html += `<option value="{{ p.id }}">{{ p.razon_social }}</option>`;
+        {% endfor %}
+        html += `</select></div>
+        <div class="mb-2">
+            <label class="form-label fw-bold small">Fecha entrega</label>
+            <input type="date" id="estFecha" class="form-control form-control-sm">
+        </div>`;
+        extra.innerHTML = html;
+        document.getElementById('estFecha').valueAsDate = new Date();
+    } else if (v === 'cobrado') {
+        extra.innerHTML = `<div class="mb-2">
+            <label class="form-label fw-bold small">Fecha de cobro</label>
+            <input type="date" id="estFecha" class="form-control form-control-sm">
+        </div>`;
+        document.getElementById('estFecha').valueAsDate = new Date();
+    } else {
+        extra.innerHTML = '';
+    }
+}
+
+async function confirmarCambioEstado() {
+    const id = document.getElementById('estChId').value;
+    const nuevo = document.getElementById('estNuevoValor').value;
+    const payload = { estado: nuevo };
+    const fechaInput = document.getElementById('estFecha');
+    if (fechaInput) payload.fecha = fechaInput.value;
+    const provInput = document.getElementById('estProvId');
+    if (provInput) {
+        if (!provInput.value) { Swal.fire('Error', 'Tenés que seleccionar un proveedor', 'warning'); return; }
+        payload.proveedor_id = provInput.value;
+    }
+    const res = await fetch(`/api/cheque_propio/${id}/estado`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!data.success) { Swal.fire('Error', data.error, 'error'); return; }
+    modalEstado.hide();
+    Swal.fire({ icon:'success', title:'Estado actualizado', timer:1200, timerProgressBar:true, showConfirmButton:false });
+    cargar();
+}
+
+// ─── ELIMINAR ────────────────────────────────────────────────────────
+async function eliminar(id) {
+    const c = cheques.find(x => x.id === id);
+    const conf = await Swal.fire({
+        title: '¿Eliminar cheque?',
+        html: `<strong>${c.banco} Nº ${c.numero}</strong><br>Monto: ${fmt(c.monto)}`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'No',
+        confirmButtonColor: '#dc3545',
+    });
+    if (!conf.isConfirmed) return;
+    const res = await fetch(`/api/cheque_propio/${id}/eliminar`, { method: 'POST' });
+    const data = await res.json();
+    if (!data.success) { Swal.fire('Error', data.error, 'error'); return; }
+    Swal.fire({ icon:'success', title:'Eliminado', timer:1200, timerProgressBar:true, showConfirmButton:false });
+    cargar();
+}
+
+// ─── BUSCADOR (debounce) ─────────────────────────────────────────────
+let timer;
+document.getElementById('filtroQ').addEventListener('input', function() {
+    clearTimeout(timer);
+    timer = setTimeout(cargar, 300);
+});
+
+cargar();
+</script>
+{% endblock %}

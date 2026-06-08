@@ -1,0 +1,466 @@
+{% extends 'base.html' %}
+{% block title %}Margen por Producto{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-4">
+    <h2><i class="fas fa-chart-line me-2"></i>Margen de Ganancia por Producto</h2>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-warning btn-sm" onclick="verProblemas()" title="Detectar errores de costos">
+            <i class="fas fa-exclamation-triangle me-1"></i> Problemas de Costos
+        </button>
+        <button class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#modalAyuda" title="¿Cómo funciona este reporte?">
+            <i class="fas fa-question-circle me-1"></i> Ayuda
+        </button>
+        <button class="btn btn-outline-dark btn-sm" onclick="window.print()">
+            <i class="fas fa-print me-1"></i> Imprimir
+        </button>
+    </div>
+</div>
+
+<!-- ===================== MODAL AYUDA ===================== -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>¿Cómo funciona este reporte?</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="fw-bold text-primary"><i class="fas fa-calculator me-2"></i>¿Qué calcula?</h6>
+                <p class="text-muted">Por cada producto vendido en el período, toma las facturas <strong>autorizadas y pendientes</strong> (excluye únicamente las canceladas) y calcula:</p>
+                <ul>
+                    <li><strong>Ingreso:</strong> precio de venta sin IVA × unidades vendidas (tomado de la factura)</li>
+                    <li><strong>Costo:</strong> costo unitario sin IVA <strong>al momento de la venta</strong> × unidades vendidas</li>
+                    <li><strong>Ganancia:</strong> Ingreso − Costo</li>
+                    <li><strong>Margen %:</strong> Ganancia ÷ Ingreso × 100</li>
+                </ul>
+                <hr>
+                <div class="alert alert-primary py-3">
+                    <h6 class="fw-bold mb-2"><i class="fas fa-balance-scale me-2"></i>IMPORTANTE: "Margen" del reporte vs "Margen" del ABM de Productos</h6>
+                    <p class="mb-2">Es la confusión más común. <strong>No son el mismo número y los dos están bien</strong> — miden cosas distintas:</p>
+                    <ul class="mb-2">
+                        <li><strong>El % que cargás en el ABM de Productos es un MARKUP sobre el costo:</strong> cuánto le sumás al costo para obtener el precio.<br>
+                        <span class="text-muted">Ejemplo: Costo $100 + 20% de markup → Precio $120</span></li>
+                        <li><strong>El "Margen %" de este reporte es el MARGEN sobre la venta:</strong> qué porcentaje de lo que facturaste es ganancia.<br>
+                        <span class="text-muted">Ejemplo: Vendés a $120, ganás $20 → $20 ÷ $120 = <strong>16,7%</strong></span></li>
+                    </ul>
+                    <p class="mb-2">Este reporte usa el <strong>margen sobre la venta</strong> porque es el criterio contable estándar para medir rentabilidad (ganancia sobre lo facturado). Por eso un producto con <strong>20% de markup</strong> en el ABM aparece acá con <strong>16,7% de margen</strong>: es exactamente la misma ganancia en pesos, expresada sobre la venta en lugar de sobre el costo.</p>
+                    <p class="fw-bold mb-1">Tabla de equivalencias:</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-2" style="max-width:520px;">
+                            <thead class="table-light">
+                                <tr><th>Markup configurado (ABM de Productos)</th><th>Margen sobre venta (este reporte)</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>10%</td><td>9,1%</td></tr>
+                                <tr><td>15%</td><td>13,0%</td></tr>
+                                <tr><td>20%</td><td>16,7%</td></tr>
+                                <tr><td>25%</td><td>20,0%</td></tr>
+                                <tr><td>30%</td><td>23,1%</td></tr>
+                                <tr><td>40%</td><td>28,6%</td></tr>
+                                <tr><td>50%</td><td>33,3%</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="mb-0">La fórmula que conecta ambos: <strong>margen = markup ÷ (100 + markup) × 100</strong>. No es un error de cálculo, es aritmética: las dos cifras describen la misma ganancia desde puntos de vista distintos.</p>
+                </div>
+                <div class="alert alert-warning py-3">
+                    <h6 class="fw-bold mb-2"><i class="fas fa-search-dollar me-2"></i>¿Cuándo un margen bajo es un problema real?</h6>
+                    <p class="mb-2">Un producto con markup 20% configurado <strong>debería</strong> mostrar 16,7% acá si se vendió a precio de lista. Eso es lo normal y esperado, no un problema.</p>
+                    <p class="mb-2"><strong>El problema aparece cuando un producto muestra MENOS de lo que le corresponde por su markup.</strong> Ejemplo: si un producto tiene 25% de markup (debería dar 20%) pero el reporte muestra 11%, significa que <strong>se vendió por debajo del precio de lista</strong>: con descuentos, por una lista más barata, o con precio editado a mano. Esa diferencia es ganancia que se está dejando de ganar.</p>
+                    <p class="mb-0">Para detectarlos: ordená el reporte por <strong>"Menor margen"</strong> y revisá los productos del fondo. Compará el margen que muestran contra el markup que tienen configurado en el ABM (usando la tabla de arriba). Si la brecha es grande, hay que revisar el precio de ese producto.</p>
+                </div>
+                <hr>
+                <div class="alert alert-success py-2">
+                    <h6 class="fw-bold mb-2"><i class="fas fa-history me-2"></i>Costo histórico — ¿cómo funciona?</h6>
+                    <p class="mb-1">Desde la última actualización, el sistema guarda el <strong>costo real al momento de cada venta</strong> en la factura. Esto significa que:</p>
+                    <ul class="mb-0">
+                        <li>Si modificás el costo de un producto hoy, <strong>las ventas posteriores a la actualización no se ven afectadas</strong>: cada una conserva el costo que el producto tenía cuando se vendió.</li>
+                        <li>Para esas ventas, el margen es el <strong>margen real exacto</strong>, no una estimación.</li>
+                        <li><strong>Para ventas anteriores a la actualización</strong> (que no tienen el costo guardado), el sistema <strong>estima</strong> el costo a partir del precio de venta. Esa estimación es razonable pero <strong>no es exacta</strong>: para esas ventas viejas tomá el margen como referencia general, no como dato preciso por producto.</li>
+                        <li><strong>Recomendación:</strong> para análisis de pricing confiable, filtrá el reporte por fechas <strong>recientes</strong> (posteriores a la actualización). Ese rango tiene el costo real y el margen es exacto producto por producto.</li>
+                    </ul>
+                </div>
+                <hr>
+                <h6 class="fw-bold text-warning"><i class="fas fa-exclamation-triangle me-2"></i>¿Por qué un producto no aparece?</h6>
+                <ul>
+                    <li>Tiene <strong>costo = 0 o sin costo cargado</strong> → el reporte lo excluye porque el margen sería incalculable</li>
+                    <li>No tuvo ventas en el período seleccionado</li>
+                    <li>Es un combo (los combos se excluyen para no duplicar costos)</li>
+                </ul>
+                <hr>
+                <h6 class="fw-bold text-success"><i class="fas fa-palette me-2"></i>Significado de los colores de margen</h6>
+                <div class="d-flex gap-2 flex-wrap mb-3">
+                    <span class="badge bg-success fs-6 px-3 py-2">≥ 40% — Excelente</span>
+                    <span class="badge bg-warning text-dark fs-6 px-3 py-2">≥ 20% — Normal</span>
+                    <span class="badge bg-secondary fs-6 px-3 py-2">0–19% — Bajo</span>
+                    <span class="badge bg-danger fs-6 px-3 py-2">&lt; 0% — Venta a pérdida</span>
+                </div>
+                <hr>
+                <h6 class="fw-bold text-danger"><i class="fas fa-lightbulb me-2"></i>Tips</h6>
+                <ul class="mb-0">
+                    <li>Usá el botón <strong>⚠️ Problemas de Costos</strong> antes de analizar el reporte para detectar inconsistencias.</li>
+                    <li>El costo y el precio de venta se toman de la factura — el reporte refleja lo que realmente ocurrió en cada venta.</li>
+                    <li>Si un margen parece raro en ventas antiguas (anteriores a la actualización del sistema), recordá que esas ventas usan un <strong>costo estimado</strong> a partir del precio — para datos exactos, filtrá por fechas recientes.</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL PROBLEMAS ===================== -->
+<div class="modal fade" id="modalProblemas" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Problemas de Costos detectados</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="bodyProblemas">
+                <div class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Analizando...</div>
+            </div>
+            <div class="modal-footer">
+                <small class="text-muted me-auto">Corregí los costos en el ABM de Productos y volvé a consultar el reporte.</small>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Desde <span class="text-danger">*</span></label>
+                <input type="date" id="filtroDes" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Hasta <span class="text-danger">*</span></label>
+                <input type="date" id="filtroHas" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Categoría</label>
+                <select id="filtroCategoria" class="form-select form-select-sm">
+                    <option value="">Todas las categorías</option>
+                    {% for cat in categorias %}
+                    <option value="{{ cat }}">{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Ordenar por</label>
+                <select id="filtroOrden" class="form-select form-select-sm">
+                    <option value="ganancia_desc">Mayor Ganancia</option>
+                    <option value="margen_desc">Mayor % Margen</option>
+                    <option value="ingresos_desc">Mayor Ingreso</option>
+                    <option value="ganancia_asc">Menor Ganancia</option>
+                    <option value="margen_asc">Menor % Margen</option>
+                    <option value="nombre">Nombre A-Z</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary btn-sm w-100" onclick="cargarMargen()">
+                    <i class="fas fa-search me-1"></i> Consultar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tarjetas de totales -->
+<div id="panelTotales" style="display:none">
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="small text-muted">Ingresos Totales</div>
+                <div class="fw-bold fs-5 text-primary" id="totIngresos">$0</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 bg-light text-center py-3">
+                <div class="small text-muted">Costo Total</div>
+                <div class="fw-bold fs-5 text-danger" id="totCosto">$0</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 bg-success bg-opacity-10 text-center py-3">
+                <div class="small text-muted">Ganancia Bruta</div>
+                <div class="fw-bold fs-5 text-success" id="totGanancia">$0</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-primary text-white text-center py-3">
+                <div class="small">Margen General</div>
+                <div class="fw-bold fs-3" id="totMargen">0%</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barra de margen visual -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between small text-muted mb-1">
+                <span>Costo</span>
+                <span>Ganancia</span>
+            </div>
+            <div class="progress" style="height:20px">
+                <div class="progress-bar bg-danger" id="barCosto" style="width:50%"></div>
+                <div class="progress-bar bg-success" id="barGanancia" style="width:50%"></div>
+            </div>
+            <div class="d-flex justify-content-between small mt-1">
+                <span id="barCostoPct" class="text-danger fw-bold"></span>
+                <span id="barGananciaPct" class="text-success fw-bold"></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0" id="tablaMargen">
+            <thead class="table-dark">
+                <tr>
+                    <th>#</th>
+                    <th>Producto</th>
+                    <th>Categoría</th>
+                    <th class="text-end">Unidades</th>
+                    <th class="text-end">Ingreso</th>
+                    <th class="text-end">Costo</th>
+                    <th class="text-end">Ganancia</th>
+                    <th class="text-center">Margen %</th>
+                </tr>
+            </thead>
+            <tbody id="bodyMargen">
+                <tr><td colspan="8" class="text-center py-4 text-muted">Seleccione un período y consulte</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+@media print {
+    nav, .btn, #filtros { display: none !important; }
+    .card { border: 1px solid #ccc !important; }
+    body { font-size: 11px; }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function fmt(v) {
+    return '$' + parseFloat(v || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function colorMargen(pct) {
+    if (pct >= 40) return 'success';
+    if (pct >= 20) return 'warning';
+    if (pct >= 0)  return 'secondary';
+    return 'danger';
+}
+
+function badgeMargen(pct) {
+    const color = colorMargen(pct);
+    return `<span class="badge bg-${color}">${pct.toFixed(1)}%</span>`;
+}
+
+async function cargarMargen() {
+    const desde = document.getElementById('filtroDes').value;
+    const hasta = document.getElementById('filtroHas').value;
+    const cat   = document.getElementById('filtroCategoria').value;
+    const orden = document.getElementById('filtroOrden').value;
+
+    if (!desde || !hasta) { alertSwal('Seleccione el período', 'info'); return; }
+
+    let url = `/api/margen_productos?desde=${desde}&hasta=${hasta}&orden=${orden}`;
+    if (cat) url += `&categoria=${encodeURIComponent(cat)}`;
+
+    const tbody = document.getElementById('bodyMargen');
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-3 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Calculando...</td></tr>';
+
+    const res  = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-danger">Error: ${data.error}</td></tr>`;
+        return;
+    }
+
+    const t = data.totales;
+    const prods = data.productos;
+
+    if (!prods.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Sin datos para el período (¿los productos tienen costo cargado?)</td></tr>';
+        document.getElementById('panelTotales').style.display = 'none';
+        return;
+    }
+
+    // Totales
+    document.getElementById('totIngresos').textContent = fmt(t.ingresos);
+    document.getElementById('totCosto').textContent    = fmt(t.costo);
+    document.getElementById('totGanancia').textContent = fmt(t.ganancia);
+    document.getElementById('totMargen').textContent   = t.margen + '%';
+
+    // Barra de progreso
+    const costoPct    = t.ingresos > 0 ? ((t.costo    / t.ingresos) * 100).toFixed(1) : 0;
+    const gananciaPct = t.ingresos > 0 ? ((t.ganancia / t.ingresos) * 100).toFixed(1) : 0;
+    document.getElementById('barCosto').style.width      = costoPct + '%';
+    document.getElementById('barGanancia').style.width   = gananciaPct + '%';
+    document.getElementById('barCostoPct').textContent   = costoPct + '% costo';
+    document.getElementById('barGananciaPct').textContent = gananciaPct + '% margen';
+    document.getElementById('panelTotales').style.display = '';
+
+    // Tabla
+    tbody.innerHTML = prods.map((p, i) => `
+        <tr>
+            <td class="text-muted">${i + 1}</td>
+            <td><strong>${p.nombre}</strong><br><small class="text-muted">${p.codigo}</small></td>
+            <td><span class="badge bg-secondary">${p.categoria || '-'}</span></td>
+            <td class="text-end">${p.unidades.toLocaleString('es-AR')}</td>
+            <td class="text-end">${fmt(p.ingresos)}</td>
+            <td class="text-end text-danger">${fmt(p.costo_total)}</td>
+            <td class="text-end text-success fw-bold">${fmt(p.ganancia)}</td>
+            <td class="text-center">${badgeMargen(p.margen_pct)}</td>
+        </tr>
+    `).join('');
+}
+
+// Fechas del mes actual por defecto
+(function() {
+    const hoy   = new Date();
+    const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    document.getElementById('filtroDes').value = desde.toISOString().split('T')[0];
+    document.getElementById('filtroHas').value = hoy.toISOString().split('T')[0];
+})();
+
+// ---- DETECCIÓN DE PROBLEMAS DE COSTOS ----
+async function verProblemas() {
+    const desde = document.getElementById('filtroDes').value;
+    const hasta = document.getElementById('filtroHas').value;
+    if (!desde || !hasta) { alertSwal('Primero seleccioná el período.', 'info'); return; }
+
+    const modal = new bootstrap.Modal(document.getElementById('modalProblemas'));
+    document.getElementById('bodyProblemas').innerHTML =
+        '<div class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Analizando productos...</div>';
+    modal.show();
+
+    try {
+        const res  = await fetch(`/api/problemas_costos?desde=${desde}&hasta=${hasta}`);
+        const data = await res.json();
+
+        if (!data.success) {
+            document.getElementById('bodyProblemas').innerHTML =
+                `<div class="alert alert-danger">Error: ${data.error}</div>`;
+            return;
+        }
+
+        const { sin_costo, perdida, margen_alto, costo_mayor_precio } = data;
+        const total = sin_costo.length + perdida.length + margen_alto.length + costo_mayor_precio.length;
+
+        if (total === 0) {
+            document.getElementById('bodyProblemas').innerHTML = `
+                <div class="alert alert-success text-center py-4">
+                    <i class="fas fa-check-circle fa-2x mb-2 d-block"></i>
+                    <strong>¡Todo bien!</strong> No se detectaron problemas en los costos del período.
+                </div>`;
+            return;
+        }
+
+        let html = `<div class="alert alert-warning mb-3">
+            <strong>${total} problema(s) detectado(s)</strong> en el período ${desde} → ${hasta}.
+        </div>`;
+
+        // --- Sin costo ---
+        if (sin_costo.length) {
+            html += `
+            <h6 class="fw-bold text-danger"><i class="fas fa-times-circle me-1"></i>
+                Sin costo cargado (${sin_costo.length}) — <small class="fw-normal">No aparecen en el reporte</small>
+            </h6>
+            <table class="table table-sm table-bordered mb-4">
+                <thead class="table-danger"><tr><th>Código</th><th>Producto</th><th>Categoría</th><th class="text-end">Precio Venta</th><th class="text-end">Unidades vendidas</th></tr></thead>
+                <tbody>${sin_costo.map(p => `
+                    <tr>
+                        <td><small class="text-muted">${p.codigo}</small></td>
+                        <td>${p.nombre}</td>
+                        <td><span class="badge bg-secondary">${p.categoria || '-'}</span></td>
+                        <td class="text-end">${fmt(p.precio)}</td>
+                        <td class="text-end">${p.unidades.toLocaleString('es-AR')}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+        }
+
+        // --- Costo mayor que precio (venta a pérdida segura) ---
+        if (costo_mayor_precio.length) {
+            html += `
+            <h6 class="fw-bold text-danger"><i class="fas fa-arrow-down me-1"></i>
+                Costo mayor al precio de venta (${costo_mayor_precio.length}) — <small class="fw-normal">Pérdida garantizada</small>
+            </h6>
+            <table class="table table-sm table-bordered mb-4">
+                <thead class="table-danger"><tr><th>Código</th><th>Producto</th><th class="text-end">Precio Venta</th><th class="text-end">Costo</th><th class="text-end">Diferencia</th></tr></thead>
+                <tbody>${costo_mayor_precio.map(p => `
+                    <tr>
+                        <td><small class="text-muted">${p.codigo}</small></td>
+                        <td>${p.nombre}</td>
+                        <td class="text-end">${fmt(p.precio)}</td>
+                        <td class="text-end text-danger">${fmt(p.costo)}</td>
+                        <td class="text-end text-danger fw-bold">${fmt(p.costo - p.precio)}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+        }
+
+        // --- Venta a pérdida (margen negativo en el período) ---
+        if (perdida.length) {
+            html += `
+            <h6 class="fw-bold text-warning"><i class="fas fa-minus-circle me-1"></i>
+                Vendidos a pérdida en el período (${perdida.length}) — <small class="fw-normal">Margen negativo real</small>
+            </h6>
+            <table class="table table-sm table-bordered mb-4">
+                <thead class="table-warning"><tr><th>Código</th><th>Producto</th><th class="text-end">Ingreso</th><th class="text-end">Costo Total</th><th class="text-center">Margen</th></tr></thead>
+                <tbody>${perdida.map(p => `
+                    <tr>
+                        <td><small class="text-muted">${p.codigo}</small></td>
+                        <td>${p.nombre}</td>
+                        <td class="text-end">${fmt(p.ingresos)}</td>
+                        <td class="text-end text-danger">${fmt(p.costo_total)}</td>
+                        <td class="text-center"><span class="badge bg-danger">${p.margen_pct.toFixed(1)}%</span></td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+        }
+
+        // --- Margen sospechosamente alto ---
+        if (margen_alto.length) {
+            html += `
+            <h6 class="fw-bold text-info"><i class="fas fa-question-circle me-1"></i>
+                Margen muy alto (&gt; 80%) (${margen_alto.length}) — <small class="fw-normal">Verificar que el costo sea correcto</small>
+            </h6>
+            <table class="table table-sm table-bordered mb-3">
+                <thead class="table-info"><tr><th>Código</th><th>Producto</th><th class="text-end">Precio Venta</th><th class="text-end">Costo Unitario</th><th class="text-center">Margen</th></tr></thead>
+                <tbody>${margen_alto.map(p => `
+                    <tr>
+                        <td><small class="text-muted">${p.codigo}</small></td>
+                        <td>${p.nombre}</td>
+                        <td class="text-end">${fmt(p.precio)}</td>
+                        <td class="text-end">${fmt(p.costo)}</td>
+                        <td class="text-center"><span class="badge bg-info text-dark">${p.margen_pct.toFixed(1)}%</span></td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+        }
+
+        document.getElementById('bodyProblemas').innerHTML = html;
+
+    } catch (e) {
+        document.getElementById('bodyProblemas').innerHTML =
+            `<div class="alert alert-danger">Error de conexión: ${e.message}</div>`;
+    }
+}
+</script>
+{% endblock %}

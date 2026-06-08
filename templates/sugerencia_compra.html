@@ -1,0 +1,617 @@
+{% extends 'base.html' %}
+{% block title %}Sugerencia de Compra{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3">
+    <h2>
+        <i class="fas fa-shopping-basket me-2"></i>Sugerencia de Compra
+        <button class="btn btn-sm btn-outline-info ms-2" data-bs-toggle="modal" data-bs-target="#modalAyuda" title="Ver ayuda">
+            <i class="fas fa-question-circle me-1"></i> Ayuda
+        </button>
+    </h2>
+    <div>
+        <button class="btn btn-success" onclick="generarOC()" id="btnGenerarOC" disabled
+                title="Calculá primero y filtrá por un proveedor específico para habilitar este botón">
+            <i class="fas fa-file-circle-plus me-1"></i> Generar OC
+        </button>
+        <button class="btn btn-outline-primary" onclick="exportarExcel()" id="btnExcel" disabled>
+            <i class="fas fa-file-excel me-1"></i> Exportar Excel
+        </button>
+        <button class="btn btn-outline-secondary" onclick="window.print()" id="btnImprimir" disabled>
+            <i class="fas fa-print me-1"></i> Imprimir
+        </button>
+    </div>
+</div>
+
+<!-- Modal de Ayuda -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>¿Cómo funciona?</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="text-info fw-bold"><i class="fas fa-lightbulb me-1"></i> ¿Qué hace este informe?</h6>
+                <p>Te dice <strong>qué productos comprar y cuánto</strong>, basado en tus ventas reales de los últimos días.</p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-calculator me-1"></i> Cómo se calcula</h6>
+                <pre class="bg-light p-2 small rounded"><code>venta_promedio_diaria = ventas_ultimos_30_días / 30
+cantidad_sugerida = (venta_diaria × 30) + stock_minimo - stock_actual</code></pre>
+                <p class="small">Ejemplo: Si <strong>MILAN 214</strong> vendió 60 unidades en 30 días (2/día), tiene stock 5 y mínimo 10:
+                cantidad sugerida = (2 × 30) + 10 - 5 = <strong>65 unidades</strong> (cubre 30 días + colchón)</p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-bullseye me-1"></i> Niveles de urgencia</h6>
+                <ul>
+                    <li><span class="badge bg-danger">CRÍTICO</span> Stock en cero — mercadería ya agotada</li>
+                    <li><span class="badge bg-warning text-dark">ALTO</span> Stock bajó del mínimo</li>
+                    <li><span class="badge bg-info text-dark">MEDIO</span> Te queda menos de 7 días de cobertura</li>
+                    <li><span class="badge bg-secondary">BAJO</span> Conviene reponer pero no urge</li>
+                </ul>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-cog me-1"></i> Configuración por producto</h6>
+                <p>Para que el informe sea preciso, cada producto debería tener un <strong>stock mínimo</strong> definido en el ABM de Productos. Si está en 0, el informe igual calcula pero con menos precisión.</p>
+
+                <hr>
+
+                <h6 class="text-success fw-bold"><i class="fas fa-file-circle-plus me-1"></i> Generar OC (Orden de Compra) automática</h6>
+                <p>Una vez calculado el informe, si <strong>filtrás por un proveedor específico</strong> (no "Todos"), se habilita el botón <span class="badge bg-success">Generar OC</span>. Al hacer click:</p>
+                <ul>
+                    <li>Se crea una <strong>Orden de Compra en borrador</strong> con ese proveedor.</li>
+                    <li>Todos los productos visibles con <strong>cantidad sugerida &gt; 0</strong> se agregan como ítems.</li>
+                    <li>La cantidad pedida es la <strong>cantidad sugerida</strong>, y el precio unitario es el <strong>costo actual</strong> del producto.</li>
+                    <li>Te redirige automáticamente a la pantalla de edición de la OC para que revises/ajustes antes de enviarla.</li>
+                </ul>
+                <p class="small text-muted mb-0">Los productos con cantidad sugerida = 0 (que no urgen comprar) se excluyen automáticamente. Si usás el <strong>buscador</strong>, se genera OC solo con lo que veas filtrado.</p>
+
+                <hr>
+                <ul class="mb-0">
+                    <li>Se cuentan facturas <strong>autorizadas</strong> y <strong>error_afip</strong> (ambas descuentan stock real)</li>
+                    <li>Se excluyen <strong>combos</strong> (se arman de productos base) y productos <strong>inactivos</strong></li>
+                    <li>La "venta diaria" es un promedio — en fines de semana o picos puede variar</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros y parámetros -->
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Período de análisis</label>
+                <select id="diasAnalisis" class="form-select form-select-sm">
+                    <option value="7">Últimos 7 días</option>
+                    <option value="15">Últimos 15 días</option>
+                    <option value="30" selected>Últimos 30 días</option>
+                    <option value="60">Últimos 60 días</option>
+                    <option value="90">Últimos 90 días</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Cobertura deseada</label>
+                <select id="diasCobertura" class="form-select form-select-sm">
+                    <option value="7">7 días</option>
+                    <option value="15">15 días</option>
+                    <option value="30" selected>30 días</option>
+                    <option value="45">45 días</option>
+                    <option value="60">60 días</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold">Proveedor</label>
+                <select id="filtroProveedor" class="form-select form-select-sm">
+                    <option value="">Todos los proveedores</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Buscar</label>
+                <input type="text" id="buscar" class="form-control form-control-sm" placeholder="Código o nombre...">
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="soloCriticos">
+                    <label class="form-check-label small" for="soloCriticos">Solo críticos</label>
+                </div>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-primary btn-sm w-100" onclick="calcular()">
+                    <i class="fas fa-search me-1"></i> Calcular
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resumen -->
+<div class="row g-2 mb-3" id="resumenCards" style="display:none;">
+    <div class="col-md-2 col-6">
+        <div class="card bg-danger text-white">
+            <div class="card-body py-2">
+                <small>Críticos</small>
+                <h3 class="mb-0" id="countCriticos">0</h3>
+                <small>sin stock</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6">
+        <div class="card bg-warning">
+            <div class="card-body py-2">
+                <small>Alto</small>
+                <h3 class="mb-0" id="countAltos">0</h3>
+                <small>bajo mínimo</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6">
+        <div class="card bg-info">
+            <div class="card-body py-2">
+                <small>Medio</small>
+                <h3 class="mb-0" id="countMedios">0</h3>
+                <small>&lt; 7 días</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 col-6">
+        <div class="card bg-secondary text-white">
+            <div class="card-body py-2">
+                <small>Bajo</small>
+                <h3 class="mb-0" id="countBajos">0</h3>
+                <small>conviene</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-dark text-white">
+            <div class="card-body py-2">
+                <small>Compra estimada total</small>
+                <h3 class="mb-0" id="montoTotal">$0.00</h3>
+                <small id="totalProductos">0 productos a comprar</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-list me-2"></i>Productos a comprar</span>
+        <span id="contador" class="badge bg-secondary">0</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0" id="tablaResultados">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 90px">Urgencia</th>
+                        <th style="width: 90px">Código</th>
+                        <th>Producto</th>
+                        <th style="width: 130px">Proveedor</th>
+                        <th class="text-end" style="width: 80px">Stock</th>
+                        <th class="text-end" style="width: 80px">Mínimo</th>
+                        <th class="text-end" style="width: 90px">Venta/día</th>
+                        <th class="text-end" style="width: 80px">Cobertura</th>
+                        <th class="text-end" style="width: 100px">Comprar</th>
+                        <th class="text-end" style="width: 110px">Monto est.</th>
+                    </tr>
+                </thead>
+                <tbody id="tbl">
+                    <tr><td colspan="10" class="text-center text-muted py-4">
+                        Hacé click en <strong>Calcular</strong> para generar el informe
+                    </td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+let datosCalculo = null;
+
+// ================== INICIALIZACIÓN ==================
+document.addEventListener('DOMContentLoaded', function() {
+    cargarProveedores();
+    // Al escribir en el buscador: redibujar tabla + actualizar estado del botón Generar OC
+    document.getElementById('buscar').addEventListener('input', function() {
+        dibujarTabla();
+        actualizarBtnGenerarOC();
+    });
+    // Al cambiar el filtro de proveedor: actualizar estado del botón
+    document.getElementById('filtroProveedor').addEventListener('change', actualizarBtnGenerarOC);
+});
+
+function cargarProveedores() {
+    fetch('/sugerencia_compra/api/proveedores')
+        .then(r => r.json())
+        .then(data => {
+            if (Array.isArray(data)) {
+                const sel = document.getElementById('filtroProveedor');
+                const opts = data.map(p => `<option value="${p.id}">${p.razon_social}</option>`).join('');
+                sel.innerHTML = '<option value="">Todos los proveedores</option>' + opts;
+            }
+        });
+}
+
+// ================== CÁLCULO ==================
+function calcular() {
+    const diasAnalisis = document.getElementById('diasAnalisis').value;
+    const diasCobertura = document.getElementById('diasCobertura').value;
+    const proveedorId = document.getElementById('filtroProveedor').value;
+    const soloCriticos = document.getElementById('soloCriticos').checked ? '1' : '0';
+
+    // UI: mostrar loading
+    document.getElementById('tbl').innerHTML = `
+        <tr><td colspan="10" class="text-center py-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2 text-muted">Calculando...</div>
+        </td></tr>
+    `;
+
+    const params = new URLSearchParams({
+        dias_analisis: diasAnalisis,
+        dias_cobertura: diasCobertura,
+        proveedor_id: proveedorId,
+        solo_criticos: soloCriticos,
+    });
+
+    fetch(`/sugerencia_compra/api/calcular?${params}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { alertSwal(data.error); return; }
+            datosCalculo = data;
+            mostrarResumen(data.resumen);
+            dibujarTabla();
+            document.getElementById('btnExcel').disabled = false;
+            document.getElementById('btnImprimir').disabled = false;
+            actualizarBtnGenerarOC();
+        })
+        .catch(e => {
+            document.getElementById('tbl').innerHTML = `
+                <tr><td colspan="10" class="text-center text-danger py-4">
+                    Error al calcular: ${e.message}
+                </td></tr>
+            `;
+        });
+}
+
+function mostrarResumen(r) {
+    document.getElementById('resumenCards').style.display = 'flex';
+    document.getElementById('countCriticos').textContent = r.criticos;
+    document.getElementById('countAltos').textContent = r.altos;
+    document.getElementById('countMedios').textContent = r.medios;
+    document.getElementById('countBajos').textContent = r.bajos;
+    document.getElementById('montoTotal').textContent = '$' + formatearNumero(r.monto_total_estimado);
+    const totalAComprar = r.criticos + r.altos + r.medios + r.bajos;
+    document.getElementById('totalProductos').textContent = `${totalAComprar} productos a comprar`;
+    document.getElementById('contador').textContent = r.total_productos;
+}
+
+function dibujarTabla() {
+    if (!datosCalculo) return;
+    const filtro = (document.getElementById('buscar').value || '').toLowerCase().trim();
+
+    let productos = datosCalculo.productos;
+    if (filtro) {
+        productos = productos.filter(p =>
+            (p.codigo || '').toLowerCase().includes(filtro) ||
+            (p.nombre || '').toLowerCase().includes(filtro) ||
+            (p.categoria || '').toLowerCase().includes(filtro)
+        );
+    }
+
+    if (!productos.length) {
+        document.getElementById('tbl').innerHTML = `
+            <tr><td colspan="10" class="text-center text-muted py-4">Sin resultados para mostrar</td></tr>
+        `;
+        return;
+    }
+
+    const colores = {
+        'critico': 'bg-danger text-white',
+        'alto': 'bg-warning text-dark',
+        'medio': 'bg-info text-dark',
+        'bajo': 'bg-secondary text-white',
+        'ok': 'bg-light text-dark'
+    };
+    const labels = {
+        'critico': 'CRÍTICO',
+        'alto': 'ALTO',
+        'medio': 'MEDIO',
+        'bajo': 'BAJO',
+        'ok': 'OK'
+    };
+
+    document.getElementById('tbl').innerHTML = productos.map(p => {
+        const badgeUrgencia = `<span class="badge ${colores[p.urgencia] || ''}">${labels[p.urgencia] || '?'}</span>`;
+        const provText = (p.proveedores && p.proveedores.length > 0)
+            ? p.proveedores.map(pv => pv.razon_social).slice(0, 1).join(', ') +
+              (p.proveedores.length > 1 ? ` <small class="text-muted">(+${p.proveedores.length - 1})</small>` : '')
+            : '<small class="text-muted">-</small>';
+        const cobertura = p.dias_cobertura_actual !== null
+            ? `${p.dias_cobertura_actual.toFixed(0)} días`
+            : '<small class="text-muted">∞</small>';
+        const filaClass = p.cantidad_sugerida === 0 ? 'text-muted' : '';
+
+        return `
+            <tr class="${filaClass}">
+                <td>${badgeUrgencia}</td>
+                <td><code>${p.codigo}</code></td>
+                <td>
+                    <strong>${p.nombre}</strong>
+                    ${p.categoria ? `<br><small class="text-muted">${p.categoria}</small>` : ''}
+                </td>
+                <td><small>${provText}</small></td>
+                <td class="text-end">${formatearNumero(p.stock_actual, 2)}</td>
+                <td class="text-end">${formatearNumero(p.stock_minimo, 2)}</td>
+                <td class="text-end">${formatearNumero(p.venta_diaria, 2)}</td>
+                <td class="text-end">${cobertura}</td>
+                <td class="text-end"><strong>${p.cantidad_sugerida > 0 ? formatearNumero(p.cantidad_sugerida) : '-'}</strong></td>
+                <td class="text-end">${p.monto_estimado > 0 ? '$' + formatearNumero(p.monto_estimado) : '-'}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function formatearNumero(n, decimales = 0) {
+    if (n === null || n === undefined) return '-';
+    return new Intl.NumberFormat('es-AR', {
+        minimumFractionDigits: decimales,
+        maximumFractionDigits: 2
+    }).format(n);
+}
+
+// ================== EXPORTAR A EXCEL ==================
+function exportarExcel() {
+    if (!datosCalculo || !datosCalculo.productos.length) {
+        alertSwal('Primero calculá el informe', 'info');
+        return;
+    }
+
+    const filtro = (document.getElementById('buscar').value || '').toLowerCase().trim();
+    let productos = datosCalculo.productos;
+    if (filtro) {
+        productos = productos.filter(p =>
+            (p.codigo || '').toLowerCase().includes(filtro) ||
+            (p.nombre || '').toLowerCase().includes(filtro) ||
+            (p.categoria || '').toLowerCase().includes(filtro)
+        );
+    }
+
+    // Armar CSV
+    const headers = ['Urgencia', 'Código', 'Producto', 'Categoría', 'Proveedor',
+                     'Stock actual', 'Stock mínimo', 'Venta/día', 'Días cobertura',
+                     'Cantidad a comprar', 'Costo unitario', 'Monto estimado'];
+    const rows = productos.map(p => [
+        p.urgencia,
+        p.codigo,
+        p.nombre,
+        p.categoria || '',
+        (p.proveedores || []).map(pv => pv.razon_social).join(' / '),
+        p.stock_actual,
+        p.stock_minimo,
+        p.venta_diaria,
+        p.dias_cobertura_actual !== null ? p.dias_cobertura_actual : '',
+        p.cantidad_sugerida,
+        p.costo_unitario,
+        p.monto_estimado,
+    ]);
+
+    const csv = [headers, ...rows]
+        .map(row => row.map(cell => {
+            const s = String(cell).replace(/"/g, '""');
+            return /[",\n]/.test(s) ? `"${s}"` : s;
+        }).join(','))
+        .join('\n');
+
+    const blob = new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const fecha = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `sugerencia_compra_${fecha}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ================== GENERAR OC DESDE SUGERENCIA (Fase 6) ==================
+
+/**
+ * Devuelve los productos visibles actualmente en la tabla (aplicando el buscador),
+ * filtrando solo los que tienen cantidad_sugerida > 0.
+ * Es lo que se va a mandar a la OC.
+ */
+function obtenerProductosParaOC() {
+    if (!datosCalculo || !datosCalculo.productos) return [];
+    const filtro = (document.getElementById('buscar').value || '').toLowerCase().trim();
+    let productos = datosCalculo.productos;
+    if (filtro) {
+        productos = productos.filter(p =>
+            (p.codigo || '').toLowerCase().includes(filtro) ||
+            (p.nombre || '').toLowerCase().includes(filtro) ||
+            (p.categoria || '').toLowerCase().includes(filtro)
+        );
+    }
+    return productos.filter(p => p.cantidad_sugerida > 0);
+}
+
+/**
+ * Habilita/deshabilita el botón "Generar OC" según:
+ * - Si ya se calculó (hay datos)
+ * - Si hay un proveedor filtrado (no "Todos")
+ * - Si hay productos visibles con cantidad sugerida > 0
+ * También actualiza el tooltip con el motivo concreto del disabled.
+ */
+function actualizarBtnGenerarOC() {
+    const btn = document.getElementById('btnGenerarOC');
+    if (!btn) return;
+    const sel = document.getElementById('filtroProveedor');
+    const proveedorId = sel.value;
+
+    if (!datosCalculo) {
+        btn.disabled = true;
+        btn.title = 'Primero hacé click en "Calcular" para generar el informe';
+        return;
+    }
+    if (!proveedorId) {
+        btn.disabled = true;
+        btn.title = 'Seleccioná un proveedor específico en el filtro (no "Todos") para generar la OC';
+        return;
+    }
+    const productos = obtenerProductosParaOC();
+    if (productos.length === 0) {
+        btn.disabled = true;
+        btn.title = 'No hay productos con cantidad sugerida > 0 en la vista actual';
+        return;
+    }
+    // Habilitado
+    btn.disabled = false;
+    const nombreProveedor = sel.options[sel.selectedIndex].text;
+    btn.title = `Generar OC borrador para ${nombreProveedor} con ${productos.length} ítem(s)`;
+}
+
+/**
+ * Toma los productos visibles (filtro activo) del proveedor seleccionado,
+ * arma el payload y llama al endpoint POST /api/ordenes_compra/nueva.
+ * Al recibir OK, redirige a la pantalla de edición de la OC creada.
+ */
+async function generarOC() {
+    const sel = document.getElementById('filtroProveedor');
+    const proveedorId = sel.value;
+    if (!proveedorId) {
+        Swal.fire('Atención', 'Primero filtrá por un proveedor específico', 'warning');
+        return;
+    }
+    const nombreProveedor = sel.options[sel.selectedIndex].text;
+
+    const productos = obtenerProductosParaOC();
+    if (productos.length === 0) {
+        Swal.fire('Sin productos', 'No hay productos con cantidad sugerida > 0 en la vista actual', 'info');
+        return;
+    }
+
+    // Calcular total estimado
+    const totalEstimado = productos.reduce(
+        (acc, p) => acc + (p.cantidad_sugerida * p.costo_unitario),
+        0
+    );
+
+    // Armar HTML de muestra (primeros 8 productos)
+    const muestra = productos.slice(0, 8).map(p =>
+        `<tr>
+            <td><code>${p.codigo}</code></td>
+            <td class="text-start">${p.nombre}</td>
+            <td class="text-end">${formatearNumero(p.cantidad_sugerida)}</td>
+            <td class="text-end">$${formatearNumero(p.costo_unitario, 2)}</td>
+        </tr>`
+    ).join('');
+    const masTxt = productos.length > 8
+        ? `<tr><td colspan="4" class="text-center text-muted small">... y ${productos.length - 8} ítem(s) más</td></tr>`
+        : '';
+
+    const htmlResumen = `
+        <div class="text-start">
+            <p class="mb-2">Se va a crear una <strong>OC en borrador</strong> para:</p>
+            <ul class="mb-2">
+                <li>Proveedor: <strong>${nombreProveedor}</strong></li>
+                <li>Cantidad de ítems: <strong>${productos.length}</strong></li>
+                <li>Total estimado (con costo actual): <strong>$${formatearNumero(totalEstimado, 2)}</strong></li>
+            </ul>
+            <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                <table class="table table-sm table-striped mb-0 small">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th>Código</th>
+                            <th class="text-start">Producto</th>
+                            <th class="text-end">Cant.</th>
+                            <th class="text-end">Costo u.</th>
+                        </tr>
+                    </thead>
+                    <tbody>${muestra}${masTxt}</tbody>
+                </table>
+            </div>
+            <p class="small text-muted mt-2 mb-0">La OC quedará en borrador para que la revises y ajustes antes de enviarla al proveedor.</p>
+        </div>
+    `;
+
+    const conf = await Swal.fire({
+        icon: 'question',
+        title: '¿Generar Orden de Compra?',
+        html: htmlResumen,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, generar OC',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#198754',
+        width: '700px',
+    });
+    if (!conf.isConfirmed) return;
+
+    // Armar payload para el endpoint existente /api/ordenes_compra/nueva
+    const payload = {
+        proveedor_id: parseInt(proveedorId, 10),
+        fecha_emision: new Date().toISOString().slice(0, 10),
+        observaciones: `Generada automáticamente desde Sugerencia de Compra (${productos.length} ítem(s))`,
+        detalles: productos.map(p => ({
+            producto_id: p.id,
+            cantidad: p.cantidad_sugerida,
+            precio_unitario: p.costo_unitario,
+        })),
+    };
+
+    // Loading
+    Swal.fire({
+        title: 'Generando OC...',
+        html: 'Creando la orden de compra en borrador.',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+    });
+
+    try {
+        const resp = await fetch('/api/ordenes_compra/nueva', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+
+        if (!data.success) {
+            Swal.fire({
+                icon: 'error',
+                title: 'No se pudo generar la OC',
+                text: data.error || 'Error desconocido',
+            });
+            return;
+        }
+
+        await Swal.fire({
+            icon: 'success',
+            title: '¡OC generada!',
+            html: `Se creó <strong>${data.numero_completo}</strong> en estado <strong>borrador</strong>.<br><br>` +
+                  `<span class="small text-muted">Te llevamos a la pantalla de edición para que revises y ajustes antes de enviar.</span>`,
+            timer: 2500,
+            timerProgressBar: true,
+            showConfirmButton: false,
+        });
+
+        // Redirigir a la pantalla de edición de la OC creada
+        window.location.href = `/orden_compra/${data.oc_id}?edit=1`;
+
+    } catch (err) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error de red',
+            text: err.message,
+        });
+    }
+}
+</script>
+{% endblock %}

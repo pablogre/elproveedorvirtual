@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+{% block title %}Auditoría de Cancelaciones{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-4">
+    <h2><i class="fas fa-eye me-2 text-danger"></i>Auditoría de Cancelaciones</h2>
+    <button class="btn btn-outline-dark btn-sm" onclick="window.print()">
+        <i class="fas fa-print me-1"></i> Imprimir
+    </button>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Desde</label>
+                <input type="date" id="filtro_desde" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Hasta</label>
+                <input type="date" id="filtro_hasta" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Tipo</label>
+                <select id="filtro_tipo" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="cancelacion_medios_pago">Cancelación en pago</option>
+                    <option value="limpiar_todo">Limpiar todo</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary btn-sm w-100" onclick="cargarCancelaciones()">
+                    <i class="fas fa-search me-1"></i> Consultar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resumen -->
+<div class="row g-3 mb-3" id="resumen" style="display:none">
+    <div class="col-md-3">
+        <div class="card bg-danger text-white text-center py-2">
+            <div class="small">Total cancelaciones</div>
+            <div class="fw-bold fs-4" id="res_cantidad">0</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark text-center py-2">
+            <div class="small">Monto total cancelado</div>
+            <div class="fw-bold fs-4" id="res_total">$0</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white text-center py-2">
+            <div class="small">Cancelaciones en pago</div>
+            <div class="fw-bold fs-4" id="res_medios">0</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-secondary text-white text-center py-2">
+            <div class="small">Limpiar todo</div>
+            <div class="fw-bold fs-4" id="res_limpiar">0</div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Fecha</th>
+                    <th>Usuario</th>
+                    <th>Cliente</th>
+                    <th class="text-center">Tipo</th>
+                    <th class="text-end">Total</th>
+                    <th class="text-center">Detalle</th>
+                </tr>
+            </thead>
+            <tbody id="tablaCancelaciones">
+                <tr><td colspan="6" class="text-center py-4 text-muted">
+                    Seleccione un período y consulte
+                </td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal detalle -->
+<div class="modal fade" id="modalDetalle" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title"><i class="fas fa-list me-2"></i>Detalle de productos</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalDetalleBody"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print { .btn, .card:first-child { display:none !important; } }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function fmt(v) {
+    return '$' + parseFloat(v||0).toLocaleString('es-AR', {minimumFractionDigits:2});
+}
+
+function setHoy() {
+    const hoy = new Date().toISOString().split('T')[0];
+    const desde = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+    document.getElementById('filtro_desde').value = desde;
+    document.getElementById('filtro_hasta').value = hoy;
+}
+
+async function cargarCancelaciones() {
+    const desde = document.getElementById('filtro_desde').value;
+    const hasta = document.getElementById('filtro_hasta').value;
+    const tipo = document.getElementById('filtro_tipo').value;
+
+    let url = '/api/cancelaciones?';
+    if (desde) url += `desde=${desde}&`;
+    if (hasta) url += `hasta=${hasta}&`;
+    if (tipo) url += `tipo=${tipo}&`;
+
+    const tbody = document.getElementById('tablaCancelaciones');
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3"><i class="fas fa-spinner fa-spin me-2"></i>Cargando...</td></tr>';
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.success) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">${data.error}</td></tr>`;
+        return;
+    }
+
+    const cancelaciones = data.cancelaciones;
+
+    if (!cancelaciones.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">Sin cancelaciones en el período</td></tr>';
+        document.getElementById('resumen').style.display = 'none';
+        return;
+    }
+
+    // Resumen
+    const total = cancelaciones.reduce((s,c) => s + c.total, 0);
+    const enMedios = cancelaciones.filter(c => c.tipo === 'cancelacion_medios_pago').length;
+    const enLimpiar = cancelaciones.filter(c => c.tipo === 'limpiar_todo').length;
+
+    document.getElementById('res_cantidad').textContent = cancelaciones.length;
+    document.getElementById('res_total').textContent = fmt(total);
+    document.getElementById('res_medios').textContent = enMedios;
+    document.getElementById('res_limpiar').textContent = enLimpiar;
+    document.getElementById('resumen').style.display = '';
+
+    tbody.innerHTML = cancelaciones.map(c => {
+        const esMedios = c.tipo === 'cancelacion_medios_pago';
+        const badge = esMedios
+            ? '<span class="badge bg-danger">Canceló en pago</span>'
+            : '<span class="badge bg-secondary">Limpió todo</span>';
+        return `<tr>
+            <td>${c.fecha}</td>
+            <td><i class="fas fa-user me-1 text-muted"></i>${c.usuario}</td>
+            <td>${c.cliente}</td>
+            <td class="text-center">${badge}</td>
+            <td class="text-end fw-bold text-danger">${fmt(c.total)}</td>
+            <td class="text-center">
+                ${c.detalle && c.detalle !== '[]'
+                    ? `<button class="btn btn-sm btn-outline-secondary" onclick="verDetalle('${encodeURIComponent(c.detalle)}', '${c.fecha}', '${c.usuario}')">
+                        <i class="fas fa-list"></i>
+                       </button>`
+                    : '<span class="text-muted">-</span>'
+                }
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function verDetalle(detalleEncoded, fecha, usuario) {
+    const detalle = JSON.parse(decodeURIComponent(detalleEncoded));
+    const fmt = v => '$' + parseFloat(v||0).toLocaleString('es-AR', {minimumFractionDigits:2});
+
+    let html = `<p class="text-muted mb-3"><i class="fas fa-user me-1"></i>${usuario} — ${fecha}</p>`;
+    html += `<table class="table table-sm table-bordered">
+        <thead class="table-dark">
+            <tr><th>Producto</th><th class="text-center">Cant.</th><th class="text-end">Precio</th><th class="text-end">Subtotal</th></tr>
+        </thead><tbody>`;
+
+    detalle.forEach(item => {
+        html += `<tr>
+            <td>${item.nombre} <small class="text-muted">${item.codigo || ''}</small></td>
+            <td class="text-center">${parseFloat(item.cantidad||0).toLocaleString('es-AR')}</td>
+            <td class="text-end">${fmt(item.precio)}</td>
+            <td class="text-end fw-bold">${fmt(item.subtotal)}</td>
+        </tr>`;
+    });
+
+    const totalDetalle = detalle.reduce((s,i) => s + (i.subtotal||0), 0);
+    html += `</tbody><tfoot class="table-secondary fw-bold">
+        <tr><td colspan="3">TOTAL</td><td class="text-end">${fmt(totalDetalle)}</td></tr>
+    </tfoot></table>`;
+
+    document.getElementById('modalDetalleBody').innerHTML = html;
+    new bootstrap.Modal(document.getElementById('modalDetalle')).show();
+}
+
+setHoy();
+</script>
+{% endblock %}

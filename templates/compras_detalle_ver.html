@@ -1,0 +1,190 @@
+{% extends 'base.html' %}
+{% block title %}Detalle de Factura de Compra{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3 d-print-none">
+    <h2><i class="fas fa-file-invoice me-2"></i>Detalle de Factura de Compra</h2>
+    <div>
+        <a href="{{ url_for('compras.listado') }}" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-arrow-left me-1"></i> Volver
+        </a>
+        <button class="btn btn-outline-primary" onclick="window.print()">
+            <i class="fas fa-print me-1"></i> Imprimir
+        </button>
+    </div>
+</div>
+
+<div id="contenido" class="text-center text-muted py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+    <div class="mt-2">Cargando...</div>
+</div>
+
+<script>
+const FACTURA_ID = {{ factura_id }};
+
+function fmt(n) {
+    return '$' + Number(n || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function cargar() {
+    fetch(`/compras/api/ver/${FACTURA_ID}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                document.getElementById('contenido').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+            const c = data.cabecera;
+            const items = data.items;
+            const esCI = c.tipo_comprobante === 'CI';
+
+            let html = `
+                ${esCI ? `
+                <div class="alert alert-warning d-flex align-items-center mb-3" role="alert">
+                    <i class="fas fa-file-alt fa-2x me-3 text-warning"></i>
+                    <div>
+                        <div class="fw-bold"><i class="fas fa-info-circle me-1"></i> Comprobante Interno</div>
+                        <div class="small">Este comprobante <strong>NO figura en el Libro IVA Compras</strong>. Sí actualizó stock, costo, precios de venta y cuenta corriente del proveedor.</div>
+                    </div>
+                </div>
+                ` : ''}
+
+                <div class="card mb-3">
+                    <div class="card-header bg-light fw-bold"><i class="fas fa-file-invoice me-2"></i>Cabecera</div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="mb-1"><strong>Proveedor:</strong> ${c.proveedor}</p>
+                                <p class="mb-1"><strong>Fecha:</strong> ${c.fecha}</p>
+                                <p class="mb-1"><strong>Comprobante:</strong>
+                                    <span class="badge ${esCI ? 'bg-secondary' : 'bg-dark'}">${c.tipo_comprobante}</span>
+                                    ${c.punto_venta}${c.punto_venta ? '-' : ''}${c.numero}
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                ${c.observaciones ? `<p class="mb-1"><strong>Observaciones:</strong><br>${c.observaciones}</p>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header bg-light fw-bold"><i class="fas fa-list me-2"></i>Detalle de Artículos</div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Producto</th>
+                                        <th class="text-end">Cant.</th>
+                                        <th class="text-end">P. Unit. s/IVA</th>
+                                        <th class="text-end">Desc. %</th>
+                                        <th class="text-center">IVA%</th>
+                                        <th class="text-end">Subtotal s/IVA</th>
+                                        <th class="text-end">Costo unit. final c/IVA</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            `;
+
+            let sumaCantidades = 0;
+            let sumaSubtotales = 0;
+
+            items.forEach(i => {
+                sumaCantidades += i.cantidad;
+                sumaSubtotales += i.subtotal;
+                const descPct = i.descuento_porcentaje || 0;
+                const descTxt = descPct > 0
+                    ? `<span class="text-info fw-bold">${descPct.toFixed(2)}%</span>`
+                    : '<span class="text-muted">—</span>';
+                html += `
+                    <tr>
+                        <td><code>${i.codigo}</code></td>
+                        <td>${i.nombre}</td>
+                        <td class="text-end">${i.cantidad.toFixed(3)}</td>
+                        <td class="text-end">${fmt(i.precio_unitario)}</td>
+                        <td class="text-end">${descTxt}</td>
+                        <td class="text-center">${i.iva}%</td>
+                        <td class="text-end">${fmt(i.subtotal)}</td>
+                        <td class="text-end fw-bold text-primary">${fmt(i.costo_final_unitario)}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                                </tbody>
+                                <tfoot class="table-light fw-bold">
+                                    <tr>
+                                        <td colspan="2">${items.length} artículo(s)</td>
+                                        <td class="text-end">${sumaCantidades.toFixed(3)}</td>
+                                        <td colspan="3"></td>
+                                        <td class="text-end">${fmt(sumaSubtotales)}</td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    ${esCI ? '' : `
+                    <div class="col-md-7">
+                        <div class="card h-100">
+                            <div class="card-header bg-light fw-bold"><i class="fas fa-calculator me-2"></i>Libro IVA</div>
+                            <div class="card-body">
+                                <table class="table table-sm mb-0">
+                                    <tr><td>Neto Gravado 21%</td><td class="text-end">${fmt(c.neto_21)}</td></tr>
+                                    <tr><td>IVA 21%</td><td class="text-end text-warning">${fmt(c.iva_21)}</td></tr>
+                                    <tr><td>Neto Gravado 10.5%</td><td class="text-end">${fmt(c.neto_105)}</td></tr>
+                                    <tr><td>IVA 10.5%</td><td class="text-end text-warning">${fmt(c.iva_105)}</td></tr>
+                                    <tr><td>Neto No Gravado</td><td class="text-end">${fmt(c.neto_no_gravado)}</td></tr>
+                                    <tr><td>Otros Impuestos</td><td class="text-end">${fmt(c.otros_impuestos)}</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    `}
+                    <div class="${esCI ? 'col-12' : 'col-md-5'}">
+                        <div class="card h-100">
+                            <div class="card-header bg-light fw-bold"><i class="fas fa-percent me-2"></i>${esCI ? 'Ajustes' : 'Ajustes y Percepciones'}</div>
+                            <div class="card-body">
+                                <table class="table table-sm mb-0">
+                                    <tr><td>Descuento</td><td class="text-end">${fmt(c.descuento)}</td></tr>
+                                    <tr><td>Flete</td><td class="text-end">${fmt(c.flete)}</td></tr>
+                                    ${esCI ? '' : `
+                                    <tr><td>Perc. IVA</td><td class="text-end">${fmt(c.percepcion_iva)}</td></tr>
+                                    <tr><td>Perc. IIBB</td><td class="text-end">${fmt(c.percepcion_iibb)}</td></tr>
+                                    <tr><td>Perc. Ganancias</td><td class="text-end">${fmt(c.percepcion_ganancias)}</td></tr>
+                                    `}
+                                </table>
+                                <hr>
+                                <div class="row">
+                                    <div class="col-6 fw-bold">TOTAL ${esCI ? 'COMPROBANTE' : 'FACTURA'}:</div>
+                                    <div class="col-6 text-end fs-4 fw-bold text-primary">${fmt(c.total)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('contenido').innerHTML = html;
+        })
+        .catch(err => {
+            document.getElementById('contenido').innerHTML =
+                `<div class="alert alert-danger">Error al cargar la factura: ${err}</div>`;
+        });
+}
+
+cargar();
+</script>
+
+<style>
+@media print {
+    .d-print-none { display: none !important; }
+    body { font-size: 12px; }
+}
+</style>
+{% endblock %}

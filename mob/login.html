@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d6efd">
+<title>FactuFácil Móvil — Iniciar sesión</title>
+<link rel="manifest" href="{{ url_for('mobile.manifest') }}">
+<link rel="icon" href="/static/mob/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/static/mob/icon-192.png">
+
+<!-- Font Awesome para íconos -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 50%, #1e3a8a 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: env(safe-area-inset-top) 1.5rem env(safe-area-inset-bottom);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Decoración de fondo */
+body::before {
+  content: '';
+  position: absolute;
+  top: -30%; right: -30%;
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+  pointer-events: none;
+}
+body::after {
+  content: '';
+  position: absolute;
+  bottom: -30%; left: -30%;
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.login-container {
+  width: 100%;
+  max-width: 380px;
+  position: relative;
+  z-index: 1;
+}
+
+.brand {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+.brand-logo {
+  width: 80px; height: 80px;
+  margin: 0 auto 1rem;
+  background: rgba(255,255,255,0.15);
+  border-radius: 22px;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.2);
+  font-size: 2.4rem;
+}
+.brand-name {
+  font-size: 2rem;
+  font-weight: 300;
+  letter-spacing: -0.5px;
+}
+.brand-name strong { font-weight: 800; }
+.brand-tagline {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  margin-top: 0.3rem;
+}
+
+.form-card {
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 20px;
+  padding: 1.8rem 1.5rem;
+}
+
+.form-group {
+  margin-bottom: 1.2rem;
+}
+.form-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  opacity: 0.9;
+  letter-spacing: 0.3px;
+}
+.form-input {
+  width: 100%;
+  padding: 1rem 1rem 1rem 3rem;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: all 0.2s;
+  -webkit-appearance: none;
+}
+.form-input:focus {
+  outline: none;
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.4);
+}
+.form-input::placeholder { color: rgba(255,255,255,0.5); }
+.input-wrap { position: relative; }
+.input-icon {
+  position: absolute;
+  left: 1rem; top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.btn-submit {
+  width: 100%;
+  padding: 1.05rem;
+  background: #fff;
+  color: #0d6efd;
+  border: none;
+  border-radius: 12px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  transition: all 0.2s;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-submit:active {
+  transform: scale(0.98);
+  background: #f0f0f0;
+}
+.btn-submit i { margin-right: 0.5rem; }
+
+.alert {
+  background: rgba(220, 53, 69, 0.2);
+  border: 1px solid rgba(220, 53, 69, 0.5);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.2rem;
+  font-size: 0.88rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.alert i { flex-shrink: 0; }
+
+.footer-info {
+  text-align: center;
+  margin-top: 2rem;
+  font-size: 0.75rem;
+  opacity: 0.65;
+  line-height: 1.5;
+}
+.footer-info a { color: #fff; text-decoration: none; opacity: 0.85; }
+
+.install-hint {
+  margin-top: 1rem;
+  font-size: 0.78rem;
+  opacity: 0.7;
+  text-align: center;
+  line-height: 1.5;
+  display: none;
+}
+.install-hint.visible { display: block; }
+.install-hint i { margin-right: 0.3rem; }
+</style>
+</head>
+<body>
+
+<div class="login-container">
+
+  <div class="brand">
+    <div class="brand-logo">
+      <i class="fas fa-mobile-alt" style="color: #fff;"></i>
+    </div>
+    <div class="brand-name">Factu<strong>Fácil</strong></div>
+    <div class="brand-tagline">Control en la palma de tu mano</div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert">
+        <i class="fas fa-exclamation-circle"></i>
+        <span>{{ msg }}</span>
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <form class="form-card" method="POST" action="{{ url_for('mobile.login') }}" autocomplete="on">
+    <div class="form-group">
+      <label class="form-label" for="username">USUARIO</label>
+      <div class="input-wrap">
+        <i class="fas fa-user input-icon"></i>
+        <input type="text" id="username" name="username" class="form-input"
+               placeholder="Tu usuario" autocomplete="username"
+               autocapitalize="none" autocorrect="off" spellcheck="false" required>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="password">CONTRASEÑA</label>
+      <div class="input-wrap">
+        <i class="fas fa-lock input-icon"></i>
+        <input type="password" id="password" name="password" class="form-input"
+               placeholder="Tu contraseña" autocomplete="current-password" required>
+      </div>
+    </div>
+
+    <button type="submit" class="btn-submit">
+      <i class="fas fa-sign-in-alt"></i> Iniciar sesión
+    </button>
+  </form>
+
+  <div class="install-hint" id="installHint">
+    <i class="fas fa-download"></i> Instalá la app: tocá <strong>Compartir → Agregar a inicio</strong>
+  </div>
+
+  <div class="footer-info">
+    FactuFácil · pablore.com.ar<br>
+    <small>Acceso desde tu PC para operar · Móvil para consulta y monitoreo</small>
+  </div>
+
+</div>
+
+<script>
+// Detectar si estamos en iOS para mostrar el hint de instalación
+(function() {
+  const ua = navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+  if (isIOS && !isStandalone) {
+    setTimeout(() => {
+      document.getElementById('installHint').classList.add('visible');
+    }, 2000);
+  }
+})();
+
+// Service worker (para instalar como PWA)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/mob/service-worker.js', { scope: '/mob/' })
+    .catch(err => console.log('SW registration failed:', err));
+}
+</script>
+
+</body>
+</html>

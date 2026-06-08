@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deuda por Cliente - FactuFácil</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #f4f5f7; color: #212529; }
+  .topbar { background: #212529; color: #fff; padding: 12px 20px; display: flex;
+            align-items: center; gap: 12px; flex-wrap: wrap; }
+  .topbar h1 { font-size: 1.15rem; margin: 0; flex: 1; }
+  .btn { border: none; border-radius: 6px; padding: 8px 14px; font-size: .9rem;
+         cursor: pointer; font-weight: 600; }
+  .btn-pdf { background: #dc3545; color: #fff; }
+  .btn-print { background: #6c757d; color: #fff; }
+  .btn-volver { background: #0d6efd; color: #fff; text-decoration: none; display: inline-block; }
+  .wrap { max-width: 1000px; margin: 18px auto; padding: 0 14px; }
+  .resumen { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+  .card { background: #fff; border: 1px solid #dee2e6; border-radius: 8px;
+          padding: 12px 18px; flex: 1; min-width: 180px; }
+  .card .lbl { font-size: .78rem; color: #6c757d; text-transform: uppercase; }
+  .card .val { font-size: 1.35rem; font-weight: 700; }
+  .card .val.rojo { color: #dc3545; }
+  .buscador { margin-bottom: 12px; }
+  .buscador input { width: 100%; max-width: 380px; padding: 9px 12px; font-size: .95rem;
+                    border: 1px solid #ced4da; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: .86rem; }
+  th, td { border: 1px solid #dee2e6; padding: 5px 8px; }
+  thead th { background: #212529; color: #fff; text-align: left; position: sticky; top: 0; }
+  .fila-cliente td { background: #dee2e6; font-weight: 700; font-size: .9rem; }
+  .fila-total td { background: #f1f3f5; font-weight: 700; }
+  .fila-total-general td { background: #f1d4d4; font-weight: 700; font-size: .95rem; }
+  .num { text-align: right; white-space: nowrap; }
+  .ctr { text-align: center; }
+  .neg { color: #198754; }
+  .dias-alto { color: #dc3545; font-weight: 700; }
+  .dias-falta { color: #6c757d; }
+  .vacio { background: #fff; border: 1px solid #dee2e6; border-radius: 8px;
+           padding: 30px; text-align: center; color: #6c757d; }
+  .pie { margin: 14px 0 30px; font-size: .8rem; color: #6c757d; }
+  @media print {
+    .topbar, .buscador { display: none; }
+    body { background: #fff; }
+    .wrap { max-width: none; margin: 0; padding: 0; }
+    thead th { position: static; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>📋 Deuda pendiente por cliente</h1>
+  <button class="btn btn-pdf" onclick="descargarPDF()">⬇ Descargar PDF</button>
+  <button class="btn btn-print" onclick="window.print()">🖨 Imprimir</button>
+  <a class="btn btn-volver" href="/">← Volver</a>
+</div>
+
+<div class="wrap">
+  <div class="resumen">
+    <div class="card">
+      <div class="lbl">Clientes con deuda</div>
+      <div class="val" id="resCantidad">—</div>
+    </div>
+    <div class="card">
+      <div class="lbl">Total general</div>
+      <div class="val rojo" id="resTotal">—</div>
+    </div>
+    <div class="card">
+      <div class="lbl">Saldos al</div>
+      <div class="val" id="resFecha" style="font-size:1rem;">—</div>
+    </div>
+  </div>
+
+  <div class="buscador" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+    <input type="text" id="filtro" placeholder="Filtrar por cliente..." oninput="filtrar()">
+    <select id="filtroVendedor" onchange="cargar()" style="padding:9px 12px; font-size:.95rem; border:1px solid #ced4da; border-radius:6px;">
+      <option value="">Todos los vendedores</option>
+    </select>
+  </div>
+
+  <div id="contenido"><div class="vacio">Cargando...</div></div>
+
+  <div class="pie">Mismos saldos que la grilla de clientes y la cuenta corriente desglosada.
+    Incluye facturas e internos pendientes, notas de crédito y pagos a cuenta sin imputar.
+    El vencimiento sale de la fecha del comprobante + los días configurados en cada cliente;
+    Días en rojo = vencida (positivo), en gris = faltan días para vencer (negativo).</div>
+</div>
+
+<script>
+let DATA = null;
+
+function fmt(n) {
+  return '$ ' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function render(clientes) {
+  const cont = document.getElementById('contenido');
+  if (!clientes.length) {
+    cont.innerHTML = '<div class="vacio">No hay clientes con saldo deudor. ¡Felicitaciones!</div>';
+    return;
+  }
+  let html = '<table><thead><tr>' +
+    '<th style="width:90px;">Fecha</th><th style="width:90px;">Vencimiento</th><th style="width:55px;">Tipo</th><th>Comprobante</th>' +
+    '<th class="num" style="width:120px;">Importe</th><th class="num" style="width:120px;">Saldo</th>' +
+    '<th class="ctr" style="width:55px;">Días</th></tr></thead><tbody>';
+  let totalGeneral = 0;
+  for (const c of clientes) {
+    const doc = c.documento ? ' — ' + c.documento : '';
+    html += '<tr class="fila-cliente"><td colspan="7">' + esc(c.nombre) + esc(doc) + '</td></tr>';
+    for (const f of c.filas) {
+      const negI = f.importe < 0 ? ' neg' : '';
+      const negS = f.saldo < 0 ? ' neg' : '';
+      let diasCls = 'ctr', diasTxt = '';
+      if (typeof f.dias === 'number') {
+        diasTxt = f.dias;
+        diasCls += f.dias > 0 ? ' dias-alto' : ' dias-falta';
+      }
+      html += '<tr><td>' + esc(f.fecha) + '</td><td>' + esc(f.vto || '') + '</td><td>' + esc(f.tipo) + '</td><td>' + esc(f.comprobante) + '</td>' +
+              '<td class="num' + negI + '">' + fmt(f.importe) + '</td>' +
+              '<td class="num' + negS + '">' + fmt(f.saldo) + '</td>' +
+              '<td class="' + diasCls + '">' + diasTxt + '</td></tr>';
+    }
+    html += '<tr class="fila-total"><td colspan="5" style="text-align:right;">Total Cliente</td>' +
+            '<td class="num">' + fmt(c.saldo) + '</td><td></td></tr>';
+    totalGeneral += c.saldo;
+  }
+  const lblFooter = (DATA && DATA.vendedor_nombre) ? ('TOTAL ' + esc(DATA.vendedor_nombre.toUpperCase())) : 'TOTAL GENERAL';
+  html += '<tr class="fila-total-general"><td colspan="5" style="text-align:right;">' + lblFooter + '</td>' +
+          '<td class="num">' + fmt(totalGeneral) + '</td><td></td></tr>';
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function filtrar() {
+  if (!DATA) return;
+  const t = document.getElementById('filtro').value.trim().toLowerCase();
+  const lista = !t ? DATA.clientes :
+    DATA.clientes.filter(c => c.nombre.toLowerCase().includes(t) ||
+                              (c.documento || '').toLowerCase().includes(t));
+  render(lista);
+}
+
+let vendedoresCargados = false;
+
+function poblarVendedores(vendedores) {
+  if (vendedoresCargados || !vendedores) return;
+  const sel = document.getElementById('filtroVendedor');
+  vendedores.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = v.nombre;
+    sel.appendChild(opt);
+  });
+  vendedoresCargados = true;
+}
+
+function descargarPDF() {
+  const vid = document.getElementById('filtroVendedor').value;
+  let url = '/api/cta_cte/deuda_clientes_pdf';
+  if (vid) url += '?vendedor_id=' + vid;
+  window.open(url, '_blank');
+}
+
+function cargar() {
+  const vid = document.getElementById('filtroVendedor').value;
+  let url = '/api/cta_cte/deuda_clientes';
+  if (vid) url += '?vendedor_id=' + vid;
+  document.getElementById('contenido').innerHTML = '<div class="vacio">Cargando...</div>';
+  fetch(url)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) throw new Error(d.error || 'Error');
+      DATA = d;
+      poblarVendedores(d.vendedores);
+      document.getElementById('resCantidad').textContent = d.cantidad;
+      document.getElementById('resTotal').textContent = fmt(d.total_general);
+      document.getElementById('resFecha').textContent = d.fecha;
+      // El rótulo de la tarjeta de total cambia si hay vendedor filtrado
+      const lblTotal = document.querySelector('#resTotal').previousElementSibling;
+      if (lblTotal) lblTotal.textContent = d.vendedor_nombre ? ('Total ' + d.vendedor_nombre) : 'Total general';
+      render(d.clientes);
+    })
+    .catch(e => {
+      document.getElementById('contenido').innerHTML =
+        '<div class="vacio">Error cargando datos: ' + esc(e.message) + '</div>';
+    });
+}
+
+cargar();
+</script>
+
+</body>
+</html>

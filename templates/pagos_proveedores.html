@@ -1,0 +1,716 @@
+{% extends 'base.html' %}
+{% block title %}Pagos Emitidos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3 flex-wrap gap-2">
+    <h2><i class="fas fa-receipt me-2"></i>Pagos Emitidos</h2>
+    <div>
+        <a href="/pagar_proveedor" class="btn btn-success me-2">
+            <i class="fas fa-hand-holding-dollar me-1"></i> Nuevo Pago
+        </a>
+        <a href="/proveedores" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-truck me-1"></i> Proveedores
+        </a>
+        <button class="btn btn-outline-info" onclick="abrirAyuda()">
+            <i class="fas fa-question-circle"></i> Ayuda
+        </button>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2">
+            <div class="col-md-4">
+                <label class="form-label small mb-1 fw-bold">Proveedor</label>
+                <select id="filtroProv" class="form-select form-select-sm" onchange="cargar()">
+                    <option value="">Todos</option>
+                    {% for p in proveedores %}
+                    <option value="{{ p.id }}">{{ p.razon_social }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1 fw-bold">Desde</label>
+                <input type="date" id="filtroDesde" class="form-control form-control-sm" onchange="cargar()">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1 fw-bold">Hasta</label>
+                <input type="date" id="filtroHasta" class="form-control form-control-sm" onchange="cargar()">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1 fw-bold">Estado</label>
+                <select id="filtroEstado" class="form-select form-select-sm" onchange="cargar()">
+                    <option value="">Todos</option>
+                    <option value="activo" selected>Activos</option>
+                    <option value="anulado">Anulados</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="limpiarFiltros()">
+                    <i class="fas fa-eraser"></i> Limpiar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resumen -->
+<div class="row g-2 mb-3" id="resumen" style="display:none">
+    <div class="col-md-4"><div class="card text-bg-light"><div class="card-body py-2">
+        <small class="text-muted">Cantidad de pagos</small>
+        <div class="fw-bold fs-5" id="r_cant">0</div>
+    </div></div></div>
+    <div class="col-md-4"><div class="card text-bg-success"><div class="card-body py-2">
+        <small>Total pagado (activos)</small>
+        <div class="fw-bold fs-5" id="r_total">$0,00</div>
+    </div></div></div>
+    <div class="col-md-4"><div class="card text-bg-danger"><div class="card-body py-2">
+        <small>Total anulado</small>
+        <div class="fw-bold fs-5" id="r_anulado">$0,00</div>
+    </div></div></div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Nº OP</th>
+                        <th>Fecha</th>
+                        <th>Proveedor</th>
+                        <th class="text-center">Facturas</th>
+                        <th>Medios</th>
+                        <th class="text-end">Importe</th>
+                        <th class="text-center">Estado</th>
+                        <th class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="bodyPagos">
+                    <tr><td colspan="8" class="text-center py-4 text-muted">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal DETALLE -->
+<div class="modal fade" id="modalDetalle" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-receipt me-2"></i><span id="detTitulo">Detalle del pago</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="detContenido">
+                <div class="text-center py-4 text-muted">Cargando...</div>
+            </div>
+            <div class="modal-footer">
+                <a href="#" id="detBtnPdf" class="btn btn-primary" target="_blank">
+                    <i class="fas fa-file-pdf me-1"></i> Ver PDF
+                </a>
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal AYUDA -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Ayuda — Pagos Emitidos</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- ═══════════ INTRO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-book me-2"></i>¿Qué es esta pantalla?</h4>
+                <p>
+                    Es el <strong>archivo histórico de todas las Órdenes de Pago (OP)</strong> que emitiste
+                    a proveedores. Desde acá podés <strong>consultar</strong>, <strong>reimprimir el PDF</strong>
+                    y <strong>anular</strong> pagos ya emitidos.
+                </p>
+                <div class="alert alert-primary small">
+                    <strong><i class="fas fa-lightbulb me-1"></i> Analogía simple:</strong> pensalo como
+                    la "chequera de OPs" — un talonario donde cada OP queda registrada con su número,
+                    fecha y detalle. Podés volver atrás, revisar qué pagaste y cuándo, y eventualmente
+                    anular alguna si cometiste un error.
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ESTRUCTURA ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-th-large me-2"></i>Estructura de la pantalla</h4>
+
+                <h6 class="fw-bold mt-3">1) Header superior</h6>
+                <ul>
+                    <li><strong>Nuevo Pago</strong> (verde): atajo para ir a la pantalla de emisión.</li>
+                    <li><strong>Proveedores</strong>: vuelve al listado de proveedores.</li>
+                    <li><strong>Ayuda</strong>: este modal.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">2) Filtros</h6>
+                <ul>
+                    <li><strong>Proveedor</strong>: filtrá para ver solo los pagos de un proveedor.</li>
+                    <li><strong>Desde / Hasta</strong>: rango de fechas de los pagos.</li>
+                    <li><strong>Estado</strong>: por default filtra "Activos". Cambialo a "Anulados" para
+                        ver solo los que fueron anulados, o "Todos" para ver ambos.</li>
+                    <li><strong>Limpiar</strong>: reset de todos los filtros.</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">3) Tres tarjetas de resumen</h6>
+                <ul>
+                    <li><strong>Cantidad de pagos</strong>: total de OPs que cumplen los filtros.</li>
+                    <li><strong>Total pagado (activos)</strong>: suma en $ de los pagos activos.</li>
+                    <li><strong>Total anulado</strong>: suma en $ de los pagos anulados (en el listado).</li>
+                </ul>
+
+                <h6 class="fw-bold mt-3">4) Tabla de pagos</h6>
+                <p>Columnas: <code>Nº OP</code> · <code>Fecha</code> · <code>Proveedor</code> ·
+                    <code>Facturas</code> (cantidad) · <code>Medios</code> (resumen) · <code>Importe</code> ·
+                    <code>Estado</code> · <code>Acciones</code>.</p>
+                <p>Los pagos <strong>anulados</strong> aparecen con <u>fondo gris</u> y texto atenuado
+                    para diferenciarse.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ACCIONES ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-hand-pointer me-2"></i>Acciones disponibles en cada fila</h4>
+
+                <h6 class="fw-bold mt-3"><i class="fas fa-eye text-info me-2"></i>Ver detalle</h6>
+                <p>Abre un modal con toda la información del pago:</p>
+                <ul>
+                    <li>Datos generales: Nº OP, fecha, proveedor, total.</li>
+                    <li>Tabla de <strong>facturas imputadas</strong>: qué facturas se pagaron con ese pago
+                        y cuánto se imputó a cada una.</li>
+                    <li>Tabla de <strong>medios de pago</strong>: qué medios se usaron, con su detalle
+                        (banco, Nº de cheque, librador, etc.).</li>
+                    <li>Si el pago está anulado, muestra el motivo en una alerta roja arriba.</li>
+                </ul>
+                <p>Dentro del modal hay un botón <strong>Ver PDF</strong> que abre el recibo en otra pestaña.</p>
+
+                <h6 class="fw-bold mt-3"><i class="fas fa-file-pdf text-primary me-2"></i>Ver PDF (reimprimir)</h6>
+                <p>Abre el PDF de la Orden de Pago en una pestaña nueva. Se genera al vuelo cada vez
+                    (no es un archivo guardado), así que si cambió algo —por ejemplo, se editaron
+                    observaciones o se marcó anulado— el PDF refleja el estado actual.</p>
+                <p><strong>Podés reimprimir las veces que quieras.</strong> No hay un límite.</p>
+
+                <h6 class="fw-bold mt-3"><i class="fas fa-ban text-danger me-2"></i>Anular</h6>
+                <p>Solo disponible en pagos activos. Al clickear te pide un <strong>motivo obligatorio</strong>
+                    y confirma que vas a anular. Ver la sección "Qué pasa al anular" más abajo.</p>
+                <p>Los pagos ya anulados <strong>no se pueden anular otra vez</strong> — solo podés ver
+                    detalle o reimprimir el PDF.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ANULACIÓN ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-ban me-2"></i>Anulación de un pago — cómo funciona</h4>
+                <p>Al anular un pago, el sistema <strong>revierte todo</strong> lo que hizo cuando se emitió.
+                    Esto es crítico entenderlo porque toca muchas cosas a la vez.</p>
+
+                <h6 class="fw-bold mt-3">Qué cambia al anular</h6>
+                <ol>
+                    <li><strong>Estado del pago</strong>: pasa de "activo" a "anulado". <u>El pago no se borra</u>,
+                        queda en el historial con el motivo guardado en sus observaciones.</li>
+                    <li><strong>Facturas</strong>: recuperan el saldo pendiente que tenían antes, con su
+                        estado recalculado (pagada → parcial → pendiente según corresponda).</li>
+                    <li><strong>Cheques propios</strong> usados: vuelven a estado "pendiente", se desvinculan
+                        del pago y del proveedor. Quedan disponibles en la cartera otra vez.</li>
+                    <li><strong>Cheques de terceros</strong> endosados: vuelven a "en_cartera", se desvinculan
+                        del pago y del proveedor destino.</li>
+                    <li><strong>Cta cte del proveedor</strong>: se crea un movimiento inverso tipo "ajuste"
+                        con la descripción "Anulación OP Nº X — motivo". Saldo corrido se ajusta.</li>
+                    <li><strong>Saldo cache del proveedor</strong>: vuelve a aumentar por el importe del pago.</li>
+                </ol>
+
+                <div class="alert alert-warning mt-3">
+                    <strong><i class="fas fa-exclamation-triangle me-1"></i> Importante — motivo obligatorio:</strong><br>
+                    El sistema pide un <strong>motivo</strong> escrito al anular. Se guarda en las observaciones
+                    del pago con la fecha, y en la descripción del movimiento inverso de la cta cte. Esto
+                    es para auditoría: si alguien pregunta "¿por qué se anuló este pago?", queda registrado.
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ CUÁNDO NO SE PUEDE ANULAR ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-times-circle me-2"></i>Cuándo NO se puede anular un pago</h4>
+                <p>El sistema bloquea la anulación en dos casos:</p>
+                <ol>
+                    <li><strong>Si un cheque propio del pago ya fue cobrado o rechazado por el banco.</strong><br>
+                        El cheque salió del mundo "entregado" y no podemos deshacer ese cambio de estado.</li>
+                    <li><strong>Si un cheque de tercero endosado ya fue cobrado o rechazado por el proveedor destino.</strong><br>
+                        Lo mismo — el cheque ya no está en "endosado".</li>
+                </ol>
+                <p>Si intentás anular en alguno de estos casos, el sistema muestra un mensaje claro
+                    indicando cuál cheque bloquea la operación y te sugiere resolverlo por vías contables.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ CASOS DE USO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-tasks me-2"></i>Casos de uso típicos</h4>
+
+                <h6 class="fw-bold">Caso 1 — Consultar qué le pagué al proveedor en marzo</h6>
+                <ol>
+                    <li>Filtro: <strong>Proveedor</strong> = el proveedor que quieras.</li>
+                    <li>Filtro: <strong>Desde</strong> = 01/03/2026, <strong>Hasta</strong> = 31/03/2026.</li>
+                    <li>Se listan todas sus OPs del período con importes y total.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 2 — Reimprimir el recibo de un pago</h6>
+                <ol>
+                    <li>Buscar el pago en el listado (usar filtros si hace falta).</li>
+                    <li>Botón <i class="fas fa-file-pdf text-primary"></i>.</li>
+                    <li>Se abre el PDF en otra pestaña. Ctrl+P para imprimir, o guardar como archivo.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 3 — Consultar el detalle sin abrir el PDF</h6>
+                <ol>
+                    <li>Botón <i class="fas fa-eye text-info"></i> en la fila del pago.</li>
+                    <li>Se abre el modal con facturas y medios listados.</li>
+                    <li>Más rápido que abrir el PDF, útil para una consulta rápida.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 4 — Anular un pago que se hizo por error</h6>
+                <ol>
+                    <li>Buscar el pago.</li>
+                    <li>Botón <i class="fas fa-ban text-danger"></i>.</li>
+                    <li>Leer el cuadro de confirmación (muestra OP, proveedor, importe).</li>
+                    <li>Escribir el <strong>motivo</strong> (obligatorio, mínimo un texto).</li>
+                    <li>Click "Sí, anular".</li>
+                    <li>Se anula. La fila aparece ahora en gris. Las facturas vuelven a tener saldo pendiente,
+                        los cheques vuelven a su estado anterior.</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 5 — Ver cuánto pagué en total este mes a todos los proveedores</h6>
+                <ol>
+                    <li>Filtro: <strong>Proveedor</strong> = Todos.</li>
+                    <li>Filtro: <strong>Desde</strong> = día 1 del mes, <strong>Hasta</strong> = día actual.</li>
+                    <li>Mirá la tarjeta de resumen "Total pagado (activos)".</li>
+                </ol>
+
+                <h6 class="fw-bold mt-3">Caso 6 — Verificar qué pagos fueron anulados</h6>
+                <ol>
+                    <li>Filtro: <strong>Estado</strong> = Anulados.</li>
+                    <li>Se listan todos los pagos anulados.</li>
+                    <li>Botón "Ver detalle" para ver el motivo de cada anulación.</li>
+                </ol>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ QUE MUESTRA EL LISTADO ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-info-circle me-2"></i>Qué pagos aparecen acá</h4>
+                <p>Este listado muestra <strong>solo los pagos emitidos desde el módulo nuevo</strong> de
+                    "Pagar Proveedor" (los que tienen <code>forma_pago = 'multiple'</code> internamente).</p>
+                <p><strong>Los pagos históricos</strong> (los que se cargaron antes del módulo, con forma
+                    única como "efectivo", "cheque", "transferencia" etc.) <u>no aparecen en este listado</u>
+                    porque no tienen la estructura de detalles e imputaciones. Para verlos, habría que
+                    consultar la cta cte del proveedor o el listado viejo de pagos.</p>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ FAQ ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-question-circle me-2"></i>Preguntas frecuentes</h4>
+                <div class="accordion" id="faqAccPE">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPE1">
+                                ¿Por qué no veo pagos viejos que sé que se hicieron?
+                            </button>
+                        </h2>
+                        <div id="faqPE1" class="accordion-collapse collapse" data-bs-parent="#faqAccPE">
+                            <div class="accordion-body">
+                                Este listado muestra solo los pagos emitidos desde la pantalla nueva de
+                                "Pagar Proveedor". Los pagos anteriores al módulo no aparecen acá porque no
+                                tienen la estructura de detalles/medios necesaria. Para verlos, consultá la
+                                cta cte del proveedor o el listado viejo de pagos.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPE2">
+                                Anulé un pago por error. ¿Puedo "desanular"?
+                            </button>
+                        </h2>
+                        <div id="faqPE2" class="accordion-collapse collapse" data-bs-parent="#faqAccPE">
+                            <div class="accordion-body">
+                                No hay un botón "desanular". La forma correcta de arreglarlo es
+                                <strong>rehacer el pago</strong>: andá a <a href="/pagar_proveedor">Pagar
+                                Proveedor</a> y volvé a emitir con los mismos datos (las facturas aparecen
+                                otra vez con saldo, los cheques de vuelta en cartera). Quedarán dos pagos
+                                en el historial: el anulado original y el nuevo. La cta cte del proveedor
+                                queda correcta igual porque los movimientos se compensan.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPE3">
+                                Me da error al anular: "cheque ya cobrado". ¿Qué hago?
+                            </button>
+                        </h2>
+                        <div id="faqPE3" class="accordion-collapse collapse" data-bs-parent="#faqAccPE">
+                            <div class="accordion-body">
+                                Significa que un cheque del pago cambió de estado después de la emisión
+                                (fue cobrado o rechazado por el banco / proveedor). El sistema no puede
+                                revertir esos cambios automáticamente porque involucran movimientos de
+                                terceros reales. Opciones:
+                                <ul class="mb-0">
+                                    <li>Si el cheque fue "cobrado": la plata salió de tu cuenta. No tiene
+                                        sentido anular el pago — fue real. Si hay un error contable, hay
+                                        que ajustarlo por otra vía (nota de crédito del proveedor, ajuste manual).</li>
+                                    <li>Si el cheque fue "rechazado": podés marcarlo como "rechazado" en la
+                                        pantalla de Cheques Propios/Terceros, pero el pago sigue firme en
+                                        el sistema. Contactá a Pablo para ajustes excepcionales.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPE4">
+                                ¿El PDF reimprimido es idéntico al original?
+                            </button>
+                        </h2>
+                        <div id="faqPE4" class="accordion-collapse collapse" data-bs-parent="#faqAccPE">
+                            <div class="accordion-body">
+                                El PDF se genera <strong>al vuelo</strong> cada vez, con los datos actuales
+                                de la base de datos. Si nada cambió, es idéntico. Si se editaron observaciones
+                                del pago o se anuló, el PDF reflejará ese estado. En general, para un pago
+                                activo tal como se emitió, va a salir igual al original.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPE5">
+                                ¿Puedo exportar este listado a Excel / PDF?
+                            </button>
+                        </h2>
+                        <div id="faqPE5" class="accordion-collapse collapse" data-bs-parent="#faqAccPE">
+                            <div class="accordion-body">
+                                Por ahora no hay botón de export para este listado (está en el roadmap).
+                                Mientras tanto, podés:
+                                <ul class="mb-0">
+                                    <li>Imprimir la pantalla con Ctrl+P del navegador.</li>
+                                    <li>Si necesitás un reporte de pagos específico, contactá a Pablo.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPE6">
+                                Si anulo un pago, ¿se borra el PDF?
+                            </button>
+                        </h2>
+                        <div id="faqPE6" class="accordion-collapse collapse" data-bs-parent="#faqAccPE">
+                            <div class="accordion-body">
+                                No. El pago queda en la base pero marcado como anulado. Podés seguir
+                                consultándolo y reimprimiendo el PDF (se va a ver con el texto del motivo
+                                de anulación arriba). Nada se borra nunca.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPE7">
+                                ¿Cómo sé a qué factura se imputó cada pago?
+                            </button>
+                        </h2>
+                        <div id="faqPE7" class="accordion-collapse collapse" data-bs-parent="#faqAccPE">
+                            <div class="accordion-body">
+                                Botón <i class="fas fa-eye text-info"></i> en la fila del pago → modal
+                                "Ver detalle" → tabla "Facturas imputadas". Aparece cada factura con el
+                                monto que se imputó.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqPE8">
+                                La anulación afectó la cta cte del proveedor. ¿Está bien?
+                            </button>
+                        </h2>
+                        <div id="faqPE8" class="accordion-collapse collapse" data-bs-parent="#faqAccPE">
+                            <div class="accordion-body">
+                                Sí, es lo esperado. Al anular, se crea un movimiento <strong>"ajuste"</strong>
+                                en la cta cte con Debe = importe del pago. Esto hace que el saldo del
+                                proveedor vuelva a aumentar (porque "deshicimos" el pago). Si ves el
+                                libro mayor en la cta cte, vas a ver el pago original (haber) seguido del
+                                ajuste (debe), que se compensan.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ ERRORES COMUNES ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-exclamation-triangle me-2"></i>Errores comunes</h4>
+                <ul>
+                    <li><strong>"El motivo de anulación es obligatorio"</strong>: no llenaste el textarea
+                        del motivo. Escribí algo (aunque sea "pago duplicado" o "error en monto").</li>
+                    <li><strong>"No se puede anular: cheque en estado X"</strong>: ver la sección
+                        "Cuándo no se puede anular" arriba.</li>
+                    <li><strong>"El pago ya está anulado"</strong>: intentaste anular un pago que ya está
+                        anulado. No pasa nada.</li>
+                    <li><strong>"No se pueden anular pagos históricos"</strong>: estás intentando anular un
+                        pago cargado antes del módulo (forma_pago distinta a "multiple"). Esos hay que
+                        ajustarlos por SQL si hace falta.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ RELACIÓN CON OTROS MÓDULOS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-link me-2"></i>Relación con otros módulos</h4>
+                <ul>
+                    <li><strong>Pagar Proveedor</strong>: el origen. Todo pago emitido desde ahí aparece acá.</li>
+                    <li><strong>Cta Cte Proveedor</strong>: los pagos aparecen como movimiento "pago" (y los
+                        anulados como "ajuste" inverso).</li>
+                    <li><strong>Cheques Propios / Terceros</strong>: al anular un pago, los cheques asociados
+                        vuelven a su estado previo.</li>
+                    <li><strong>Facturas de Compra</strong>: al anular, las facturas imputadas recuperan
+                        saldo pendiente.</li>
+                </ul>
+
+                <hr class="my-4">
+
+                <!-- ═══════════ NOTAS TÉCNICAS ═══════════ -->
+                <h4 class="text-primary"><i class="fas fa-cog me-2"></i>Notas técnicas</h4>
+                <ul class="small text-muted">
+                    <li>Endpoints: <code>GET /api/pagos_proveedores/listar</code>,
+                        <code>GET /api/pago_proveedor/&lt;id&gt;/detalle</code>,
+                        <code>POST /api/pago_proveedor/&lt;id&gt;/anular</code>.</li>
+                    <li>Filtro de listado: <code>forma_pago = 'multiple'</code> (solo pagos del módulo nuevo).</li>
+                    <li>Validación previa a anular: verifica que todos los cheques sigan en el estado
+                        que los dejó el pago (entregado / endosado).</li>
+                    <li>La anulación es una transacción atómica — si algo falla, rollback completo.</li>
+                    <li>El motivo se guarda en <code>pago_proveedor.observaciones</code> con prefijo
+                        <code>[ANULADO fecha]</code>.</li>
+                </ul>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="fas fa-check me-1"></i> Entendido
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const modalDetalle = new bootstrap.Modal(document.getElementById('modalDetalle'));
+const modalAyuda   = new bootstrap.Modal(document.getElementById('modalAyuda'));
+
+let pagos = [];
+
+function fmt(v) {
+    return '$' + parseFloat(v || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function abrirAyuda() { modalAyuda.show(); }
+
+function limpiarFiltros() {
+    document.getElementById('filtroProv').value = '';
+    document.getElementById('filtroDesde').value = '';
+    document.getElementById('filtroHasta').value = '';
+    document.getElementById('filtroEstado').value = 'activo';
+    cargar();
+}
+
+async function cargar() {
+    const params = new URLSearchParams({
+        proveedor_id: document.getElementById('filtroProv').value,
+        desde:        document.getElementById('filtroDesde').value,
+        hasta:        document.getElementById('filtroHasta').value,
+        estado:       document.getElementById('filtroEstado').value,
+    });
+    const res = await fetch('/api/pagos_proveedores/listar?' + params.toString());
+    const data = await res.json();
+    if (!data.success) { Swal.fire('Error', data.error || 'No se pudo cargar', 'error'); return; }
+    pagos = data.pagos;
+    render();
+    renderResumen();
+}
+
+function badgeEstado(est) {
+    if (est === 'anulado') return '<span class="badge bg-danger">Anulado</span>';
+    return '<span class="badge bg-success">Activo</span>';
+}
+
+function render() {
+    const tbody = document.getElementById('bodyPagos');
+    if (!pagos.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Sin resultados</td></tr>';
+        return;
+    }
+    tbody.innerHTML = pagos.map(p => {
+        const rowClass = p.estado === 'anulado' ? 'table-secondary text-muted' : '';
+        const btnAnular = p.estado === 'activo' ? `
+            <button class="btn btn-sm btn-outline-danger" onclick="anular(${p.id})" title="Anular">
+                <i class="fas fa-ban"></i>
+            </button>` : '';
+        return `
+        <tr class="${rowClass}">
+            <td><strong>${p.numero_recibo_completo || ('R ' + String(p.punto_venta_recibo).padStart(4,'0') + '-' + String(p.numero_recibo).padStart(8,'0'))}</strong></td>
+            <td>${p.fecha}</td>
+            <td>${p.proveedor}</td>
+            <td class="text-center">${p.cant_facturas}</td>
+            <td><small>${p.resumen_medios}</small></td>
+            <td class="text-end fw-bold">${fmt(p.importe)}</td>
+            <td class="text-center">${badgeEstado(p.estado)}</td>
+            <td class="text-center">
+                <button class="btn btn-sm btn-outline-info me-1" onclick="verDetalle(${p.id})" title="Ver detalle">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <a href="/api/pago_proveedor/${p.id}/recibo_pdf" target="_blank" class="btn btn-sm btn-outline-primary me-1" title="Ver PDF">
+                    <i class="fas fa-file-pdf"></i>
+                </a>
+                ${btnAnular}
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderResumen() {
+    const r = document.getElementById('resumen');
+    if (!pagos.length) { r.style.display = 'none'; return; }
+    r.style.display = '';
+    let totAct = 0, totAnu = 0;
+    pagos.forEach(p => {
+        if (p.estado === 'anulado') totAnu += parseFloat(p.importe);
+        else                        totAct += parseFloat(p.importe);
+    });
+    document.getElementById('r_cant').textContent    = pagos.length;
+    document.getElementById('r_total').textContent   = fmt(totAct);
+    document.getElementById('r_anulado').textContent = fmt(totAnu);
+}
+
+// ─── VER DETALLE ─────────────────────────────────────────────
+async function verDetalle(id) {
+    const cont = document.getElementById('detContenido');
+    cont.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>';
+    document.getElementById('detBtnPdf').href = '/api/pago_proveedor/' + id + '/recibo_pdf';
+    modalDetalle.show();
+
+    const res = await fetch('/api/pago_proveedor/' + id + '/detalle');
+    const data = await res.json();
+    if (!data.success) {
+        cont.innerHTML = `<div class="alert alert-danger">${data.error || 'Error'}</div>`;
+        return;
+    }
+    const p = data.pago;
+    document.getElementById('detTitulo').textContent = 'OP ' + p.numero_recibo_completo + ' — ' + p.proveedor;
+
+    let html = `
+    <div class="row g-2 mb-3">
+        <div class="col-md-3"><small class="text-muted">Nº OP</small><div class="fw-bold">${p.numero_recibo_completo}</div></div>
+        <div class="col-md-3"><small class="text-muted">Fecha</small><div class="fw-bold">${p.fecha}</div></div>
+        <div class="col-md-3"><small class="text-muted">Proveedor</small><div class="fw-bold">${p.proveedor}</div></div>
+        <div class="col-md-3"><small class="text-muted">Total</small><div class="fw-bold fs-5 text-success">${fmt(p.importe)}</div></div>
+    </div>`;
+
+    if (p.estado === 'anulado') {
+        html += `<div class="alert alert-danger"><strong>PAGO ANULADO.</strong> ${p.observaciones || ''}</div>`;
+    } else if (p.observaciones) {
+        html += `<div class="alert alert-light"><strong>Observaciones:</strong> ${p.observaciones}</div>`;
+    }
+
+    // Facturas
+    html += '<h6 class="text-primary mt-3"><i class="fas fa-file-invoice me-1"></i>Facturas imputadas</h6>';
+    html += '<table class="table table-sm"><thead class="table-light"><tr><th>Factura</th><th class="text-end">Total</th><th class="text-end">Monto imputado</th></tr></thead><tbody>';
+    data.detalles.forEach(d => {
+        html += `<tr><td>${d.factura_numero}</td><td class="text-end">${fmt(d.factura_total)}</td><td class="text-end fw-bold">${fmt(d.monto_imputado)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+
+    // Medios
+    html += '<h6 class="text-primary mt-3"><i class="fas fa-money-bill-wave me-1"></i>Medios de pago</h6>';
+    html += '<table class="table table-sm"><thead class="table-light"><tr><th>Medio</th><th>Detalle</th><th class="text-end">Monto</th></tr></thead><tbody>';
+    data.medios.forEach(m => {
+        let detalle = '-';
+        const nombres = {
+            'efectivo': 'Efectivo',
+            'transferencia': 'Transferencia',
+            'cheque_propio': 'Cheque propio',
+            'cheque_tercero': 'Cheque de tercero',
+            'otro': 'Otro',
+        };
+        if (m.medio === 'transferencia') {
+            const parts = [];
+            if (m.banco_destino) parts.push('Banco: ' + m.banco_destino);
+            if (m.cbu_destino)   parts.push('CBU: ' + m.cbu_destino);
+            detalle = parts.join(' — ') || '-';
+        } else if (m.cheque_propio) {
+            detalle = `${m.cheque_propio.banco} Nº ${m.cheque_propio.numero} — Vto. ${m.cheque_propio.vto || 's/f'}`;
+        } else if (m.cheque_tercero) {
+            detalle = `${m.cheque_tercero.banco} Nº ${m.cheque_tercero.numero} — Lib.: ${m.cheque_tercero.librador || 's/librador'}`;
+        }
+        html += `<tr><td><strong>${nombres[m.medio] || m.medio}</strong></td><td><small>${detalle}</small></td><td class="text-end">${fmt(m.monto)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+
+    cont.innerHTML = html;
+}
+
+// ─── ANULAR ──────────────────────────────────────────────────
+async function anular(id) {
+    const p = pagos.find(x => x.id === id);
+    const { value: motivo } = await Swal.fire({
+        title: '¿Anular pago?',
+        html: `
+            <div class="text-start">
+                <p class="mb-2">Vas a anular:</p>
+                <p class="mb-1"><strong>OP:</strong> ${p.numero_recibo_completo}</p>
+                <p class="mb-1"><strong>Proveedor:</strong> ${p.proveedor}</p>
+                <p class="mb-2"><strong>Importe:</strong> ${fmt(p.importe)}</p>
+                <div class="alert alert-warning small py-2">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    Esta acción va a:
+                    <ul class="mb-0">
+                        <li>Devolver saldo pendiente a las facturas</li>
+                        <li>Volver los cheques a su estado previo</li>
+                        <li>Crear un movimiento inverso en la cta cte</li>
+                    </ul>
+                </div>
+                <label class="form-label fw-bold mt-2">Motivo de anulación *</label>
+            </div>`,
+        input: 'textarea',
+        inputPlaceholder: 'Ej: Pago duplicado, error en el proveedor, etc.',
+        inputAttributes: { rows: 3 },
+        showCancelButton: true,
+        confirmButtonText: 'Sí, anular',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#dc3545',
+        inputValidator: (v) => {
+            if (!v || !v.trim()) return 'El motivo es obligatorio';
+        }
+    });
+    if (!motivo) return;
+
+    Swal.fire({ title: 'Anulando...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+    const res = await fetch('/api/pago_proveedor/' + id + '/anular', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ motivo: motivo.trim() })
+    });
+    const data = await res.json();
+    Swal.close();
+
+    if (!data.success) { Swal.fire('No se pudo anular', data.error, 'error'); return; }
+    Swal.fire({ icon:'success', title:'Pago anulado', timer:1500, timerProgressBar:true, showConfirmButton:false });
+    cargar();
+}
+
+cargar();
+</script>
+{% endblock %}

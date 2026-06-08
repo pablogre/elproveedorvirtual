@@ -1,0 +1,719 @@
+{% extends 'base.html' %}
+{% block title %}Armar Reparto del Día{% endblock %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+<style>
+    .zona-card { border-left: 6px solid #0d6efd; margin-bottom: 1.5rem; }
+    .zona-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 0.75rem 1rem; color: white; border-radius: .375rem .375rem 0 0;
+        font-weight: 600;
+    }
+    .reparto-item {
+        display: grid;
+        grid-template-columns: 40px 40px 140px 1fr 180px 120px 110px;
+        gap: .75rem; align-items: center;
+        padding: .75rem 1rem;
+        border-bottom: 1px solid #e9ecef;
+        background: #fff;
+        cursor: grab;
+    }
+    .reparto-item:active { cursor: grabbing; }
+    .reparto-item.sortable-ghost { opacity: 0.4; background: #ffe69c; }
+    .reparto-item .handle {
+        color: #adb5bd; font-size: 1.2rem; text-align: center; user-select: none;
+    }
+    .reparto-item .handle:hover { color: #495057; }
+    .reparto-item .tipo-badge { font-size: .7rem; padding: .15rem .4rem; }
+    .cliente-nombre { font-weight: 600; }
+    .direccion-tel { font-size: .85rem; color: #6c757d; }
+    .btn-sacar { font-size: .75rem; }
+    .total-zona { font-size: 1.1rem; }
+    .alert-vacio { text-align: center; padding: 3rem; color: #6c757d; }
+    .nav-tabs .nav-link { font-weight: 500; }
+    .sticky-acciones {
+        position: sticky; bottom: 0; background: white;
+        padding: 1rem; border-top: 2px solid #dee2e6;
+        box-shadow: 0 -4px 10px rgba(0,0,0,.05); z-index: 10;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3">
+    <h2>
+        <i class="fas fa-truck me-2"></i>Armar Reparto del Día
+        <button class="btn btn-sm btn-outline-info ms-2" data-bs-toggle="modal" data-bs-target="#modalAyuda" title="Ver ayuda">
+            <i class="fas fa-question-circle me-1"></i> Ayuda
+        </button>
+    </h2>
+    <div class="d-flex align-items-center gap-2">
+        <label class="form-label mb-0 small fw-bold"><i class="fas fa-calendar me-1"></i>Fecha:</label>
+        <input type="date" id="fechaReparto" class="form-control form-control-sm" style="width:auto;">
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-armar" data-bs-toggle="tab" data-bs-target="#pane-armar" type="button">
+            <i class="fas fa-clipboard-list me-1"></i> Armar reparto
+            <span id="chip-pendientes" class="badge bg-primary ms-1">0</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-enreparto" data-bs-toggle="tab" data-bs-target="#pane-enreparto" type="button">
+            <i class="fas fa-truck-loading me-1"></i> En reparto hoy
+            <span id="chip-enreparto" class="badge bg-success ms-1">0</span>
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- ======== PESTAÑA ARMAR REPARTO ======== -->
+    <div class="tab-pane fade show active" id="pane-armar">
+        <div class="alert alert-info small d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-info-circle me-1"></i>
+                Seleccioná qué comprobantes salen al reparto. Podés <strong>arrastrar</strong> con
+                <i class="fas fa-grip-vertical mx-1"></i>
+                para cambiar el orden dentro de cada zona.
+            </div>
+            <div>
+                <span class="text-muted me-2" id="resumenArmar">—</span>
+            </div>
+        </div>
+
+        <div id="grupos-armar">
+            <div class="alert-vacio">Cargando...</div>
+        </div>
+
+        <!-- Acciones fijas abajo -->
+        <div class="sticky-acciones d-flex justify-content-between align-items-center">
+            <div>
+                <button class="btn btn-outline-secondary btn-sm" onclick="toggleTodos(true)">
+                    <i class="fas fa-check-double me-1"></i> Seleccionar todo
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="toggleTodos(false)">
+                    <i class="far fa-square me-1"></i> Deseleccionar todo
+                </button>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary" onclick="abrirModalImpresion(false)" title="Solo imprimir el PDF sin marcar como 'en reparto'">
+                    <i class="fas fa-file-pdf me-1"></i> Solo imprimir PDF
+                </button>
+                <button class="btn btn-outline-success" onclick="iniciarReparto()" title="Marcar los seleccionados como 'en reparto' sin generar PDF">
+                    <i class="fas fa-truck-loading me-1"></i> Marcar como en reparto
+                </button>
+                <button class="btn btn-success" onclick="abrirModalImpresion(true)" title="Generar PDF y marcar como 'en reparto' en un solo paso">
+                    <i class="fas fa-rocket me-1"></i> Imprimir e iniciar reparto
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======== PESTAÑA EN REPARTO HOY ======== -->
+    <div class="tab-pane fade" id="pane-enreparto">
+        <div class="alert alert-success small">
+            <i class="fas fa-check-circle me-1"></i>
+            Estos comprobantes ya están asignados al camión de hoy. Si el chofer no pudo entregar alguno, podés
+            <strong>volverlo a "pendiente"</strong> y se reincorpora al listado de "Armar reparto" del día siguiente.
+        </div>
+        <div id="grupos-enreparto">
+            <div class="alert-vacio">Cargando...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ MODAL IMPRESIÓN (nombre del chofer) ============ -->
+<div class="modal fade" id="modalImpresion" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-file-pdf me-2"></i>Generar hoja de reparto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Nombre del chofer</label>
+                    <input type="text" id="impChofer" class="form-control" placeholder="Ej: Juan Pérez">
+                    <small class="text-muted">Aparecerá impreso en la cabecera del PDF. Podés dejarlo vacío.</small>
+                </div>
+                <div id="impResumen" class="alert alert-info small mb-0"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-success" id="btnConfirmarImpresion">
+                    <i class="fas fa-rocket me-1"></i> Generar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ MODAL DE AYUDA — EXHAUSTIVO ============ -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Cómo usar la pantalla "Armar Reparto del Día"</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <div class="alert alert-primary">
+                    <strong><i class="fas fa-lightbulb me-1"></i> ¿Para qué sirve esta pantalla?</strong><br>
+                    Es el <strong>centro de mando del reparto del día</strong>. Acá agrupás todos los remitos pendientes
+                    y los pedidos online "listos" (que no son de retiro) por zona, los ordenás en el orden de recorrido
+                    del camión, imprimís la planilla que el chofer se lleva, y los marcás como "en reparto" para que no
+                    se mezclen con los del día siguiente.
+                </div>
+
+                <hr>
+
+                <h5 class="text-info fw-bold"><i class="fas fa-book-open me-1"></i> Conceptos previos</h5>
+                <p>Antes de usar esta pantalla tenés que tener:</p>
+                <ul>
+                    <li>✅ <strong>Zonas configuradas</strong> en <a href="/zonas/" target="_blank">Zonas de Reparto</a>.</li>
+                    <li>✅ <strong>Clientes con zona asignada</strong> (por lo menos los que más repartís).</li>
+                    <li>✅ <strong>Remitos pendientes</strong> o <strong>pedidos online en estado "listo"</strong> (preparados para entregar).</li>
+                </ul>
+                <p>Si no tenés nada de esto todavía, mirá el botón "Ayuda" dentro de <a href="/zonas/" target="_blank">Zonas de Reparto</a> que explica cómo arrancar.</p>
+
+                <hr>
+
+                <h5 class="text-info fw-bold"><i class="fas fa-eye me-1"></i> Qué ves en esta pantalla</h5>
+                <p>Al entrar la pantalla se divide en dos <strong>pestañas</strong>:</p>
+
+                <h6 class="fw-bold mt-3"><i class="fas fa-clipboard-list me-1"></i> Pestaña 1: "Armar reparto"</h6>
+                <p>Es la pestaña principal. Muestra todo lo que <strong>todavía no fue asignado al camión del día</strong>:</p>
+                <ul>
+                    <li><strong>Remitos pendientes</strong> (los que cargaste y están sin facturar)</li>
+                    <li><strong>Pedidos online "listos" que NO sean de retiro</strong> (los que el cliente eligió que los lleves vos)</li>
+                </ul>
+                <p>Los podés ver <strong>agrupados por zona</strong>, con colores, y dentro de cada zona el orden que definiste manualmente (ver más abajo).</p>
+                <p>Los de <strong>"Sin zona"</strong> aparecen al final. Te conviene ir asignándoles zona a esos clientes para que se integren al flujo.</p>
+
+                <h6 class="fw-bold mt-3"><i class="fas fa-truck-loading me-1"></i> Pestaña 2: "En reparto hoy"</h6>
+                <p>Muestra todo lo que <strong>ya marcaste como "en reparto" para la fecha seleccionada</strong>. Acá ves lo que "está en el camión".</p>
+                <p>Si el chofer vuelve sin entregar algún comprobante (el cliente no estaba, no quiso recibir, etc.), tenés un botón <strong>"Volver a pendiente"</strong> al lado de cada uno: lo saca del reparto y vuelve a la pestaña 1 para mandarlo al día siguiente.</p>
+
+                <hr>
+
+                <h5 class="text-info fw-bold"><i class="fas fa-hand-pointer me-1"></i> Flujo de trabajo día a día</h5>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title text-primary"><strong>Paso 1:</strong> Elegí la fecha</h6>
+                        <p class="mb-0">Arriba a la derecha tenés un selector de fecha. Por defecto es hoy. Si estás preparando el reparto de mañana, cambiala a mañana.</p>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title text-primary"><strong>Paso 2:</strong> Revisá los comprobantes</h6>
+                        <p>Se muestran agrupados por zona. Cada fila tiene:</p>
+                        <ul class="mb-0">
+                            <li><strong>Checkbox</strong> a la izquierda (marcado por default) — para incluir o excluir del reparto</li>
+                            <li><strong>Agarrador</strong> <i class="fas fa-grip-vertical text-muted mx-1"></i> — para arrastrar y reordenar</li>
+                            <li><strong>Tipo</strong> (Remito o Pedido)</li>
+                            <li><strong>Número</strong>, <strong>Cliente</strong>, <strong>Dirección</strong>, <strong>Teléfono</strong>, <strong>Total</strong></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title text-primary"><strong>Paso 3:</strong> Ordená el recorrido</h6>
+                        <p>Hacé click sostenido en <i class="fas fa-grip-vertical mx-1"></i> y <strong>arrastrá las filas dentro de la misma zona</strong> para definir el orden en que el chofer va a visitar a los clientes.</p>
+                        <p>El orden se <strong>guarda automáticamente</strong> al soltar (no hace falta apretar "guardar"). La próxima vez que entres a esta pantalla el orden se conserva.</p>
+                        <p class="mb-0"><strong>Tip</strong>: arrastrá primero los clientes de la calle por donde arranca el camión, después los de más lejos, y al final los que estén más cerca del depósito para volver rápido.</p>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title text-primary"><strong>Paso 4:</strong> Excluí lo que hoy no sale</h6>
+                        <p class="mb-0">Destildá el checkbox de los comprobantes que <strong>no vas a mandar hoy</strong> (ej: un cliente que avisó que mañana no está, un remito que todavía no está listo para salir, etc.). Van a quedar en la lista para el día siguiente.</p>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title text-primary"><strong>Paso 5:</strong> Generá la planilla</h6>
+                        <p>Tenés <strong>3 opciones</strong> en la barra inferior:</p>
+
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-4">
+                                <div class="border rounded p-2 h-100">
+                                    <strong class="text-success"><i class="fas fa-rocket me-1"></i> Imprimir e iniciar reparto</strong>
+                                    <br><small>(recomendado)</small>
+                                    <p class="small mb-0 mt-1">Genera el PDF y al mismo tiempo marca todo como "en reparto". Es el botón que más vas a usar.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="border rounded p-2 h-100">
+                                    <strong class="text-primary"><i class="fas fa-file-pdf me-1"></i> Solo imprimir PDF</strong>
+                                    <p class="small mb-0 mt-1">Solo genera el PDF, no cambia el estado. Útil para <strong>previsualizar</strong> o reimprimir una copia.</p>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="border rounded p-2 h-100">
+                                    <strong class="text-success"><i class="fas fa-truck-loading me-1"></i> Marcar como en reparto</strong>
+                                    <p class="small mb-0 mt-1">Marca sin generar PDF. Útil si ya imprimiste antes o si querés asignar sin necesidad de papel (ej: tracking interno).</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p class="mb-0"><strong>Al confirmar la impresión</strong> te va a pedir el <strong>nombre del chofer</strong> (opcional). Si lo completás, aparece impreso en la cabecera del PDF.</p>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title text-primary"><strong>Paso 6:</strong> El chofer sale con la planilla</h6>
+                        <p>El PDF tiene:</p>
+                        <ul>
+                            <li>Una <strong>página por zona</strong> (con el color de la zona en la cabecera)</li>
+                            <li>Tabla con <strong>número, comprobante, cliente, dirección, teléfono, total</strong> y una columna en blanco para que el cliente firme al recibir</li>
+                            <li>Subtotal por zona y total general al final</li>
+                            <li>Espacios para <strong>firma del chofer al retirar</strong> y <strong>al regresar</strong> del reparto</li>
+                        </ul>
+                        <p class="mb-0">El chofer lleva el PDF impreso + los remitos/facturas térmicas. Usa la planilla como checklist: tacha los entregados y deja nota en los que hubo problema.</p>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title text-primary"><strong>Paso 7:</strong> El chofer vuelve</h6>
+                        <p>Cuando el chofer regresa:</p>
+                        <ul>
+                            <li>Los que <strong>entregó bien</strong> → los facturás normalmente (los remitos) o los marcás como "facturado" (los pedidos). Automáticamente salen de "en reparto hoy".</li>
+                            <li>Los que <strong>no pudo entregar</strong> → andá a la pestaña "En reparto hoy", buscalo, y apretá <strong>"Volver a pendiente"</strong>. Eso lo devuelve al listado de "Armar reparto" para que lo pongas en el camión del día siguiente.</li>
+                        </ul>
+                        <p class="mb-0">Listo, ciclo cerrado 🚛</p>
+                    </div>
+                </div>
+
+                <hr>
+
+                <h5 class="text-info fw-bold"><i class="fas fa-exclamation-triangle me-1"></i> Reglas importantes</h5>
+                <ul>
+                    <li><strong>Pedidos de "Retiro"</strong>: Nunca aparecen acá, porque el cliente los busca él mismo. Solo se listan los pedidos con tipo de entrega "Envío".</li>
+                    <li><strong>Remitos anulados o ya facturados</strong>: no aparecen, solo los que están en estado <code>pendiente</code>.</li>
+                    <li><strong>Pedidos que no estén "listo"</strong>: los pedidos en <code>pendiente</code>, <code>preparando</code>, <code>cotizado</code>, <code>aceptado</code> no aparecen. Tienen que estar preparados y marcados como "listo" en <a href="/admin/pedidos" target="_blank">Administración de Pedidos</a>.</li>
+                    <li><strong>Un comprobante no puede estar en dos días</strong>: si ya está en "reparto hoy" no aparece en "Armar" (lógico). Si lo devolvés a pendiente, vuelve a aparecer.</li>
+                    <li><strong>Ordenar entre zonas diferentes no se puede</strong> en esta pantalla — el orden entre zonas lo define el <strong>"orden de reparto"</strong> que le pusiste a cada zona al crearla. Si querés cambiar qué zona va primero, andá a <a href="/zonas/" target="_blank">Zonas</a>.</li>
+                </ul>
+
+                <hr>
+
+                <h5 class="text-info fw-bold"><i class="fas fa-question me-1"></i> Preguntas frecuentes</h5>
+
+                <p><strong>¿Qué pasa si un cliente pide que le lleve algo hoy pero no tiene zona?</strong><br>
+                Aparece igual en la sección "Sin zona" al final. Podés mandarlo al reparto de todas formas. Después conviene asignarle zona al cliente para que la próxima se agrupe.</p>
+
+                <p><strong>¿Puedo reimprimir la planilla después de haberla generado?</strong><br>
+                Sí: andá a la pestaña "En reparto hoy" y generá un PDF desde ahí (mismo botón). Igual te recomiendo guardar/imprimir el original en PDF.</p>
+
+                <p><strong>¿El PDF es fijo o se actualiza solo?</strong><br>
+                Es una "foto" del momento en que lo generaste. Si después agregás remitos nuevos, tenés que volver a generarlo.</p>
+
+                <p><strong>¿Y si quiero hacer varios repartos en un día (dos camiones)?</strong><br>
+                Hoy la pantalla está pensada para un reparto por día por fecha. Si tenés 2 camiones, podés hacer lo siguiente: (a) genera el PDF del camión 1 con las zonas que le tocan, marcalos como "en reparto", (b) volvé a la pestaña "Armar" — ahora solo ves lo del camión 2, (c) generá ese PDF también. Los dos aparecen juntos en "En reparto hoy".</p>
+
+                <p><strong>¿Los pedidos listos aparecen directo o tengo que hacer algo antes?</strong><br>
+                Tenés que entrar a <a href="/admin/pedidos" target="_blank">Administración de Pedidos</a>, revisar el pedido, preparar los productos, y cambiar el estado a <strong>"listo"</strong>. Recién ahí aparece acá.</p>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-info text-white" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const ES_ADMIN = {{ 'true' if es_admin else 'false' }};
+let datosArmar = null;
+let datosEnReparto = null;
+let modoImpresionMarcar = true; // true = "imprimir e iniciar"; false = "solo imprimir"
+
+function fmt(n) {
+    return '$ ' + (n || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function escapeHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+// =========================================================
+// CARGA DE DATOS
+// =========================================================
+function cargarArmar() {
+    const fecha = document.getElementById('fechaReparto').value;
+    fetch('/reparto/api/armar?fecha=' + fecha)
+        .then(r => r.json())
+        .then(data => {
+            datosArmar = data;
+            pintarArmar();
+        });
+}
+
+function cargarEnReparto() {
+    const fecha = document.getElementById('fechaReparto').value;
+    fetch('/reparto/api/en_reparto_hoy?fecha=' + fecha)
+        .then(r => r.json())
+        .then(data => {
+            datosEnReparto = data;
+            pintarEnReparto();
+        });
+}
+
+// =========================================================
+// PINTAR "ARMAR"
+// =========================================================
+function pintarArmar() {
+    const cont = document.getElementById('grupos-armar');
+    if (!datosArmar || !datosArmar.zonas.length) {
+        cont.innerHTML = `<div class="alert-vacio">
+            <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
+            <h5>No hay comprobantes para repartir en esta fecha</h5>
+            <p class="small">Crear remitos o marcar pedidos online como "listo" para que aparezcan acá.</p>
+        </div>`;
+        document.getElementById('chip-pendientes').textContent = '0';
+        document.getElementById('resumenArmar').textContent = '—';
+        return;
+    }
+
+    document.getElementById('chip-pendientes').textContent = datosArmar.total_items;
+    document.getElementById('resumenArmar').innerHTML =
+        `<strong>${datosArmar.total_items}</strong> comprobantes &nbsp;|&nbsp; Total: <strong>${fmt(datosArmar.total_monto)}</strong>`;
+
+    let html = '';
+    datosArmar.zonas.forEach(grupo => {
+        const zonaTotal = grupo.items.reduce((s, it) => s + it.total, 0);
+        const zId = grupo.zona_id || 0;
+        html += `
+            <div class="card zona-card" style="border-left-color: ${grupo.zona_color}">
+                <div class="zona-header" style="background: ${grupo.zona_color}">
+                    <div>
+                        <input type="checkbox" class="form-check-input me-2 chk-zona" data-zona="${zId}" checked onchange="toggleZona(${zId}, this.checked)">
+                        <i class="fas fa-map-marker-alt me-1"></i>
+                        <strong>${escapeHtml(grupo.zona_nombre)}</strong>
+                        <span class="badge bg-dark ms-2">${grupo.items.length} comprobantes</span>
+                    </div>
+                    <div class="total-zona"><strong>${fmt(zonaTotal)}</strong></div>
+                </div>
+                <div class="list-group list-group-flush items-zona" data-zona="${zId}">
+                    ${grupo.items.map(it => filaItem(it, zId)).join('')}
+                </div>
+            </div>
+        `;
+    });
+    cont.innerHTML = html;
+
+    // Activar SortableJS en cada lista
+    document.querySelectorAll('.items-zona').forEach(lista => {
+        new Sortable(lista, {
+            handle: '.handle',
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            onEnd: function(evt) {
+                guardarOrden(lista);
+            }
+        });
+    });
+}
+
+function filaItem(it, zonaId) {
+    const tipoColor = it.tipo === 'remito' ? 'bg-primary' : 'bg-warning text-dark';
+    const tipoIcon = it.tipo === 'remito' ? 'fa-file-alt' : 'fa-shopping-cart';
+    return `
+        <div class="reparto-item" data-tipo="${it.tipo}" data-id="${it.id}" data-zona="${zonaId}">
+            <div class="text-center">
+                <input type="checkbox" class="form-check-input chk-item" checked>
+            </div>
+            <div class="handle" title="Arrastrá para reordenar"><i class="fas fa-grip-vertical"></i></div>
+            <div>
+                <span class="badge ${tipoColor} tipo-badge"><i class="fas ${tipoIcon} me-1"></i>${it.tipo === 'remito' ? 'Remito' : 'Pedido'}</span>
+                <br><small class="text-muted">${escapeHtml(it.numero)}</small>
+            </div>
+            <div>
+                <div class="cliente-nombre">${escapeHtml(it.cliente_nombre)}</div>
+                <div class="direccion-tel">
+                    ${it.direccion ? '<i class="fas fa-map-pin me-1"></i>' + escapeHtml(it.direccion) : '<em class="text-danger">Sin dirección</em>'}
+                </div>
+            </div>
+            <div class="direccion-tel">
+                ${it.telefono ? '<i class="fas fa-phone me-1"></i>' + escapeHtml(it.telefono) : '<em class="text-muted">—</em>'}
+            </div>
+            <div class="text-end"><strong>${fmt(it.total)}</strong></div>
+            <div class="text-end"><small class="text-muted">${escapeHtml(it.fecha_creacion)}</small></div>
+        </div>
+    `;
+}
+
+function toggleZona(zonaId, checked) {
+    document.querySelectorAll(`.items-zona[data-zona="${zonaId}"] .chk-item`)
+        .forEach(c => c.checked = checked);
+}
+
+function toggleTodos(checked) {
+    document.querySelectorAll('.chk-item').forEach(c => c.checked = checked);
+    document.querySelectorAll('.chk-zona').forEach(c => c.checked = checked);
+}
+
+// =========================================================
+// GUARDAR ORDEN MANUAL (drag and drop)
+// =========================================================
+function guardarOrden(lista) {
+    const items = Array.from(lista.querySelectorAll('.reparto-item')).map((el, idx) => ({
+        tipo: el.dataset.tipo,
+        id: parseInt(el.dataset.id),
+        orden: idx
+    }));
+    fetch('/reparto/api/ordenar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({items})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) Swal.fire('Error', data.error, 'error');
+    });
+}
+
+// =========================================================
+// RECOLECCIÓN DE SELECCIONADOS
+// =========================================================
+function getItemsSeleccionados() {
+    return Array.from(document.querySelectorAll('.reparto-item'))
+        .filter(el => el.querySelector('.chk-item').checked)
+        .map(el => ({
+            tipo: el.dataset.tipo,
+            id: parseInt(el.dataset.id)
+        }));
+}
+
+// =========================================================
+// BOTÓN "MARCAR COMO EN REPARTO" (sin PDF)
+// =========================================================
+function iniciarReparto() {
+    const items = getItemsSeleccionados();
+    if (!items.length) {
+        Swal.fire('Atención', 'No hay comprobantes seleccionados', 'warning');
+        return;
+    }
+    Swal.fire({
+        title: `¿Marcar ${items.length} comprobantes como "en reparto"?`,
+        text: 'Van a desaparecer de "Armar reparto" y aparecer en "En reparto hoy".',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#198754',
+        confirmButtonText: 'Sí, marcar',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        const fecha = document.getElementById('fechaReparto').value;
+        fetch('/reparto/api/iniciar', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fecha, items})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { Swal.fire('Error', data.error, 'error'); return; }
+            Swal.fire({
+                icon: 'success', title: 'Marcado como en reparto',
+                text: `${data.remitos_count} remito(s) y ${data.pedidos_count} pedido(s).`,
+                timer: 2000, showConfirmButton: false, timerProgressBar: true
+            }).then(() => {
+                cargarArmar();
+                cargarEnReparto();
+            });
+        });
+    });
+}
+
+// =========================================================
+// MODAL DE IMPRESIÓN (PDF + opcional marcar)
+// =========================================================
+function abrirModalImpresion(marcarTambien) {
+    const items = getItemsSeleccionados();
+    if (!items.length) {
+        Swal.fire('Atención', 'No hay comprobantes seleccionados', 'warning');
+        return;
+    }
+    modoImpresionMarcar = marcarTambien;
+    document.getElementById('impChofer').value = '';
+    document.getElementById('impResumen').innerHTML =
+        `Se imprimirán <strong>${items.length}</strong> comprobantes.` +
+        (marcarTambien ? ' Además <strong>se marcarán como "en reparto"</strong>.' : ' <strong>No</strong> se marcarán (solo PDF).');
+    new bootstrap.Modal(document.getElementById('modalImpresion')).show();
+}
+
+document.getElementById('btnConfirmarImpresion').addEventListener('click', function() {
+    const items = getItemsSeleccionados();
+    const fecha = document.getElementById('fechaReparto').value;
+    const chofer = document.getElementById('impChofer').value.trim();
+
+    // 1) Pedir el PDF
+    fetch('/reparto/pdf', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({fecha, chofer, items})
+    })
+    .then(r => {
+        if (!r.ok) throw new Error('Error generando PDF');
+        return r.blob();
+    })
+    .then(blob => {
+        // Abrir el PDF en pestaña nueva
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+
+        bootstrap.Modal.getInstance(document.getElementById('modalImpresion')).hide();
+
+        // 2) Si corresponde, marcar como en reparto
+        if (modoImpresionMarcar) {
+            return fetch('/reparto/api/iniciar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({fecha, items})
+            }).then(r => r.json()).then(data => {
+                if (data.error) throw new Error(data.error);
+                Swal.fire({
+                    icon: 'success', title: 'PDF generado y reparto iniciado',
+                    text: `${data.remitos_count} remito(s) y ${data.pedidos_count} pedido(s) marcados como "en reparto".`,
+                    timer: 2500, showConfirmButton: false, timerProgressBar: true
+                }).then(() => {
+                    cargarArmar();
+                    cargarEnReparto();
+                });
+            });
+        } else {
+            Swal.fire({
+                icon: 'success', title: 'PDF generado',
+                text: 'Se abrió el PDF en una pestaña nueva.',
+                timer: 1800, showConfirmButton: false, timerProgressBar: true
+            });
+        }
+    })
+    .catch(err => {
+        Swal.fire('Error', err.message || 'Error generando el PDF', 'error');
+    });
+});
+
+// =========================================================
+// PESTAÑA "EN REPARTO HOY"
+// =========================================================
+function pintarEnReparto() {
+    const cont = document.getElementById('grupos-enreparto');
+    if (!datosEnReparto || !datosEnReparto.items.length) {
+        cont.innerHTML = `<div class="alert-vacio">
+            <i class="fas fa-truck fa-3x mb-3 d-block"></i>
+            <h5>No hay nada en reparto en esta fecha</h5>
+            <p class="small">Cuando marques comprobantes desde "Armar reparto" van a aparecer acá.</p>
+        </div>`;
+        document.getElementById('chip-enreparto').textContent = '0';
+        return;
+    }
+    document.getElementById('chip-enreparto').textContent = datosEnReparto.items.length;
+
+    // Agrupar por zona
+    const grupos = {};
+    datosEnReparto.items.forEach(it => {
+        const key = it.zona_nombre;
+        if (!grupos[key]) grupos[key] = {color: it.zona_color, nombre: it.zona_nombre, items: []};
+        grupos[key].items.push(it);
+    });
+
+    let html = '';
+    Object.values(grupos).forEach(grupo => {
+        html += `
+            <div class="card zona-card mb-3" style="border-left-color: ${grupo.color}">
+                <div class="zona-header" style="background: ${grupo.color}">
+                    <div><i class="fas fa-map-marker-alt me-1"></i><strong>${escapeHtml(grupo.nombre)}</strong>
+                        <span class="badge bg-dark ms-2">${grupo.items.length}</span>
+                    </div>
+                </div>
+                <div class="list-group list-group-flush">
+                    ${grupo.items.map(it => `
+                        <div class="reparto-item" style="cursor:default; grid-template-columns: 140px 1fr 180px 120px auto;">
+                            <div>
+                                <span class="badge ${it.tipo === 'remito' ? 'bg-primary' : 'bg-warning text-dark'} tipo-badge">
+                                    <i class="fas ${it.tipo === 'remito' ? 'fa-file-alt' : 'fa-shopping-cart'} me-1"></i>
+                                    ${escapeHtml(it.numero)}
+                                </span>
+                            </div>
+                            <div>
+                                <div class="cliente-nombre">${escapeHtml(it.cliente_nombre)}</div>
+                                <div class="direccion-tel">${it.direccion ? '<i class="fas fa-map-pin me-1"></i>' + escapeHtml(it.direccion) : ''}</div>
+                            </div>
+                            <div class="direccion-tel">${it.telefono ? '<i class="fas fa-phone me-1"></i>' + escapeHtml(it.telefono) : '—'}</div>
+                            <div class="text-end"><strong>${fmt(it.total)}</strong></div>
+                            <div class="text-end">
+                                <button class="btn btn-sm btn-outline-warning btn-sacar"
+                                        onclick="devolverPendiente('${it.tipo}', ${it.id}, '${escapeHtml(it.numero).replace(/'/g, "\\'")}')"
+                                        title="Sacar del reparto y devolver a pendiente">
+                                    <i class="fas fa-undo me-1"></i>Devolver a pendiente
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>`;
+    });
+    cont.innerHTML = html;
+}
+
+function devolverPendiente(tipo, id, numero) {
+    Swal.fire({
+        title: `¿Devolver "${numero}" a pendiente?`,
+        text: 'Sale del reparto y vuelve a aparecer en "Armar reparto" para los próximos días.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ffc107',
+        confirmButtonText: 'Sí, devolver',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        fetch('/reparto/api/devolver_pendiente', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tipo, id})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) { Swal.fire('Error', data.error, 'error'); return; }
+            Swal.fire({
+                icon: 'success', title: 'Devuelto a pendiente',
+                timer: 1500, showConfirmButton: false, timerProgressBar: true
+            }).then(() => {
+                cargarArmar();
+                cargarEnReparto();
+            });
+        });
+    });
+}
+
+// =========================================================
+// INIT
+// =========================================================
+(function() {
+    // Setear fecha = hoy
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('fechaReparto').value = hoy;
+
+    document.getElementById('fechaReparto').addEventListener('change', () => {
+        cargarArmar();
+        cargarEnReparto();
+    });
+
+    cargarArmar();
+    cargarEnReparto();
+})();
+</script>
+{% endblock %}

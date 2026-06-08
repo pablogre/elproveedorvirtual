@@ -1,0 +1,2136 @@
+{% extends 'base.html' %}
+{% block title %}Nueva Factura de Compra con Detalle{% endblock %}
+
+{% block content %}
+{# Variable JS con el oc_id recibido por querystring (None si no viene) #}
+<script>
+    window.OC_ID = {{ oc_id|tojson if oc_id else 'null' }};
+</script>
+
+{% if oc_id %}
+<div id="bannerDesdeOC" class="alert alert-warning d-flex align-items-center mt-3 mb-3" role="alert">
+    <i class="fas fa-link fa-2x me-3 text-warning"></i>
+    <div class="flex-grow-1">
+        <div class="fw-bold">
+            <i class="fas fa-info-circle me-1"></i>
+            Facturando desde Orden de Compra <span id="bannerOCNumero">#{{ oc_id }}</span>
+        </div>
+        <div class="small">
+            El stock <strong>NO se volverá a sumar</strong> (ya fue sumado al registrar la recepción).
+            Se actualizarán <strong>costo y precios de venta</strong> según los márgenes guardados.
+            El proveedor y los ítems vienen precargados desde la OC — podés corregir precios, cantidades y alícuotas antes de guardar.
+        </div>
+    </div>
+    <a href="#" id="bannerOCLink" class="btn btn-sm btn-outline-warning ms-2" target="_blank" title="Ver la OC en otra pestaña">
+        <i class="fas fa-external-link-alt me-1"></i> Ver OC
+    </a>
+</div>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mt-3 mb-3">
+    <h2>
+        <i class="fas fa-boxes me-2"></i>Nueva Factura de Compra con Detalle
+        <button class="btn btn-sm btn-outline-info ms-2" data-bs-toggle="modal" data-bs-target="#modalAyuda" title="Ver ayuda">
+            <i class="fas fa-question-circle me-1"></i> Ayuda
+        </button>
+    </h2>
+    <a href="{{ url_for('compras.listado') }}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i> Volver
+    </a>
+</div>
+
+<!-- Modal de Ayuda -->
+<div class="modal fade" id="modalAyuda" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-question-circle me-2"></i>Cómo cargar una factura de compra</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6 class="text-info fw-bold"><i class="fas fa-play me-1"></i> Paso a paso</h6>
+                <ol>
+                    <li><strong>Cabecera</strong>: seleccioná el proveedor, la fecha, el tipo de comprobante (A/B/C, o <strong>CI</strong> para comprobantes internos), el punto de venta y el número.</li>
+                    <li><strong>Buscá un producto</strong>: escribí en el buscador por código interno, código del proveedor o nombre. Si el producto no existe, usá el botón <strong>"Alta Rápida de Producto"</strong> (arriba a la derecha del detalle).</li>
+                    <li><strong>Cantidad y precio</strong>: ingresá la cantidad y el precio unitario <strong>sin IVA</strong> (como viene en la factura del proveedor).</li>
+                    <li><strong>Click en "Agregar"</strong> para sumarlo al carrito. Repetí para cada artículo.</li>
+                    <li><strong>Totales de IVA</strong>: cargalos manualmente para que coincidan <strong>exactamente</strong> con la factura del proveedor. También podés usar el botón <strong>"Calcular IVA desde items"</strong> para que los sugiera a partir del detalle.</li>
+                    <li><strong>Ajustes</strong>: si hay descuentos, flete o percepciones, cargalos en sus campos.</li>
+                    <li><strong>Click en "Guardar Factura"</strong>.</li>
+                </ol>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-calculator me-1"></i> Cómo se calcula el costo</h6>
+                <p class="mb-2">Para cada artículo, el costo se calcula así:</p>
+                <div class="bg-light p-2 mb-2 rounded font-monospace small">
+                    costo_base = precio_unit × (1 + iva/100)<br>
+                    costo_final = costo_base × (1 + (flete − descuento) / suma_total_con_iva)
+                </div>
+                <p class="small text-muted">El flete y el descuento se <strong>prorratean</strong> entre todos los artículos (se reparten proporcionalmente según el subtotal con IVA de cada uno).</p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-percent me-1"></i> Recálculo de precios de venta</h6>
+                <p>Cuando cambia el costo de un producto, el sistema <strong>recalcula automáticamente</strong> los precios 1 a 5 usando los márgenes guardados:</p>
+                <div class="bg-light p-2 mb-2 rounded font-monospace small">
+                    precio_X = costo_final × (1 + margen_X / 100)
+                </div>
+                <p class="small text-muted">Si algún margen está en NULL, ese precio <strong>no se toca</strong> (queda como estaba). Podés setear los márgenes en el ABM de productos.</p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-exclamation-triangle me-1"></i> Percepciones vs Ajustes</h6>
+                <ul>
+                    <li><strong>Flete y Descuento</strong>: prorratean al costo (afectan el costo de cada producto).</li>
+                    <li><strong>Percepciones (IVA, IIBB, Ganancias)</strong>: NO prorratean. Sólo suman al total de la factura y al libro IVA.</li>
+                </ul>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-barcode me-1"></i> Código del Proveedor</h6>
+                <p>Al agregar un artículo podés cargar el código que ese proveedor usa para identificarlo. Esto te sirve después para buscar productos por ese código cuando cargues próximas facturas del mismo proveedor.</p>
+                <p class="small text-muted mb-0">El botón <i class="fas fa-save text-primary"></i> al lado del campo guarda el código al instante, sin esperar a guardar la factura completa.</p>
+
+                <hr>
+
+                <h6 class="text-info fw-bold"><i class="fas fa-plus-circle me-1"></i> Alta Rápida de Producto</h6>
+                <p>Si el producto no existe en el sistema, lo creás con 4 datos: código interno, nombre, IVA y margen principal. Queda con stock y costo en cero, que se actualizan apenas guardes la factura.</p>
+                <p class="small text-muted mb-0">Los márgenes 2 a 5 quedan vacíos y los cargás después en el ABM de productos.</p>
+
+                <hr>
+
+                <h6 class="text-warning fw-bold"><i class="fas fa-file-alt me-1"></i> 🔖 Comprobante Interno (CI)</h6>
+                <p>Cuando el proveedor te entrega <strong>mercadería sin factura oficial</strong> (un remito, un recibo, una orden de pedido, un comprobante "X"), cargalo con tipo <strong>CI</strong>. Sirve para el caso típico de mayoristas/distribuidores que mandan la mercadería en el momento y la factura recién a fin de mes.</p>
+
+                <p class="fw-bold mb-1">Qué hace y qué no hace el CI:</p>
+                <ul>
+                    <li>✅ <strong>SÍ actualiza stock</strong> (suma las cantidades cargadas al stock disponible).</li>
+                    <li>✅ <strong>SÍ actualiza costos</strong> de los productos (con flete y descuento prorrateados si los cargás).</li>
+                    <li>✅ <strong>SÍ recalcula los precios de venta 1 a 5</strong> usando los márgenes guardados (igual que una factura).</li>
+                    <li>✅ <strong>SÍ va a la cuenta corriente del proveedor</strong> (suma al saldo que le debés).</li>
+                    <li>❌ <strong>NO va al Libro IVA Compras</strong> (porque no es un comprobante fiscal — el proveedor todavía no te emitió factura).</li>
+                </ul>
+
+                <p class="fw-bold mb-1">Cómo se usa:</p>
+                <ol>
+                    <li>Seleccioná tipo <strong>CI</strong> en la cabecera. Vas a ver un <span class="badge bg-warning text-dark">banner amarillo</span> arriba que confirma que es un comprobante interno.</li>
+                    <li>El <strong>Pto. Venta es opcional</strong> y el <strong>Número es libre</strong>: tipealo tal cual viene en el papel del proveedor (por ejemplo "REM-1234", "0001-00056789" o solo "234").</li>
+                    <li>Cargá los ítems normalmente con cantidad y precio unitario sin IVA.</li>
+                    <li>El bloque de "Totales IVA" y las "Percepciones" se ocultan automáticamente (no aplican porque no es factura).</li>
+                    <li>El <strong>Descuento y Flete sí siguen aplicando</strong> y prorratean al costo de cada producto.</li>
+                    <li>Click en <strong>"Guardar Factura"</strong> y listo.</li>
+                </ol>
+
+                <p class="fw-bold mb-1">¿Y cuándo llegue la factura oficial del proveedor?</p>
+                <p class="small text-muted">Cuando el proveedor te emita la factura A/B/C real, hacé lo siguiente: (1) <strong>anulá el CI</strong> que cargaste antes (esto le devuelve el stock y revierte la cta cte), (2) <strong>cargá la factura oficial</strong> con tipo A/B/C normalmente. Así la factura oficial actualiza el libro IVA y la cta cte queda equilibrada.</p>
+
+                <p class="small text-muted mb-0"><strong>📷 Con OCR (escaneo automático)</strong>: si subís una imagen o PDF de un remito/recibo, el sistema lo detecta automáticamente y lo carga como CI. Si era una factura oficial, lo carga como A/B/C según corresponda.</p>
+
+                <hr>
+
+                <h6 class="text-warning fw-bold"><i class="fas fa-link me-1"></i> 🛒 Cuando venís desde una Orden de Compra</h6>
+                <p>Si entraste a esta pantalla desde el botón <strong>"Generar factura"</strong> de una OC recibida, vas a ver un <span class="badge bg-warning text-dark">banner amarillo</span> arriba del todo. En ese modo cambian 4 cosas:</p>
+                <ul>
+                    <li><strong>Proveedor bloqueado:</strong> viene seleccionado desde la OC y no se puede cambiar (el fondo queda amarillito).</li>
+                    <li><strong>Ítems precargados:</strong> el carrito arranca con las cantidades <em>recibidas</em> (no las pedidas) de la OC, usando el precio unitario que figuraba en la OC.</li>
+                    <li><strong>Totales IVA sugeridos:</strong> se completan automáticamente sumando los subtotales por alícuota (21% / 10,5% / no gravado).</li>
+                    <li><strong>Stock NO se suma:</strong> esta es la diferencia clave. El stock ya se sumó cuando registraste la recepción, así que acá solo se actualizan <strong>costo</strong> y <strong>precios de venta</strong>. El total de la factura igual va al saldo del proveedor y al libro IVA, como siempre.</li>
+                </ul>
+                <p class="small text-muted mb-2">Si la factura real del proveedor trae diferencias (cambio de lista, ajustes, redondeo), podés:</p>
+                <ul class="small text-muted mb-2">
+                    <li>Corregir precios o cantidades en el carrito manualmente.</li>
+                    <li>Usar el botón <strong>"Escanear factura"</strong> (OCR) para que el sistema relea los totales y percepciones desde la imagen/PDF.</li>
+                </ul>
+                <p class="small text-muted mb-0">Al guardar, la OC pasa a estado <strong>"facturada"</strong> y queda vinculada a esta factura.</p>
+
+                <hr>
+                <ul class="mb-0">
+                    <li>Una vez guardada <strong>no se puede editar</strong> (solo anular + cargar de nuevo).</li>
+                    <li>Los <strong>combos</strong> no se pueden comprar: comprá los productos base.</li>
+                    <li>En facturas <strong>A/B/C</strong> los totales de IVA deben ir cargados, sino no deja guardar (para que el libro IVA quede correcto). En <strong>CI</strong> esto no aplica.</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Ayuda del Escaneo OCR -->
+<div class="modal fade" id="modalAyudaOCR" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-camera me-2"></i>Cómo usar el escaneo automático de facturas
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <div class="alert alert-info mb-3">
+                    <i class="fas fa-lightbulb me-1"></i>
+                    <strong>¿Qué hace esto?</strong> El sistema lee una foto o PDF de la factura del proveedor con IA
+                    y <strong>completa automáticamente</strong> los campos del formulario:
+                    fecha, tipo, punto de venta, número, netos gravados, IVA, percepciones y los 17 ítems con cantidad y precio.
+                    Te ahorra de 5 a 10 minutos de tipeo por factura.
+                </div>
+
+                <h6 class="text-primary fw-bold"><i class="fas fa-list-ol me-1"></i> Paso a paso</h6>
+                <ol>
+                    <li class="mb-2">
+                        <strong>Click en "Escanear factura"</strong>.<br>
+                        En celular abre la cámara, en PC abre el explorador de archivos.
+                    </li>
+                    <li class="mb-2">
+                        <strong>Elegí la foto o PDF</strong> de la factura del proveedor.<br>
+                        <span class="text-muted small">(Aceptamos JPG, PNG, WebP y PDF — hasta 10 MB)</span>
+                    </li>
+                    <li class="mb-2">
+                        <strong>Esperá 10 a 20 segundos</strong> mientras la IA analiza la imagen.<br>
+                        <span class="text-muted small">Verás el cartel azul "Analizando factura con IA..."</span>
+                    </li>
+                    <li class="mb-2">
+                        <strong>Revisá los datos auto-completados</strong>.<br>
+                        El proveedor, fecha, número, totales y percepciones deberían estar cargados.
+                    </li>
+                    <li class="mb-2">
+                        <strong>Vinculá los ítems <span class="badge bg-warning text-dark">amarillos</span></strong>
+                        con tus productos (ver sección "Vincular ítems" más abajo).
+                    </li>
+                    <li class="mb-2">
+                        <strong>Guardar Factura</strong>. El sistema procesa stock, costo y precios normalmente.
+                    </li>
+                </ol>
+
+                <hr>
+
+                <h6 class="text-primary fw-bold"><i class="fas fa-camera me-1"></i> ¿Cómo sacar una buena foto?</h6>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <div class="p-2 border border-success rounded">
+                            <strong class="text-success"><i class="fas fa-check me-1"></i> SÍ</strong>
+                            <ul class="small mb-0 mt-1">
+                                <li>Con buena luz (día, sin sombras)</li>
+                                <li>Factura derecha y plana</li>
+                                <li>Cerca: que ocupe toda la pantalla</li>
+                                <li>Bien enfocada (tocá la pantalla para enfocar)</li>
+                                <li>Foto debe pesar <strong>al menos 500 KB</strong></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-2 border border-danger rounded">
+                            <strong class="text-danger"><i class="fas fa-times me-1"></i> NO</strong>
+                            <ul class="small mb-0 mt-1">
+                                <li>Con sombras sobre los números</li>
+                                <li>Factura torcida o arrugada</li>
+                                <li>Borrosa o movida</li>
+                                <li>Muy lejos (se ven los márgenes)</li>
+                                <li>Mandada por WhatsApp (comprime demasiado)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <p class="small text-muted mt-2 mb-0">
+                    <i class="fas fa-info-circle"></i> Para pasar la foto del celular al PC sin que pierda calidad,
+                    usá <strong>cable USB</strong>, <strong>Google Drive</strong>, <strong>OneDrive</strong> o <strong>Telegram</strong>.
+                    <strong>Evitá WhatsApp</strong> porque comprime las fotos a un 30% y baja la calidad de lectura.
+                </p>
+
+                <hr>
+
+                <h6 class="text-primary fw-bold"><i class="fas fa-link me-1"></i> Vincular ítems (muy importante)</h6>
+                <p class="small">
+                    Los ítems que salen en <span class="badge bg-warning text-dark">amarillo</span> con el texto
+                    <code>[SIN VINCULAR]</code> necesitan que les digas a qué producto de tu sistema corresponden.
+                    Esto se hace <strong>solo la primera vez</strong> que cargás cada producto de cada proveedor.
+                </p>
+                <ol class="small">
+                    <li>Click en el botón <button class="btn btn-sm btn-warning"><i class="fas fa-link"></i> Vincular</button> de la fila amarilla.</li>
+                    <li>Se abre una ventanita con un buscador <strong>pre-cargado con el nombre del producto</strong>.</li>
+                    <li>Elegí el producto correcto de la lista.</li>
+                    <li>Si el producto <strong>no existe</strong>, cerrás la ventana y usás
+                        <button class="btn btn-sm btn-success"><i class="fas fa-plus me-1"></i> Alta Rápida</button>
+                        para crearlo rápido.</li>
+                    <li>Click en <strong>Vincular</strong>. La fila pasa a blanca y queda listo.</li>
+                </ol>
+                <div class="alert alert-success py-2 small mb-0">
+                    <i class="fas fa-magic me-1"></i>
+                    <strong>Atajo importante:</strong> al vincular dejá tildada la opción
+                    <em>"Guardar el código X en Cód. de Proveedor"</em>.
+                    La <strong>próxima factura</strong> del mismo proveedor va a vincular ese producto
+                    <strong>automáticamente</strong>, sin que tengas que hacer click.
+                </div>
+
+                <hr>
+
+                <h6 class="text-primary fw-bold"><i class="fas fa-eye me-1"></i> ¿Qué SIEMPRE hay que revisar?</h6>
+                <p class="small">La IA es muy precisa pero no es perfecta. Antes de darle "Guardar Factura", verificá <strong>rápido</strong>:</p>
+                <ul class="small">
+                    <li><strong>Número de factura</strong> y <strong>fecha</strong> (que coincidan con el papel)</li>
+                    <li><strong>TOTAL FACTURA</strong> abajo a la derecha (debe coincidir <strong>al centavo</strong> con la factura real)</li>
+                    <li><strong>Cantidades</strong> de los ítems (sobre todo los que tienen decimales tipo <code>33,155 kg</code>)</li>
+                    <li>Que <strong>no queden ítems amarillos</strong> sin vincular</li>
+                </ul>
+                <div class="alert alert-warning py-2 small mb-0">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    <strong>Si el TOTAL no cuadra</strong> con la factura real, hay un error de lectura.
+                    Revisá los netos gravados, percepciones, o la cantidad de algún ítem.
+                    <strong>No guardes si el total no coincide.</strong>
+                </div>
+
+                <hr>
+
+                <h6 class="text-primary fw-bold"><i class="fas fa-dollar-sign me-1"></i> ¿Cuánto cuesta?</h6>
+                <p class="small">
+                    Cada escaneo cuesta aproximadamente <strong>US$ 0,04</strong> (~$55 pesos argentinos).
+                    El costo exacto se muestra cada vez arriba, donde dice "costo OCR: US$X.XXXX".
+                    Procesando 50 facturas por mes gastás apenas <strong>~US$ 2</strong>.
+                </p>
+
+                <hr>
+
+                <h6 class="text-danger fw-bold"><i class="fas fa-exclamation-circle me-1"></i> Limitaciones</h6>
+                <ul class="small mb-0">
+                    <li>La IA <strong>puede equivocarse</strong> con fotos borrosas o mal iluminadas. <strong>Siempre revisá antes de guardar.</strong></li>
+                    <li>Las <strong>cantidades con decimales</strong> (ej: 33,155 kg) a veces se leen mal. Verificá los primeros 2-3 ítems siempre.</li>
+                    <li>Los <strong>códigos de producto del proveedor</strong> pueden tener errores tipográficos (ej: "FUET" en vez de "PEPPERONI"). Revisá las descripciones.</li>
+                    <li>Las <strong>facturas viejas</strong> (pre-2021) o <strong>manuscritas</strong> pueden no leerse bien.</li>
+                </ul>
+
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ⭐ NUEVO: Escaneo OCR de factura de proveedor -->
+<div class="card mb-3 border-primary">
+    <div class="card-body py-3">
+        <div class="d-flex align-items-center flex-wrap gap-3">
+            <div style="font-size: 2rem; color: var(--bs-primary);">
+                <i class="fas fa-camera"></i>
+            </div>
+            <div class="flex-grow-1">
+                <div class="fw-bold">
+                    <i class="fas fa-magic me-1"></i> Cargar desde foto o PDF
+                    <button class="btn btn-sm btn-link p-0 ms-2" data-bs-toggle="modal" data-bs-target="#modalAyudaOCR" title="¿Cómo funciona el escaneo de facturas?">
+                        <i class="fas fa-question-circle"></i> ¿Cómo usarlo?
+                    </button>
+                </div>
+                <div class="text-muted small">
+                    Subí una foto o PDF de la factura del proveedor y el sistema completa los campos automáticamente.
+                    <strong>Siempre revisá los datos antes de guardar.</strong>
+                </div>
+            </div>
+            <div>
+                <input type="file"
+                       id="inputFacturaOCR"
+                       accept="image/*,application/pdf"
+                       capture="environment"
+                       style="display:none"
+                       onchange="procesarFacturaOCR(this)">
+                <button type="button"
+                        class="btn btn-primary btn-lg"
+                        onclick="document.getElementById('inputFacturaOCR').click()">
+                    <i class="fas fa-camera me-2"></i> Escanear factura
+                </button>
+            </div>
+        </div>
+        <div id="ocrStatus" class="mt-2" style="display:none;"></div>
+    </div>
+</div>
+
+<!-- Banner Comprobante Interno (se muestra cuando tipo=CI) -->
+<div id="bannerCI" class="alert alert-warning d-flex align-items-center mt-3 mb-3" role="alert" style="display:none;">
+    <i class="fas fa-file-alt fa-2x me-3 text-warning"></i>
+    <div class="flex-grow-1">
+        <div class="fw-bold">
+            <i class="fas fa-info-circle me-1"></i>
+            Comprobante Interno (recibo / remito / orden del proveedor)
+        </div>
+        <div class="small">
+            <strong>NO va al Libro IVA Compras.</strong>
+            Sí actualiza <strong>stock, costo, precios de venta y cuenta corriente del proveedor</strong>.
+            Numeración libre — tipeá el número tal cual viene en el papel.
+        </div>
+    </div>
+</div>
+
+<!-- Cabecera -->
+<div class="card mb-3">
+    <div class="card-header bg-light fw-bold"><i class="fas fa-file-invoice me-2"></i>Cabecera</div>
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-md-5">
+                <label class="form-label small fw-bold d-flex justify-content-between align-items-center">
+                    <span>Proveedor *</span>
+                    <a href="{{ url_for('compras.codigos_proveedor') }}"
+                       target="_blank"
+                       class="btn btn-sm btn-outline-secondary py-0 px-2"
+                       style="font-size: 0.75rem;"
+                       title="Abrir ABM de códigos de proveedor en nueva pestaña">
+                        <i class="fas fa-cog me-1"></i> Códigos de Proveedor
+                    </a>
+                </label>
+                <select id="proveedor" class="form-select">
+                    <option value="">Seleccione...</option>
+                    {% for p in proveedores %}
+                    <option value="{{ p.id }}" data-iva="{{ p.condicion_iva }}">{{ p.razon_social }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Fecha *</label>
+                <input type="date" id="fecha" class="form-control">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small fw-bold">Tipo *</label>
+                <select id="tipo" class="form-select" onchange="aplicarModoCI()">
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                    <option value="CI">CI</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold" id="lblPV">Pto. Venta *</label>
+                <input type="text" id="pv" class="form-control" placeholder="00001" maxlength="5">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold" id="lblNumero">Número *</label>
+                <input type="text" id="numero" class="form-control" placeholder="00000001" maxlength="8">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detalle de artículos -->
+<div class="card mb-3">
+    <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-list me-2"></i>Detalle de Artículos</span>
+        <button class="btn btn-sm btn-success" onclick="abrirAltaRapida()">
+            <i class="fas fa-plus me-1"></i> Alta Rápida de Producto
+        </button>
+    </div>
+    <div class="card-body">
+        <!-- Buscador de producto -->
+        <div class="row g-2 mb-3">
+            <div class="col-md-6">
+                <label class="form-label small fw-bold">Buscar producto (código interno, código de proveedor o nombre)</label>
+                <div class="position-relative">
+                    <input type="text" id="buscarProd" class="form-control" placeholder="Escriba para buscar..." autocomplete="off">
+                    <div id="sugerencias" class="list-group position-absolute w-100" style="z-index:1000; max-height:300px; overflow-y:auto; display:none;"></div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Cantidad</label>
+                <input type="number" id="inpCantidad" class="form-control text-end" step="0.001" min="0.001" value="1">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Precio Unit. (sin IVA)</label>
+                <input type="number" id="inpPrecio" class="form-control text-end" step="0.0001" min="0" value="0">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold" title="Bonificación que aplica el proveedor a esta línea (porcentaje)">Desc. % <i class="fas fa-info-circle text-muted small"></i></label>
+                <input type="number" id="inpDescuento" class="form-control text-end" step="0.01" min="0" max="99.99" value="0">
+            </div>
+        </div>
+        <div class="row g-2 mb-3">
+            <div class="col-md-8">
+                <div id="prodSeleccionado" class="alert alert-info py-2 mb-0" style="display:none;"></div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold">Cód. Proveedor</label>
+                <div class="input-group">
+                    <input type="text" id="inpCodigoProv" class="form-control" placeholder="Opcional">
+                    <button class="btn btn-outline-primary" type="button" onclick="guardarCodigoProvAlInstante()" title="Guardar código del proveedor al instante (sin esperar a guardar la factura)">
+                        <i class="fas fa-save"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-primary w-100" onclick="agregarItem()">
+                    <i class="fas fa-plus me-1"></i> Agregar
+                </button>
+            </div>
+        </div>
+
+        <!-- Tabla de items -->
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th class="text-end">Cant.</th>
+                        <th class="text-end">P. Unit. s/IVA</th>
+                        <th class="text-end" style="width:90px;">Desc. %</th>
+                        <th class="text-center">IVA%</th>
+                        <th class="text-end">Subt. s/IVA</th>
+                        <th class="text-end">Subt. c/IVA</th>
+                        <th class="text-end">Costo unit. final</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="tblItems">
+                    <tr><td colspan="10" class="text-center text-muted py-3">Sin artículos cargados</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Totales IVA (manual) + Ajustes -->
+<div class="row g-3 mb-3">
+    <div class="col-md-7" id="wrapTotalesIVA">
+        <div class="card h-100">
+            <div class="card-header bg-light fw-bold"><i class="fas fa-calculator me-2"></i>Totales IVA (carga manual para libro IVA)</div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Neto Gravado 21%</label>
+                        <input type="number" id="neto21" class="form-control text-end" step="0.01" value="0" oninput="calcularTotal()">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">IVA 21%</label>
+                        <input type="number" id="iva21" class="form-control text-end" step="0.01" value="0" oninput="calcularTotal()">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Neto Gravado 10.5%</label>
+                        <input type="number" id="neto105" class="form-control text-end" step="0.01" value="0" oninput="calcularTotal()">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">IVA 10.5%</label>
+                        <input type="number" id="iva105" class="form-control text-end" step="0.01" value="0" oninput="calcularTotal()">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Neto No Gravado</label>
+                        <input type="number" id="netoNG" class="form-control text-end" step="0.01" value="0" oninput="calcularTotal()">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Otros Impuestos</label>
+                        <input type="number" id="otros" class="form-control text-end" step="0.01" value="0" oninput="calcularTotal()">
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="autoCalcularIva()">
+                    <i class="fas fa-magic me-1"></i> Calcular IVA desde items
+                </button>
+                <small class="text-muted d-block mt-1">Carga los netos/IVA manualmente para respetar los totales exactos de la factura del proveedor. El botón "Calcular IVA desde items" los sugiere a partir del detalle.</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5" id="wrapAjustes">
+        <div class="card h-100">
+            <div class="card-header bg-light fw-bold">
+                <i class="fas fa-percent me-2"></i><span id="lblAjustesHeader">Ajustes y Percepciones</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Descuento (prorratea)</label>
+                        <input type="number" id="descuento" class="form-control text-end" step="0.01" value="0" oninput="calcularTotal()">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Flete (prorratea)</label>
+                        <input type="number" id="flete" class="form-control text-end" step="0.01" value="0" oninput="calcularTotal()">
+                    </div>
+                    <div class="col-md-4 col-perc">
+                        <label class="form-label small fw-bold">Perc. IVA</label>
+                        <input type="number" id="percIva" class="form-control text-end" step="0.01" value="0" oninput="calcularTotal()">
+                    </div>
+                    <div class="col-md-4 col-perc">
+                        <label class="form-label small fw-bold">Perc. IIBB</label>
+                        <input type="number" id="percIibb" class="form-control text-end" step="0.01" value="0" oninput="calcularTotal()">
+                    </div>
+                    <div class="col-md-4 col-perc">
+                        <label class="form-label small fw-bold">Perc. Ganancias</label>
+                        <input type="number" id="percGan" class="form-control text-end" step="0.01" value="0" oninput="calcularTotal()">
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-6 fw-bold">TOTAL <span id="lblTotalLabel">FACTURA</span>:</div>
+                    <div class="col-6 text-end fs-4 fw-bold text-primary" id="lblTotal">$0,00</div>
+                </div>
+                <small class="text-muted d-block mt-1" id="lblTotalAyuda">El total lo calcula sumando netos + IVAs + no gravado + otros + percepciones + flete − descuento.</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <label class="form-label small fw-bold">Observaciones</label>
+        <textarea id="observaciones" class="form-control" rows="2"></textarea>
+    </div>
+</div>
+
+<div class="text-end mb-5">
+    <a href="{{ url_for('compras.listado') }}" class="btn btn-outline-secondary me-2">Cancelar</a>
+    <button class="btn btn-success btn-lg" onclick="guardar()">
+        <i class="fas fa-save me-1"></i> Guardar Factura
+    </button>
+</div>
+
+<!-- Modal Alta Rápida Producto -->
+<div class="modal fade" id="modalAlta" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-plus me-2"></i>Alta Rápida de Producto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Código interno *</label>
+                        <input type="text" id="arCodigo" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Cód. Proveedor</label>
+                        <input type="text" id="arCodigoProv" class="form-control">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Nombre *</label>
+                        <input type="text" id="arNombre" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">IVA %</label>
+                        <select id="arIva" class="form-select">
+                            <option value="21">21%</option>
+                            <option value="10.5">10.5%</option>
+                            <option value="0">0%</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Margen (%) Precio 1</label>
+                        <input type="number" id="arMargen" class="form-control text-end" step="0.01" value="30">
+                    </div>
+                </div>
+                <small class="text-muted d-block mt-2">Se crea con stock y costo en 0. El costo se actualiza automáticamente al guardar esta factura. Los márgenes 2 a 5 los cargás después en el ABM de productos.</small>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-primary" onclick="confirmarAltaRapida()">Crear producto</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Vincular Item OCR -->
+<div class="modal fade" id="modalVincular" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="fas fa-link me-2"></i>Vincular item a un producto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 small">
+                    <strong><i class="fas fa-info-circle me-1"></i> Item de la factura del proveedor:</strong>
+                    <div id="vincItemInfo" class="mt-1"></div>
+                </div>
+
+                <label class="form-label small fw-bold">
+                    Buscá el producto en tu sistema (código interno, código de proveedor o nombre)
+                </label>
+                <input type="text" id="vincBuscar" class="form-control" placeholder="Escriba para buscar..." autocomplete="off">
+                <small class="text-muted">
+                    Ya busqué algunas coincidencias. Si el producto no aparece, probá con otras palabras, o
+                    <button type="button" class="btn btn-link p-0 align-baseline" onclick="vincAbrirAltaRapida()">
+                        crealo con Alta Rápida →
+                    </button>
+                </small>
+                <div id="vincSugerencias" class="list-group mt-2" style="max-height:300px; overflow-y:auto;"></div>
+
+                <div id="vincSeleccionado" class="alert alert-success mt-3 py-2" style="display:none;"></div>
+
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="vincGuardarCodProv" checked>
+                    <label class="form-check-label small" for="vincGuardarCodProv">
+                        Guardar el código <code id="vincCodProvDisplay"></code> en <strong>Cód. de Proveedor</strong>
+                        de este producto (para que la próxima factura se vincule automáticamente)
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button class="btn btn-success" onclick="confirmarVinculacion()" id="btnConfirmarVinc" disabled>
+                    <i class="fas fa-link me-1"></i> Vincular
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let itemsCarrito = [];
+let prodElegido = null;
+let timeoutBusca = null;
+
+// ================== UTILIDADES ==================
+function fmt(n) {
+    return '$' + Number(n || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function d(v) { return parseFloat(v) || 0; }
+
+// ================== MODO CI (Comprobante Interno) ==================
+// CI = recibo/remito/orden del proveedor que NO es factura oficial.
+// - NO va al Libro IVA Compras (el backend lo excluye filtrando tipo='CI')
+// - Sí actualiza stock, costo, precios de venta y cuenta corriente del proveedor
+// - Numeración LIBRE (sin padding zfill, sin formato fijo de PV)
+// - El bloque de Totales IVA y las percepciones quedan ocultos
+// - Flete y descuento siguen aplicando (prorratean al costo final del producto)
+function esModoCI() {
+    const t = document.getElementById('tipo');
+    return t && t.value === 'CI';
+}
+
+function aplicarModoCI() {
+    const ci = esModoCI();
+
+    // Banner amarillo arriba
+    const banner = document.getElementById('bannerCI');
+    if (banner) banner.style.display = ci ? '' : 'none';
+
+    // Card de Totales IVA: oculto en CI
+    const wrapIva = document.getElementById('wrapTotalesIVA');
+    if (wrapIva) wrapIva.style.display = ci ? 'none' : '';
+
+    // Ajustes y Percepciones: en CI ocultamos solo las percepciones (3 cols)
+    // y dejamos Descuento + Flete (siguen prorrateando al costo).
+    document.querySelectorAll('.col-perc').forEach(el => {
+        el.style.display = ci ? 'none' : '';
+    });
+
+    // Cambiar título del card y label del total
+    const hdr = document.getElementById('lblAjustesHeader');
+    if (hdr) hdr.textContent = ci ? 'Ajustes (Descuento / Flete)' : 'Ajustes y Percepciones';
+    const lblTotalLabel = document.getElementById('lblTotalLabel');
+    if (lblTotalLabel) lblTotalLabel.textContent = ci ? 'COMPROBANTE' : 'FACTURA';
+
+    // El ancho del card de ajustes pasa a ocupar la fila completa cuando CI
+    const wrapAjustes = document.getElementById('wrapAjustes');
+    if (wrapAjustes) {
+        wrapAjustes.classList.toggle('col-md-12', ci);
+        wrapAjustes.classList.toggle('col-md-5', !ci);
+    }
+
+    // Labels y placeholders del PV y Número
+    const lblPV = document.getElementById('lblPV');
+    const lblNumero = document.getElementById('lblNumero');
+    const pv = document.getElementById('pv');
+    const numero = document.getElementById('numero');
+    if (ci) {
+        if (lblPV) lblPV.innerHTML = 'Pto. Venta (libre)';
+        if (lblNumero) lblNumero.innerHTML = 'N° comprobante (libre) *';
+        if (pv) { pv.placeholder = 'libre'; pv.removeAttribute('maxlength'); }
+        if (numero) { numero.placeholder = 'tal cual viene'; numero.setAttribute('maxlength', '20'); }
+        // Limpiar netos/IVA/percepciones (no aplican)
+        ['neto21','iva21','neto105','iva105','netoNG','otros','percIva','percIibb','percGan'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '0';
+        });
+    } else {
+        if (lblPV) lblPV.innerHTML = 'Pto. Venta *';
+        if (lblNumero) lblNumero.innerHTML = 'Número *';
+        if (pv) { pv.placeholder = '00001'; pv.setAttribute('maxlength', '5'); }
+        if (numero) { numero.placeholder = '00000001'; numero.setAttribute('maxlength', '8'); }
+    }
+
+    // Recalcular total con el nuevo modo
+    if (typeof calcularTotal === 'function') calcularTotal();
+}
+
+// ================== BUSCADOR ==================
+document.getElementById('buscarProd').addEventListener('input', function() {
+    clearTimeout(timeoutBusca);
+    const q = this.value.trim();
+    if (q.length < 2) {
+        document.getElementById('sugerencias').style.display = 'none';
+        return;
+    }
+    timeoutBusca = setTimeout(() => buscar(q), 250);
+});
+
+document.getElementById('buscarProd').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const q = this.value.trim();
+        if (q) buscar(q, true); // true = auto-seleccionar si hay una sola coincidencia exacta
+    }
+});
+
+function buscar(q, autoSelect) {
+    const prov = document.getElementById('proveedor').value || 0;
+    fetch(`/compras/api/buscar_producto?q=${encodeURIComponent(q)}&proveedor_id=${prov}`)
+        .then(r => r.json())
+        .then(prods => {
+            const cont = document.getElementById('sugerencias');
+            if (!prods.length) {
+                cont.innerHTML = '<div class="list-group-item text-muted">Sin coincidencias. Usá "Alta Rápida" si el producto no existe.</div>';
+                cont.style.display = 'block';
+                return;
+            }
+            // Auto-seleccionar si coincide exactamente el código o código de proveedor
+            if (autoSelect) {
+                const exact = prods.find(p => p.codigo === q || p.codigo_proveedor === q);
+                if (exact) { seleccionarProd(exact); return; }
+            }
+            cont.innerHTML = prods.map(p => `
+                <a href="#" class="list-group-item list-group-item-action" onclick="seleccionarProdById(${p.id}); return false;">
+                    <div class="d-flex justify-content-between">
+                        <span><strong>${p.codigo}</strong>${p.codigo_proveedor ? ' <small class="text-muted">(prov: ' + p.codigo_proveedor + ')</small>' : ''} - ${p.nombre}</span>
+                        <small class="text-muted">Stock: ${p.stock} | Costo: ${fmt(p.costo)} | IVA: ${p.iva}%</small>
+                    </div>
+                </a>
+            `).join('');
+            cont.style.display = 'block';
+            // Guardar para seleccionar por id
+            window._prodCache = {};
+            prods.forEach(p => window._prodCache[p.id] = p);
+        });
+}
+
+function seleccionarProdById(id) {
+    const p = window._prodCache[id];
+    if (p) seleccionarProd(p);
+}
+
+function seleccionarProd(p) {
+    if (p.es_combo) {
+        Swal.fire({icon: 'warning', title: 'Producto no válido', text: 'Los combos no se pueden comprar. Cargá los productos base.'});
+        return;
+    }
+    prodElegido = p;
+    document.getElementById('buscarProd').value = p.codigo;
+    document.getElementById('inpCodigoProv').value = p.codigo_proveedor || '';
+    document.getElementById('sugerencias').style.display = 'none';
+    document.getElementById('prodSeleccionado').style.display = 'block';
+    document.getElementById('prodSeleccionado').innerHTML =
+        `<strong>${p.codigo}</strong> - ${p.nombre} | Stock actual: <strong>${p.stock}</strong> | Costo actual: <strong>${fmt(p.costo)}</strong> | IVA: <strong>${p.iva}%</strong>`;
+    document.getElementById('inpCantidad').focus();
+    document.getElementById('inpCantidad').select();
+}
+
+// ================== GUARDAR CÓDIGO DEL PROVEEDOR AL INSTANTE ==================
+function guardarCodigoProvAlInstante() {
+    if (!prodElegido) { Swal.fire({icon: 'warning', title: 'Primero seleccioná un producto'}); return; }
+
+    const proveedor_id = document.getElementById('proveedor').value;
+    if (!proveedor_id) { Swal.fire({icon: 'warning', title: 'Primero seleccioná un proveedor (arriba)'}); return; }
+
+    const codigo_proveedor = document.getElementById('inpCodigoProv').value.trim();
+    if (!codigo_proveedor) { Swal.fire({icon: 'warning', title: 'Ingresá un código de proveedor'}); return; }
+
+    fetch('/compras/api/codigo_proveedor/guardar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            producto_id: prodElegido.id,
+            proveedor_id: parseInt(proveedor_id),
+            codigo_proveedor
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) { Swal.fire({icon: 'error', title: 'Error', text: data.error}); return; }
+        // Actualizar el cartel azul con el nuevo código
+        prodElegido.codigo_proveedor = codigo_proveedor;
+        Swal.fire({icon: 'success', title: 'Código guardado', text: `Código "${codigo_proveedor}" guardado para este producto.`, timer: 1800, timerProgressBar: true, showConfirmButton: false});
+    });
+}
+
+// ================== AGREGAR AL CARRITO ==================
+function agregarItem() {
+    if (!prodElegido) { Swal.fire({icon: 'warning', title: 'Seleccioná un producto primero'}); return; }
+    const cant = d(document.getElementById('inpCantidad').value);
+    const precio = d(document.getElementById('inpPrecio').value);
+    const desc = d(document.getElementById('inpDescuento').value);
+    const codigoProv = document.getElementById('inpCodigoProv').value.trim();
+
+    if (cant <= 0) { Swal.fire({icon: 'warning', title: 'Cantidad inválida'}); return; }
+    if (precio <= 0) { Swal.fire({icon: 'warning', title: 'Precio unitario debe ser > 0'}); return; }
+    if (desc < 0 || desc >= 100) { Swal.fire({icon: 'warning', title: 'Descuento inválido', text: 'El descuento debe estar entre 0 y 99.99 %'}); return; }
+
+    // Si el producto ya está en el carrito, sumar
+    const existente = itemsCarrito.find(i => i.producto_id === prodElegido.id);
+    if (existente) {
+        existente.cantidad = +(existente.cantidad + cant).toFixed(3);
+        existente.precio_unitario = precio; // actualizar precio
+        existente.descuento_porcentaje = desc; // actualizar descuento
+    } else {
+        itemsCarrito.push({
+            producto_id: prodElegido.id,
+            codigo: prodElegido.codigo,
+            nombre: prodElegido.nombre,
+            cantidad: cant,
+            precio_unitario: precio,
+            descuento_porcentaje: desc,
+            iva: prodElegido.iva,
+            codigo_proveedor: codigoProv
+        });
+    }
+    resetBuscador();
+    dibujarTabla();
+    calcularTotal();
+}
+
+function resetBuscador() {
+    prodElegido = null;
+    document.getElementById('buscarProd').value = '';
+    document.getElementById('inpCantidad').value = '1';
+    document.getElementById('inpPrecio').value = '0';
+    document.getElementById('inpDescuento').value = '0';
+    document.getElementById('inpCodigoProv').value = '';
+    document.getElementById('prodSeleccionado').style.display = 'none';
+    document.getElementById('buscarProd').focus();
+}
+
+function quitarItem(idx) {
+    itemsCarrito.splice(idx, 1);
+    dibujarTabla();
+    calcularTotal();
+}
+
+// Editar el COSTO UNIT. FINAL de una línea (cálculo inverso: recalcula Precio Unit. s/IVA)
+// Fórmula directa: costoFinal = precio_unit * (1 - desc/100) * (1 + iva/100) * (1 + factor_prorrateo)
+// Inversa:         precio_unit = costoFinal / ((1 - desc/100) * (1 + iva/100) * (1 + factor_prorrateo))
+function actualizarCostoFinalLinea(idx, valor) {
+    const v = parseFloat(valor);
+    if (isNaN(v) || v <= 0) {
+        Swal.fire({icon: 'warning', title: 'Costo final inválido', text: 'Debe ser mayor a 0'});
+        dibujarTabla();
+        return;
+    }
+    if (!itemsCarrito[idx]) return;
+    const item = itemsCarrito[idx];
+
+    // Calcular factor de prorrateo actual (mismo cálculo que dibujarTabla)
+    const flete = d(document.getElementById('flete').value);
+    const desc = d(document.getElementById('descuento').value);
+    const ajuste = flete - desc;
+    const sumaCI = itemsCarrito.reduce((s, i) => {
+        const descLin = i.descuento_porcentaje || 0;
+        const precioNeto = i.precio_unitario * (1 - descLin/100);
+        return s + i.cantidad * precioNeto * (1 + i.iva/100);
+    }, 0);
+    const factor = sumaCI > 0 ? ajuste / sumaCI : 0;
+
+    // Calcular hacia atrás
+    const descLin = item.descuento_porcentaje || 0;
+    const denominador = (1 - descLin/100) * (1 + item.iva/100) * (1 + factor);
+    if (denominador <= 0) {
+        Swal.fire({icon: 'warning', title: 'No se puede calcular el precio', text: 'Revisá descuento e IVA de la línea'});
+        dibujarTabla();
+        return;
+    }
+    const nuevoPrecio = v / denominador;
+    item.precio_unitario = nuevoPrecio;
+    dibujarTabla();
+    calcularTotal();
+}
+
+// Editar la CANTIDAD de una línea (input inline en la grilla)
+function actualizarCantidadLinea(idx, valor) {
+    const v = parseFloat(valor);
+    if (isNaN(v) || v <= 0) {
+        Swal.fire({icon: 'warning', title: 'Cantidad inválida', text: 'Debe ser mayor a 0'});
+        dibujarTabla(); // revertir visual
+        return;
+    }
+    if (!itemsCarrito[idx]) return;
+    itemsCarrito[idx].cantidad = v;
+    dibujarTabla();
+    calcularTotal();
+}
+
+// Editar el PRECIO UNITARIO (sin IVA) de una línea (input inline en la grilla)
+function actualizarPrecioLinea(idx, valor) {
+    const v = parseFloat(valor);
+    if (isNaN(v) || v < 0) {
+        Swal.fire({icon: 'warning', title: 'Precio inválido', text: 'Debe ser ≥ 0'});
+        dibujarTabla(); // revertir visual
+        return;
+    }
+    if (!itemsCarrito[idx]) return;
+    itemsCarrito[idx].precio_unitario = v;
+    dibujarTabla();
+    calcularTotal();
+}
+
+// Editar el descuento de una línea (input inline en la grilla)
+function actualizarDescuentoLinea(idx, valor) {
+    const v = parseFloat(valor);
+    if (isNaN(v) || v < 0 || v >= 100) {
+        Swal.fire({icon: 'warning', title: 'Descuento inválido', text: 'Debe estar entre 0 y 99.99 %'});
+        dibujarTabla(); // revertir visual
+        return;
+    }
+    if (!itemsCarrito[idx]) return;
+    itemsCarrito[idx].descuento_porcentaje = v;
+    dibujarTabla();
+    calcularTotal();
+}
+
+function dibujarTabla() {
+    const tbody = document.getElementById('tblItems');
+    if (!itemsCarrito.length) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">Sin artículos cargados</td></tr>';
+        return;
+    }
+    // Prorrateo para mostrar costo final en vivo (sobre subtotales NETO con descuento aplicado)
+    const flete = d(document.getElementById('flete').value);
+    const desc = d(document.getElementById('descuento').value);
+    const ajuste = flete - desc;
+    const sumaCI = itemsCarrito.reduce((s, i) => {
+        const descLin = i.descuento_porcentaje || 0;
+        const precioNeto = i.precio_unitario * (1 - descLin/100);
+        return s + i.cantidad * precioNeto * (1 + i.iva/100);
+    }, 0);
+    const factor = sumaCI > 0 ? ajuste / sumaCI : 0;
+
+    tbody.innerHTML = itemsCarrito.map((i, idx) => {
+        const descLin = i.descuento_porcentaje || 0;
+        const precioNeto = i.precio_unitario * (1 - descLin/100);
+        const subSI = i.cantidad * precioNeto;
+        const subCI = subSI * (1 + i.iva/100);
+        const costoUnitBase = precioNeto * (1 + i.iva/100);
+        const costoFinal = costoUnitBase * (1 + factor);
+        const sinVincular = (i.producto_id === null || i.producto_id === undefined);
+        const filaClass = sinVincular ? 'table-warning' : (descLin > 0 ? 'table-info bg-opacity-25' : '');
+        const btnVincular = sinVincular
+            ? `<button class="btn btn-sm btn-warning me-1" onclick="abrirVincular(${idx})" title="Vincular este item a un producto existente"><i class="fas fa-link"></i> Vincular</button>`
+            : '';
+        return `
+            <tr class="${filaClass}">
+                <td><code>${i.codigo}</code></td>
+                <td>${i.nombre}</td>
+                <td class="text-end p-1">
+                    <input type="number" class="form-control form-control-sm text-end"
+                           style="width:90px; display:inline-block;"
+                           step="0.001" min="0"
+                           value="${i.cantidad}"
+                           onchange="actualizarCantidadLinea(${idx}, this.value)"
+                           title="Cantidad">
+                </td>
+                <td class="text-end p-1">
+                    <input type="number" class="form-control form-control-sm text-end"
+                           style="width:110px; display:inline-block;"
+                           step="0.01" min="0"
+                           value="${i.precio_unitario}"
+                           onchange="actualizarPrecioLinea(${idx}, this.value)"
+                           title="Precio unitario sin IVA">
+                </td>
+                <td class="text-end p-1">
+                    <input type="number" class="form-control form-control-sm text-end"
+                           style="width:75px; display:inline-block;"
+                           step="0.01" min="0" max="99.99"
+                           value="${descLin.toFixed(2)}"
+                           onchange="actualizarDescuentoLinea(${idx}, this.value)"
+                           title="Descuento de la línea (%)">
+                </td>
+                <td class="text-center">${i.iva}%</td>
+                <td class="text-end">${fmt(subSI)}</td>
+                <td class="text-end">${fmt(subCI)}</td>
+                <td class="text-end p-1">
+                    <input type="number" class="form-control form-control-sm text-end fw-bold text-primary"
+                           style="width:120px; display:inline-block;"
+                           step="0.01" min="0"
+                           value="${costoFinal.toFixed(2)}"
+                           onchange="actualizarCostoFinalLinea(${idx}, this.value)"
+                           title="Costo unit. final (editable — recalcula Precio Unit. s/IVA hacia atrás)">
+                </td>
+                <td class="text-center" style="white-space:nowrap;">
+                    ${btnVincular}
+                    <button class="btn btn-sm btn-outline-danger" onclick="quitarItem(${idx})" title="Quitar"><i class="fas fa-times"></i></button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// ================== TOTALES ==================
+function calcularTotal() {
+    const desc = d(document.getElementById('descuento').value);
+    const flete = d(document.getElementById('flete').value);
+
+    let total;
+    if (esModoCI()) {
+        // En CI no hay netos/IVAs/percepciones manuales — el total sale de los ítems.
+        // Para cada item: subtotal_con_iva = cant * precio_unitario * (1 - desc/100) * (1 + iva/100)
+        let sumaItems = 0;
+        itemsCarrito.forEach(i => {
+            const descLin = i.descuento_porcentaje || 0;
+            const precioNeto = i.precio_unitario * (1 - descLin / 100);
+            const subSinIva = i.cantidad * precioNeto;
+            const subConIva = subSinIva * (1 + i.iva / 100);
+            sumaItems += subConIva;
+        });
+        total = sumaItems + flete - desc;
+    } else {
+        // Facturas A/B/C: el usuario tipea los netos/IVAs/percepciones manualmente
+        // para que coincidan con los totales de la factura del proveedor (libro IVA).
+        const n21 = d(document.getElementById('neto21').value);
+        const i21 = d(document.getElementById('iva21').value);
+        const n105 = d(document.getElementById('neto105').value);
+        const i105 = d(document.getElementById('iva105').value);
+        const nng = d(document.getElementById('netoNG').value);
+        const otros = d(document.getElementById('otros').value);
+        const piva = d(document.getElementById('percIva').value);
+        const piibb = d(document.getElementById('percIibb').value);
+        const pgan = d(document.getElementById('percGan').value);
+        total = n21 + i21 + n105 + i105 + nng + otros + flete - desc + piva + piibb + pgan;
+    }
+
+    document.getElementById('lblTotal').textContent = fmt(total);
+    dibujarTabla(); // para refrescar costo final ante cambios de flete/desc
+}
+
+function autoCalcularIva() {
+    let n21 = 0, i21 = 0, n105 = 0, i105 = 0, nng = 0;
+    itemsCarrito.forEach(i => {
+        const descLin = i.descuento_porcentaje || 0;
+        const precioNeto = i.precio_unitario * (1 - descLin/100);
+        const sub = i.cantidad * precioNeto;
+        const ivaMonto = sub * i.iva / 100;
+        if (Math.abs(i.iva - 21) < 0.01) { n21 += sub; i21 += ivaMonto; }
+        else if (Math.abs(i.iva - 10.5) < 0.01) { n105 += sub; i105 += ivaMonto; }
+        else { nng += sub; }
+    });
+    document.getElementById('neto21').value = n21.toFixed(2);
+    document.getElementById('iva21').value = i21.toFixed(2);
+    document.getElementById('neto105').value = n105.toFixed(2);
+    document.getElementById('iva105').value = i105.toFixed(2);
+    document.getElementById('netoNG').value = nng.toFixed(2);
+    calcularTotal();
+}
+
+// ================== ALTA RÁPIDA ==================
+function abrirAltaRapida() {
+    document.getElementById('arCodigo').value = '';
+    document.getElementById('arNombre').value = '';
+    document.getElementById('arIva').value = '21';
+    document.getElementById('arMargen').value = '30';
+    document.getElementById('arCodigoProv').value = '';
+    new bootstrap.Modal(document.getElementById('modalAlta')).show();
+}
+
+function confirmarAltaRapida() {
+    const codigo = document.getElementById('arCodigo').value.trim();
+    const nombre = document.getElementById('arNombre').value.trim();
+    const iva = d(document.getElementById('arIva').value);
+    const margen = d(document.getElementById('arMargen').value);
+    const codigoProv = document.getElementById('arCodigoProv').value.trim();
+    const proveedorId = document.getElementById('proveedor').value;
+
+    if (!codigo || !nombre) { Swal.fire({icon: 'warning', title: 'Datos incompletos', text: 'Código y nombre son obligatorios'}); return; }
+
+    fetch('/compras/api/alta_rapida_producto', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({codigo, nombre, iva, margen, codigo_proveedor: codigoProv, proveedor_id: proveedorId})
+    })
+    .then(r => r.json())
+    .then(p => {
+        if (p.error) { Swal.fire({icon: 'error', title: 'Error', text: p.error}); return; }
+        bootstrap.Modal.getInstance(document.getElementById('modalAlta')).hide();
+
+        // Si venimos del flujo de Vincular OCR, actualizamos el item del carrito directamente
+        if (window._vincIdxPendiente !== undefined && window._vincIdxPendiente !== null) {
+            const idx = window._vincIdxPendiente;
+            window._vincIdxPendiente = null;
+            const item = itemsCarrito[idx];
+            if (item) {
+                itemsCarrito[idx] = {
+                    producto_id: p.id,
+                    codigo: p.codigo,
+                    nombre: p.nombre,
+                    cantidad: item.cantidad,
+                    precio_unitario: item.precio_unitario,
+                    descuento_porcentaje: item.descuento_porcentaje || 0,
+                    iva: item.iva,
+                    codigo_proveedor: item.codigo_proveedor || ''
+                };
+                dibujarTabla();
+                calcularTotal();
+            }
+        } else {
+            // Flujo tradicional: seleccionarlo en el buscador para que lo agreguen con "Agregar"
+            seleccionarProd(p);
+        }
+    });
+}
+
+// ================== GUARDAR ==================
+// ================== CHEQUEO PROACTIVO DE DUPLICADO ==================
+// Se dispara: (1) apenas el OCR completa proveedor + PV + número,
+//             (2) cuando el usuario termina de tipear manualmente el número,
+//             (3) cuando cambia el proveedor o el tipo.
+// Así el usuario se entera AL TOQUE si la factura ya está cargada,
+// antes de perder tiempo vinculando productos uno por uno.
+let _ultChequeoKey = '';
+async function chequearDuplicado(opts = {}) {
+    const proveedor_id = document.getElementById('proveedor').value;
+    const tipo = document.getElementById('tipo').value;
+    const pv = document.getElementById('pv').value.trim();
+    const numero = document.getElementById('numero').value.trim();
+
+    // Si falta algún dato, no chequeamos
+    if (!proveedor_id || !numero) return false;
+    // En modo CI el PV puede ir vacío (numeración libre); en A/B/C exigimos PV
+    if (tipo !== 'CI' && !pv) return false;
+
+    // En CI mandamos número crudo; en A/B/C se aplica zfill para matchear la BD
+    const ci = (tipo === 'CI');
+    const pvKey = ci ? pv : pv.padStart(5, '0');
+    const numKey = ci ? numero : numero.padStart(8, '0');
+
+    // Evitamos chequear dos veces lo mismo (ej: si el blur dispara y el OCR también)
+    const key = `${proveedor_id}|${tipo}|${pvKey}|${numKey}`;
+    if (key === _ultChequeoKey && !opts.forzar) return false;
+    _ultChequeoKey = key;
+
+    try {
+        const resp = await fetch(
+            `/compras/api/check_duplicado?proveedor_id=${encodeURIComponent(proveedor_id)}` +
+            `&tipo=${encodeURIComponent(tipo)}&pv=${encodeURIComponent(pv)}&numero=${encodeURIComponent(numero)}`
+        );
+        const data = await resp.json();
+        if (!data.duplicate) return false;
+
+        // Pintar los campos en rojo para marcar visualmente
+        ['pv', 'numero', 'proveedor', 'tipo'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.add('is-invalid');
+                el.style.borderColor = '#dc3545';
+                el.style.backgroundColor = '#fff5f5';
+            }
+        });
+
+        // Mostrar cartel amarillo arriba del todo (sin bloquear)
+        if (window.Swal) {
+            const tituloModal = ci ? '⚠️ Este comprobante interno ya está cargado' : '⚠️ Esta factura ya está cargada';
+            const etiqueta = ci ? `Comprobante interno ${pvKey}${pvKey ? '-' : ''}${numKey}` : `Factura ${tipo} ${pvKey}-${numKey}`;
+            const noTieneSentido = ci
+                ? '<strong>No tiene sentido seguir vinculando productos</strong> — este comprobante interno ya existe y no se puede cargar dos veces.'
+                : '<strong>No tiene sentido seguir vinculando productos</strong> — la factura ya existe y no se puede cargar dos veces.';
+            const res = await Swal.fire({
+                icon: 'warning',
+                title: tituloModal,
+                html: `
+                    <div class="text-start">
+                        <p class="mb-2"><strong>${etiqueta}</strong></p>
+                        <p class="mb-2">Proveedor: <strong>${data.razon_social}</strong></p>
+                        <p class="mb-2">Cargada el <strong>${data.fecha}</strong> · Total: <strong>$${Number(data.total).toLocaleString('es-AR', {minimumFractionDigits: 2})}</strong></p>
+                        <p class="mb-0 text-muted small">Módulo: ${data.modulo} · ID interno #${data.factura_id}</p>
+                    </div>
+                    <hr>
+                    <p class="mb-0">${noTieneSentido}</p>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Ver factura existente',
+                cancelButtonText: 'Cambiar el número',
+                confirmButtonColor: '#0d6efd',
+                cancelButtonColor: '#6c757d',
+                allowOutsideClick: false
+            });
+            if (res.isConfirmed) {
+                window.location.href = `/compras/ver/${data.factura_id}`;
+            } else {
+                // El usuario quiere cambiar el número: limpiar campos y enfocar
+                document.getElementById('numero').focus();
+                document.getElementById('numero').select();
+            }
+        } else {
+            Swal.fire({icon: 'warning', title: 'Factura ya cargada', text: `La factura ${tipo} ${pv}-${numero} ya está cargada (#${data.factura_id}, ${data.fecha}, $${data.total}).`});
+        }
+        return true;
+    } catch (e) {
+        console.warn('Error chequeando duplicado:', e);
+        return false;
+    }
+}
+
+function limpiarMarcasDuplicado() {
+    ['pv', 'numero', 'proveedor', 'tipo'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.remove('is-invalid');
+            el.style.borderColor = '';
+            el.style.backgroundColor = '';
+        }
+    });
+    _ultChequeoKey = '';
+}
+
+async function guardar() {
+    const proveedor_id = document.getElementById('proveedor').value;
+    const fecha = document.getElementById('fecha').value;
+    const tipo = document.getElementById('tipo').value;
+    const pv = document.getElementById('pv').value.trim();
+    const numero = document.getElementById('numero').value.trim();
+
+    if (!proveedor_id) { Swal.fire({icon: 'warning', title: 'Seleccioná un proveedor'}); return; }
+    if (!fecha) { Swal.fire({icon: 'warning', title: 'Fecha obligatoria'}); return; }
+    if (!pv || !numero) { Swal.fire({icon: 'warning', title: 'Punto de venta y número son obligatorios'}); return; }
+    if (!itemsCarrito.length) { Swal.fire({icon: 'warning', title: 'Agregá al menos un artículo'}); return; }
+
+    // Validar que no haya items sin vincular (producto_id null)
+    const sinVincular = itemsCarrito.filter(i => !i.producto_id);
+    if (sinVincular.length > 0) {
+        const lista = sinVincular.slice(0, 5).map(i => `<li>${i.nombre}</li>`).join('') +
+                      (sinVincular.length > 5 ? `<li>... y ${sinVincular.length - 5} más</li>` : '');
+        Swal.fire({
+            icon: 'warning',
+            title: `Hay ${sinVincular.length} ítem(s) SIN VINCULAR`,
+            html: `Antes de guardar, hacé click en el botón <strong>🔗 Vincular</strong> en cada fila amarilla ` +
+                  `para asociarla a un producto existente, o quitala con ✖ si no la vas a cargar.<br><br>` +
+                  `<strong>Items pendientes:</strong><ul style="text-align:left;">${lista}</ul>`
+        });
+        return;
+    }
+
+    // Validar que los totales IVA estén cargados (sino no entra bien al libro IVA)
+    // EXCEPCIÓN: en modo CI (Comprobante Interno) NO se exige IVA — no va al libro IVA.
+    if (!esModoCI()) {
+        const n21 = d(document.getElementById('neto21').value);
+        const i21 = d(document.getElementById('iva21').value);
+        const n105 = d(document.getElementById('neto105').value);
+        const i105 = d(document.getElementById('iva105').value);
+        const nng = d(document.getElementById('netoNG').value);
+        const sumaTotales = n21 + i21 + n105 + i105 + nng;
+
+        if (sumaTotales <= 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Cargá los totales de IVA antes de guardar',
+                html: 'Ingresá los netos e IVA (21% y/o 10.5%) manualmente para que coincidan con los totales de la factura del proveedor, o usá el botón <strong>"Calcular IVA desde items"</strong> para que los sugiera a partir del detalle.'
+            });
+            document.getElementById('neto21').focus();
+            return;
+        }
+    } else {
+        // En CI, el total debe ser > 0 igual (sino no se carga la cta cte del proveedor)
+        const totalNumCI = d(document.getElementById('lblTotal').textContent.replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(',', '.'));
+        if (totalNumCI <= 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'El total del comprobante interno está en cero',
+                text: 'Cargá al menos un ítem con cantidad y precio para que el comprobante tenga un total > 0.'
+            });
+            return;
+        }
+    }
+
+    const totalTexto = document.getElementById('lblTotal').textContent;
+    const mensajeStock = window.OC_ID
+        ? 'El stock <strong>NO</strong> se volverá a sumar (OC ya recibida). Se actualizan costo y precios.'
+        : 'Se actualizará stock, costo y precios de venta según los márgenes guardados.';
+    const confResult = await Swal.fire({
+        icon: 'question',
+        title: '¿Confirmar guardado?',
+        html: `<strong>${itemsCarrito.length}</strong> artículo(s)<br>` +
+              `Total: <strong>${totalTexto}</strong><br><br>` +
+              `<small class="text-muted">${mensajeStock}</small>`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, guardar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#198754',
+        cancelButtonColor: '#6c757d'
+    });
+    if (!confResult.isConfirmed) return;
+
+    const payload = {
+        proveedor_id,
+        fecha,
+        tipo_comprobante: tipo,
+        punto_venta: pv,
+        numero,
+        neto_21: d(document.getElementById('neto21').value),
+        iva_21: d(document.getElementById('iva21').value),
+        neto_105: d(document.getElementById('neto105').value),
+        iva_105: d(document.getElementById('iva105').value),
+        neto_no_gravado: d(document.getElementById('netoNG').value),
+        otros_impuestos: d(document.getElementById('otros').value),
+        descuento: d(document.getElementById('descuento').value),
+        flete: d(document.getElementById('flete').value),
+        percepcion_iva: d(document.getElementById('percIva').value),
+        percepcion_iibb: d(document.getElementById('percIibb').value),
+        percepcion_ganancias: d(document.getElementById('percGan').value),
+        total: d(totalTexto.replace(/[^0-9,.-]/g, '').replace(/\./g, '').replace(',', '.')),
+        observaciones: document.getElementById('observaciones').value,
+        items: itemsCarrito,
+        oc_id: window.OC_ID || null
+    };
+
+    fetch('/compras/api/guardar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json().then(data => ({status: r.status, data})))
+    .then(({status, data}) => {
+        if (data.error) {
+            // Caso especial: factura duplicada (HTTP 409). Mostrar como warning
+            // amarillo y, si existe, ofrecer ir a la factura ya cargada.
+            if (data.duplicate || status === 409) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Factura ya cargada',
+                    text: data.error.replace(/^⚠️\s*/, ''),
+                    showCancelButton: !!data.factura_existente_id,
+                    confirmButtonText: data.factura_existente_id ? 'Ver factura existente' : 'Entendido',
+                    cancelButtonText: 'Cerrar'
+                }).then(res => {
+                    if (res.isConfirmed && data.factura_existente_id) {
+                        window.location.href = `/compras/ver/${data.factura_existente_id}`;
+                    }
+                });
+                return;
+            }
+            // Cualquier otro error: rojo
+            Swal.fire({icon: 'error', title: 'No se pudo guardar', text: data.error});
+            return;
+        }
+        // Si veníamos desde OC, volvemos a la OC para ver el estado "facturada".
+        // Si no, vamos al listado de compras como siempre.
+        const destino = data.oc_facturada
+            ? `/orden_compra/${data.oc_facturada}`
+            : "{{ url_for('compras.listado') }}";
+        const titulo = data.oc_facturada ? '¡Factura generada desde OC!' : 'Factura guardada';
+        Swal.fire({
+            icon: 'success',
+            title: titulo,
+            html: data.oc_facturada
+                ? `Factura #${data.factura_id} vinculada a la OC.<br>La OC pasó a estado <strong>facturada</strong>.`
+                : `Factura #${data.factura_id} registrada correctamente.`,
+            timer: 2200,
+            timerProgressBar: true,
+            showConfirmButton: false
+        }).then(() => { window.location.href = destino; });
+    })
+    .catch(err => Swal.fire({icon: 'error', title: 'Error de red', text: String(err)}));
+}
+
+// ================== INIT ==================
+(function() {
+    document.getElementById('fecha').value = new Date().toISOString().split('T')[0];
+
+    // === LISTENERS para chequeo proactivo de duplicado en carga manual ===
+    // Cuando el usuario termine de tipear el número (blur), o cambie proveedor/PV/tipo,
+    // chequeamos si la factura ya está cargada. Así se entera AL TOQUE.
+    const inputsClave = ['proveedor', 'tipo', 'pv', 'numero'];
+    inputsClave.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        // Al cambiar valor: limpiar marcas rojas (por si venía marcado de antes)
+        el.addEventListener('input', limpiarMarcasDuplicado);
+        el.addEventListener('change', limpiarMarcasDuplicado);
+        // Al perder foco: chequear (solo si los 4 datos están completos)
+        el.addEventListener('blur', () => {
+            // Pequeño delay para que termine de actualizarse el campo si es un select
+            setTimeout(() => chequearDuplicado(), 100);
+        });
+    });
+
+    // FASE 5 — si venimos con ?oc_id=N, precargar desde la OC
+    if (window.OC_ID) {
+        // Link "Ver OC" del banner
+        const link = document.getElementById('bannerOCLink');
+        if (link) link.href = '/orden_compra/' + window.OC_ID;
+        // Disparar la precarga
+        precargarDesdeOC(window.OC_ID);
+    }
+})();
+
+// ================== PRECARGA DESDE ORDEN DE COMPRA (Fase 5) ==================
+async function precargarDesdeOC(ocId) {
+    try {
+        const resp = await fetch(`/api/ordenes_compra/${ocId}/datos_para_factura`);
+        const data = await resp.json();
+
+        if (!data.success) {
+            Swal.fire({
+                icon: 'error',
+                title: 'No se pudo precargar la OC',
+                text: data.error || 'Error desconocido',
+            }).then(() => { window.location.href = '/orden_compra/' + ocId; });
+            return;
+        }
+
+        // Actualizar número de OC en el banner
+        const lblOC = document.getElementById('bannerOCNumero');
+        if (lblOC && data.oc && data.oc.numero_completo) {
+            lblOC.textContent = data.oc.numero_completo;
+        }
+
+        // --- Proveedor (seleccionar y bloquear) ---
+        const selProv = document.getElementById('proveedor');
+        if (selProv && data.proveedor && data.proveedor.id) {
+            selProv.value = String(data.proveedor.id);
+            selProv.dispatchEvent(new Event('change', {bubbles: true}));
+            // Dejar visible pero no editable (readonly-like para select)
+            // Importante: NO usamos 'disabled' porque eso excluye el campo del value lookup
+            // en algunos flujos; en su lugar hacemos que todas las opciones menos la seleccionada
+            // queden deshabilitadas.
+            for (let i = 0; i < selProv.options.length; i++) {
+                if (selProv.options[i].value !== String(data.proveedor.id)) {
+                    selProv.options[i].disabled = true;
+                }
+            }
+            selProv.style.backgroundColor = '#fff3cd';
+            selProv.title = 'No se puede cambiar: viene vinculado a la OC';
+        }
+
+        // --- Items en el carrito ---
+        // Vaciar lo que pueda haber (no debería haber nada al entrar, pero por las dudas)
+        itemsCarrito.length = 0;
+
+        for (const it of (data.items || [])) {
+            itemsCarrito.push({
+                producto_id:           it.producto_id,
+                codigo:                it.codigo || '',
+                nombre:                it.nombre || '',
+                cantidad:              parseFloat(it.cantidad) || 0,
+                precio_unitario:       parseFloat(it.precio_unitario) || 0,
+                descuento_porcentaje:  parseFloat(it.descuento_porcentaje) || 0,
+                iva:                   parseFloat(it.iva) || 21,
+                codigo_proveedor:      it.codigo_proveedor || ''
+            });
+        }
+
+        // --- Totales sugeridos por alícuota ---
+        const t = data.totales_sugeridos || {};
+        if (t.neto_21 !== undefined)  document.getElementById('neto21').value  = (t.neto_21 || 0).toFixed(2);
+        if (t.iva_21 !== undefined)   document.getElementById('iva21').value   = (t.iva_21 || 0).toFixed(2);
+        if (t.neto_105 !== undefined) document.getElementById('neto105').value = (t.neto_105 || 0).toFixed(2);
+        if (t.iva_105 !== undefined)  document.getElementById('iva105').value  = (t.iva_105 || 0).toFixed(2);
+        if (t.neto_no_gravado !== undefined) document.getElementById('netoNG').value = (t.neto_no_gravado || 0).toFixed(2);
+
+        // --- Observaciones: agregar referencia a la OC ---
+        const obsEl = document.getElementById('observaciones');
+        if (obsEl && !obsEl.value && data.oc && data.oc.numero_completo) {
+            obsEl.value = 'Factura correspondiente a ' + data.oc.numero_completo;
+        }
+
+        // Redibujar carrito y recalcular
+        if (typeof dibujarTabla === 'function') dibujarTabla();
+        if (typeof calcularTotal === 'function') calcularTotal();
+
+        // Feedback al usuario
+        Swal.fire({
+            icon: 'success',
+            title: 'OC precargada',
+            html: `Se cargaron <strong>${(data.items || []).length}</strong> ítems recibidos de ` +
+                  `<strong>${data.oc.numero_completo}</strong>.<br><br>` +
+                  `<span class="text-muted small">Revisá precios, cantidades y totales de IVA. ` +
+                  `Si la factura del proveedor trae diferencias, podés escanearla con "Escanear factura" ` +
+                  `(los ítems del carrito se mantendrán).</span>`,
+            timer: 3500,
+            timerProgressBar: true,
+            showConfirmButton: false
+        });
+
+    } catch (err) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Error de red',
+            text: 'No se pudo obtener los datos de la OC: ' + err.message,
+        });
+    }
+}
+
+// ================== VINCULACIÓN DE ITEMS OCR ==================
+let vincIdxActual = null;     // índice del item en itemsCarrito que estamos vinculando
+let vincProdElegido = null;   // producto seleccionado en el modal
+let vincTimeout = null;
+
+function abrirVincular(idx) {
+    vincIdxActual = idx;
+    vincProdElegido = null;
+    const item = itemsCarrito[idx];
+    if (!item) return;
+
+    // Mostrar info del item en el modal
+    const nombreLimpio = (item.nombre || '').replace('[SIN VINCULAR] ', '').replace(/\s*\(bonif\s+\d+(?:\.\d+)?%\)\s*$/, '');
+    document.getElementById('vincItemInfo').innerHTML =
+        `<code>${item.codigo}</code> - <strong>${nombreLimpio}</strong><br>` +
+        `Cantidad: ${item.cantidad} | Precio: $${item.precio_unitario.toFixed(2)} | IVA: ${item.iva}%`;
+
+    // Pre-cargar SOLO la palabra más distintiva (la 1ra con 5+ letras, o la 1ra palabra larga)
+    // Esto evita que busque frases completas como "MILAN GRANDE" que no matchean "MILAN 214"
+    const palabras = nombreLimpio.split(/\s+/).filter(w => w.length > 0);
+    const palabrasGenericas = ['DE', 'LA', 'EL', 'LOS', 'LAS', 'DEL', 'CON', 'PARA', 'POR'];
+    let palabraClave = '';
+    // Primero busco la palabra más larga de más de 4 letras que no sea genérica
+    for (const w of palabras) {
+        const limpia = w.replace(/[^\wÀ-ÿ]/g, '');
+        if (limpia.length >= 5 && !palabrasGenericas.includes(limpia.toUpperCase())) {
+            palabraClave = limpia;
+            break;
+        }
+    }
+    // Si no encontró, usar la primera palabra
+    if (!palabraClave && palabras.length > 0) {
+        palabraClave = palabras[0].replace(/[^\wÀ-ÿ]/g, '');
+    }
+
+    document.getElementById('vincBuscar').value = palabraClave;
+    document.getElementById('vincCodProvDisplay').textContent = item.codigo || '';
+
+    // Guardar el nombre completo del item OCR para re-búsquedas
+    window._vincNombreCompleto = nombreLimpio;
+
+    // Reset estado
+    document.getElementById('vincSeleccionado').style.display = 'none';
+    document.getElementById('vincSugerencias').innerHTML = '';
+    document.getElementById('btnConfirmarVinc').disabled = true;
+
+    // Abrir modal
+    const modal = new bootstrap.Modal(document.getElementById('modalVincular'));
+    modal.show();
+
+    // Disparar búsqueda inicial
+    setTimeout(() => vincBuscarProductos(), 300);
+}
+
+function vincBuscarProductos() {
+    const q = document.getElementById('vincBuscar').value.trim();
+    if (q.length < 2) {
+        document.getElementById('vincSugerencias').innerHTML = '';
+        return;
+    }
+    const provId = document.getElementById('proveedor').value || '';
+    const cont = document.getElementById('vincSugerencias');
+
+    // Paso 1: búsqueda con la frase completa
+    fetch(`/compras/api/buscar_producto?q=${encodeURIComponent(q)}&proveedor_id=${provId}`)
+        .then(r => r.json())
+        .then(prods => {
+            // Si devolvió resultados, mostrarlos
+            if (Array.isArray(prods) && prods.length > 0) {
+                vincMostrarResultados(prods, q);
+                return;
+            }
+            // Paso 2 (FALLBACK): si no hay resultados y la query tiene varias palabras,
+            // probar palabra por palabra y combinar resultados
+            const palabras = q.split(/\s+/).filter(w => w.length >= 3);
+            if (palabras.length <= 1) {
+                // Una sola palabra: ya probamos, no hay resultados
+                cont.innerHTML = `
+                    <div class="list-group-item text-muted small">
+                        <i class="fas fa-search"></i> Sin resultados para "<strong>${q}</strong>".
+                        <br>Probá con otras palabras, o <button type="button" class="btn btn-link p-0 align-baseline" onclick="vincAbrirAltaRapida()">crealo con Alta Rápida →</button>
+                    </div>`;
+                return;
+            }
+
+            // Buscar cada palabra por separado
+            cont.innerHTML = '<div class="list-group-item text-muted small"><i class="fas fa-spinner fa-spin"></i> Buscando por palabras sueltas...</div>';
+
+            Promise.all(palabras.map(p =>
+                fetch(`/compras/api/buscar_producto?q=${encodeURIComponent(p)}&proveedor_id=${provId}`)
+                    .then(r => r.json())
+                    .catch(() => [])
+            )).then(resultados => {
+                // Combinar y rankear: los productos que aparecen en MÁS búsquedas van primero
+                const scoreMap = {};   // id → {producto, score, palabrasMatch}
+                resultados.forEach((listaProds, idx) => {
+                    if (!Array.isArray(listaProds)) return;
+                    listaProds.forEach(p => {
+                        if (!scoreMap[p.id]) {
+                            scoreMap[p.id] = {producto: p, score: 0, palabrasMatch: []};
+                        }
+                        scoreMap[p.id].score++;
+                        scoreMap[p.id].palabrasMatch.push(palabras[idx]);
+                    });
+                });
+
+                const rankeados = Object.values(scoreMap)
+                    .sort((a, b) => b.score - a.score)  // más matches primero
+                    .slice(0, 15);  // top 15
+
+                if (!rankeados.length) {
+                    cont.innerHTML = `
+                        <div class="list-group-item text-muted small">
+                            <i class="fas fa-search"></i> No encontré productos con las palabras "<strong>${palabras.join(', ')}</strong>".
+                            <br>Probá con otras palabras, o <button type="button" class="btn btn-link p-0 align-baseline" onclick="vincAbrirAltaRapida()">crealo con Alta Rápida →</button>
+                        </div>`;
+                    return;
+                }
+
+                vincMostrarResultados(rankeados.map(r => r.producto), q, rankeados);
+            });
+        })
+        .catch(err => {
+            cont.innerHTML = '<div class="list-group-item text-danger small">Error de búsqueda: ' + err.message + '</div>';
+        });
+}
+
+function vincMostrarResultados(prods, qOriginal, rankeados) {
+    const cont = document.getElementById('vincSugerencias');
+    window._vincProdCache = {};
+    prods.forEach(p => window._vincProdCache[p.id] = p);
+
+    const tip = rankeados
+        ? '<div class="list-group-item bg-light small py-1"><i class="fas fa-lightbulb text-warning"></i> No hubo coincidencia exacta con "<strong>' + qOriginal + '</strong>". Te muestro productos que tienen alguna palabra en común:</div>'
+        : '';
+
+    cont.innerHTML = tip + prods.map((p, i) => {
+        const matchInfo = rankeados && rankeados[i]
+            ? `<span class="badge bg-secondary ms-2">${rankeados[i].score} palabra${rankeados[i].score > 1 ? 's' : ''} coincide${rankeados[i].score > 1 ? 'n' : ''}</span>`
+            : '';
+        return `
+            <a href="#" class="list-group-item list-group-item-action" onclick="vincSeleccionarProd(${p.id}); return false;">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <strong>${p.codigo}</strong>
+                        ${p.codigo_proveedor ? ` <small class="text-muted">(prov: ${p.codigo_proveedor})</small>` : ''}
+                        - ${p.nombre}
+                        ${matchInfo}
+                    </div>
+                    <small class="text-muted text-end" style="white-space:nowrap;">
+                        Stock: ${p.stock}<br>IVA: ${p.iva}%
+                    </small>
+                </div>
+            </a>
+        `;
+    }).join('');
+}
+
+function vincSeleccionarProd(id) {
+    const p = (window._vincProdCache || {})[id];
+    if (!p) return;
+    vincProdElegido = p;
+    document.getElementById('vincSugerencias').innerHTML = '';
+    const sel = document.getElementById('vincSeleccionado');
+    sel.style.display = 'block';
+    sel.innerHTML = `
+        <i class="fas fa-check-circle"></i> <strong>Producto seleccionado:</strong>
+        <code>${p.codigo}</code> - ${p.nombre}
+    `;
+    document.getElementById('btnConfirmarVinc').disabled = false;
+}
+
+async function confirmarVinculacion() {
+    if (!vincProdElegido || vincIdxActual === null) return;
+    const item = itemsCarrito[vincIdxActual];
+    const codigoProv = item.codigo_proveedor || item.codigo || '';
+    const guardarCodProv = document.getElementById('vincGuardarCodProv').checked;
+    const proveedorId = document.getElementById('proveedor').value;
+
+    // Actualizar el item del carrito con los datos del producto vinculado
+    itemsCarrito[vincIdxActual] = {
+        producto_id: vincProdElegido.id,
+        codigo: vincProdElegido.codigo,
+        nombre: vincProdElegido.nombre,
+        cantidad: item.cantidad,
+        precio_unitario: item.precio_unitario,
+        descuento_porcentaje: item.descuento_porcentaje || 0,  // conservamos el descuento del OCR
+        iva: item.iva,  // conservamos el IVA del OCR (viene de la factura)
+        codigo_proveedor: codigoProv
+    };
+
+    // Opcionalmente guardar el código de proveedor en la DB
+    if (guardarCodProv && codigoProv && proveedorId) {
+        try {
+            const resp = await fetch('/compras/api/codigo_proveedor/guardar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    producto_id: vincProdElegido.id,
+                    proveedor_id: proveedorId,
+                    codigo_proveedor: codigoProv
+                })
+            });
+            const data = await resp.json();
+            if (data.error) {
+                console.warn('No se pudo guardar código proveedor:', data.error);
+            } else {
+                console.log('Código proveedor guardado:', codigoProv, '→', vincProdElegido.codigo);
+            }
+        } catch (e) {
+            console.warn('Error guardando código proveedor:', e);
+        }
+    }
+
+    // Cerrar modal y redibujar
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalVincular'));
+    modal.hide();
+    dibujarTabla();
+    calcularTotal();
+}
+
+// Autocomplete del buscador del modal
+document.addEventListener('DOMContentLoaded', function() {
+    const inp = document.getElementById('vincBuscar');
+    if (inp) {
+        inp.addEventListener('input', function() {
+            clearTimeout(vincTimeout);
+            vincTimeout = setTimeout(vincBuscarProductos, 300);
+        });
+    }
+    // Inicializar modo CI según el valor actual del select (por defecto A → todo visible)
+    if (typeof aplicarModoCI === 'function') aplicarModoCI();
+});
+
+// Abrir Alta Rápida desde el modal de Vincular, precargando datos del item OCR
+function vincAbrirAltaRapida() {
+    if (vincIdxActual === null) return;
+    const item = itemsCarrito[vincIdxActual];
+    if (!item) return;
+
+    // Cerrar el modal de vincular
+    const modalVinc = bootstrap.Modal.getInstance(document.getElementById('modalVincular'));
+    if (modalVinc) modalVinc.hide();
+
+    // Preparar campos de alta rápida con datos del item OCR
+    const nombreLimpio = (item.nombre || '').replace('[SIN VINCULAR] ', '').replace(/\s*\(bonif\s+\d+(?:\.\d+)?%\)\s*$/, '');
+    document.getElementById('arCodigo').value = '';  // El usuario decide su código interno
+    document.getElementById('arNombre').value = nombreLimpio;
+    document.getElementById('arIva').value = String(item.iva || 21);
+    document.getElementById('arMargen').value = '30';
+    document.getElementById('arCodigoProv').value = item.codigo || '';
+
+    // Cuando se cree el producto, lo vinculamos automáticamente al item del OCR
+    window._vincIdxPendiente = vincIdxActual;
+
+    // Abrir Alta Rápida
+    new bootstrap.Modal(document.getElementById('modalAlta')).show();
+}
+
+// ================== OCR DE FACTURA DE PROVEEDOR ==================
+async function procesarFacturaOCR(input) {
+    const archivo = input.files[0];
+    if (!archivo) return;
+
+    const status = document.getElementById('ocrStatus');
+    status.style.display = 'block';
+    status.innerHTML = `
+        <div class="alert alert-info mb-0">
+            <i class="fas fa-spinner fa-spin"></i>
+            <strong>Analizando factura con IA...</strong> (10 a 20 segundos)
+        </div>`;
+
+    // Enviar el archivo al backend
+    const formData = new FormData();
+    formData.append('archivo', archivo);
+
+    try {
+        const resp = await fetch('/compras/api/extraer_factura_ocr', {
+            method: 'POST',
+            body: formData,
+        });
+        const json = await resp.json();
+
+        if (!json.success) {
+            status.innerHTML = `
+                <div class="alert alert-danger mb-0">
+                    <i class="fas fa-times-circle"></i>
+                    <strong>Error:</strong> ${json.error || 'No se pudo procesar la factura'}
+                </div>`;
+            input.value = '';
+            return;
+        }
+
+        // Auto-completar el formulario con los datos extraídos
+        await autoCompletarDesdeOCR(json.data);
+
+        // Mostrar estado con avisos de validación
+        const val = json.validaciones || {};
+        const avisos = val.avisos || [];
+        let avisosHtml = '';
+        if (avisos.length > 0) {
+            avisosHtml = '<hr><strong><i class="fas fa-exclamation-triangle"></i> Revisar:</strong><ul class="mb-0 mt-1 small">'
+                + avisos.map(a => `<li>${a}</li>`).join('')
+                + '</ul>';
+        }
+
+        const costoTxt = json.costo_usd ? ` — costo OCR: US$${json.costo_usd.toFixed(4)}` : '';
+
+        status.innerHTML = `
+            <div class="alert alert-${val.ok ? 'success' : 'warning'} mb-0">
+                <i class="fas fa-check-circle"></i>
+                <strong>Factura procesada${costoTxt}</strong>
+                — ${json.data.items.length} ítems detectados.
+                <br><small><i class="fas fa-eye"></i> <strong>Revisá todos los datos antes de guardar.</strong> Vinculá los productos manualmente si hace falta.</small>
+                ${avisosHtml}
+            </div>`;
+
+    } catch (err) {
+        status.innerHTML = `
+            <div class="alert alert-danger mb-0">
+                <i class="fas fa-times-circle"></i>
+                Error de red: ${err.message}
+            </div>`;
+    }
+
+    input.value = ''; // limpiar input para poder subir otra vez el mismo archivo
+}
+
+async function autoCompletarDesdeOCR(data) {
+    if (!data) return;
+
+    // === CABECERA ===
+    if (data.fecha_emision) {
+        document.getElementById('fecha').value = data.fecha_emision;
+    }
+
+    // === DETECCIÓN DE COMPROBANTE INTERNO (CI) ===
+    // La IA puede devolver tipo='A'/'B'/'C' (factura oficial) o un tipo no fiscal
+    // (REMITO, RECIBO, INTERNO, ORDEN, PRESUPUESTO, etc.). Si NO es A/B/C, es CI.
+    // También: si no se detectó IVA (ni 21% ni 10.5%) ni CAE, es muy probable que
+    // sea un comprobante no fiscal aunque la IA haya tipeado mal el tipo.
+    const tipoOCR = (data.tipo || '').toString().toUpperCase().trim();
+    const tiposFiscales = ['A', 'B', 'C', 'M', 'E'];
+    const stPre = data.subtotales || {};
+    const sinIVA = (stPre.iva_21 === null || stPre.iva_21 === undefined || parseFloat(stPre.iva_21) === 0)
+                && (stPre.iva_10_5 === null || stPre.iva_10_5 === undefined || parseFloat(stPre.iva_10_5) === 0);
+    const sinCAE = !data.cae;
+    const palabrasInternas = ['REMITO', 'RECIBO', 'INTERNO', 'ORDEN', 'PRESUPUESTO', 'NOTA DE PEDIDO', 'COMPROBANTE INTERNO', 'X'];
+    const pareceInterno = palabrasInternas.some(p => tipoOCR.includes(p));
+
+    let esCI = false;
+    if (tipoOCR && !tiposFiscales.includes(tipoOCR)) {
+        // La IA devolvió algo que no es A/B/C/M/E → CI
+        esCI = true;
+    } else if (pareceInterno) {
+        esCI = true;
+    } else if (sinIVA && sinCAE && !tiposFiscales.includes(tipoOCR)) {
+        // Sin IVA y sin CAE: probablemente no es factura fiscal
+        esCI = true;
+    }
+
+    if (esCI) {
+        document.getElementById('tipo').value = 'CI';
+        aplicarModoCI();
+        // Para CI: PV y número se cargan TAL CUAL (sin zfill, sin formato fijo)
+        if (data.punto_venta) {
+            document.getElementById('pv').value = String(data.punto_venta).trim();
+        }
+        if (data.numero_comprobante) {
+            document.getElementById('numero').value = String(data.numero_comprobante).trim();
+        }
+    } else if (data.tipo) {
+        document.getElementById('tipo').value = data.tipo;
+        aplicarModoCI(); // por si venía en CI y ahora pasa a A/B/C, recompone UI
+        if (data.punto_venta) {
+            document.getElementById('pv').value = String(data.punto_venta).padStart(5, '0');
+        }
+        if (data.numero_comprobante) {
+            document.getElementById('numero').value = String(data.numero_comprobante).padStart(8, '0');
+        }
+    } else {
+        // No vino tipo en el OCR: caemos en lógica anterior (zfill por defecto)
+        if (data.punto_venta) {
+            document.getElementById('pv').value = String(data.punto_venta).padStart(5, '0');
+        }
+        if (data.numero_comprobante) {
+            document.getElementById('numero').value = String(data.numero_comprobante).padStart(8, '0');
+        }
+    }
+    // === MATCHEO DE PROVEEDOR (difuso por palabras clave) ===
+    if (data.proveedor_razon_social) {
+        const select = document.getElementById('proveedor');
+        const razonOCR = data.proveedor_razon_social.toUpperCase();
+        // Palabras genericas a ignorar
+        const palabrasGenericas = ['DE', 'LA', 'EL', 'SA', 'SRL', 'SACI', 'SAIC', 'SACIAF',
+                                    'SACIFI', 'ALIMENTOS', 'PRODUCTOS', 'INDUSTRIAS',
+                                    'COMPAÑIA', 'COMPANIA', 'DEL', 'LOS', 'LAS',
+                                    'FRIGORIFICO', 'DISTRIBUIDORA', 'COOPERATIVA'];
+        // Palabras significativas: >= 5 letras, no genéricas
+        const palabrasOCR = razonOCR.split(/[\s\.,]+/).filter(w =>
+            w.length >= 5 && !palabrasGenericas.includes(w)
+        );
+
+        let mejorMatch = null;
+        let mejorScore = 0;
+
+        for (let i = 0; i < select.options.length; i++) {
+            const opt = select.options[i];
+            if (!opt.value) continue;
+            const textoOpt = opt.text.toUpperCase();
+            let score = 0;
+            for (const palabra of palabrasOCR) {
+                // Puntuar más alto a palabras más largas
+                if (textoOpt.includes(palabra)) {
+                    score += palabra.length;  // palabra de 6 letras = 6 puntos
+                }
+            }
+            if (score > mejorScore) {
+                mejorScore = score;
+                mejorMatch = opt.value;
+            }
+        }
+
+        // Si hay match claro (al menos una palabra de 5+ letras coincide)
+        if (mejorMatch && mejorScore >= 5) {
+            select.value = mejorMatch;
+            select.dispatchEvent(new Event('change', {bubbles: true}));
+            console.log('Proveedor auto-seleccionado por razón:', data.proveedor_razon_social,
+                        '→ opción:', select.options[select.selectedIndex].text);
+        } else {
+            console.warn('Proveedor no encontrado. Razón social OCR:', data.proveedor_razon_social,
+                         'Mejor score:', mejorScore);
+        }
+    }
+
+    // === CHEQUEO ANTI-DUPLICADO (apenas se completaron proveedor + PV + número) ===
+    // Si la factura ya existe, avisamos AHORA — antes de procesar items y hacer
+    // que el usuario pierda tiempo vinculando productos.
+    const yaExiste = await chequearDuplicado({forzar: true});
+    if (yaExiste) {
+        // No seguimos cargando items: la factura ya existe.
+        // Si el usuario quiere cambiar el número, los items quedan sin cargar
+        // (más limpio que cargar 30 items y después tener que empezar de nuevo).
+        return;
+    }
+
+    // === SUBTOTALES DEL PIE DE FACTURA ===
+    // En modo CI no aplican (no hay libro IVA). Se saltan netos, IVAs y percepciones.
+    if (!esCI) {
+        const st = data.subtotales || {};
+
+        // Neto Gravado 21% — lo calculamos desde iva_21 si no viene explícito
+        // Si iva_21 existe: neto_21 = iva_21 / 0.21
+        if (st.iva_21 !== null && st.iva_21 !== undefined) {
+            document.getElementById('iva21').value = parseFloat(st.iva_21).toFixed(2);
+            const neto21 = parseFloat(st.iva_21) / 0.21;
+            document.getElementById('neto21').value = neto21.toFixed(2);
+        }
+
+        // Neto Gravado 10.5% — mismo criterio
+        if (st.iva_10_5 !== null && st.iva_10_5 !== undefined) {
+            document.getElementById('iva105').value = parseFloat(st.iva_10_5).toFixed(2);
+            const neto105 = parseFloat(st.iva_10_5) / 0.105;
+            document.getElementById('neto105').value = neto105.toFixed(2);
+        }
+
+        // === PERCEPCIONES ===
+        // Clasificamos las percepciones por la descripción
+        const percs = data.percepciones || [];
+        let percIva = 0, percIibb = 0, percGan = 0, otrasPerc = 0;
+        const otrasDescripciones = [];
+
+        for (const p of percs) {
+            const desc = (p.descripcion || '').toUpperCase();
+            const importe = parseFloat(p.importe) || 0;
+
+            // Identificar por palabras clave
+            if (desc.includes('IIBB') || desc.includes('INGRESOS BRUTOS') || desc.includes('ING.BRUTOS')) {
+                percIibb += importe;
+            } else if (desc.includes('GANANCIA')) {
+                percGan += importe;
+            } else if (desc.includes('IVA')) {
+                // Importante: chequear IVA DESPUÉS de IIBB porque "Perc IVA RG 3130" contiene "IVA"
+                // pero "Perc IIBB" también contiene "IVA" si está pegado raro. Por eso IIBB va primero.
+                percIva += importe;
+            } else {
+                otrasPerc += importe;
+                otrasDescripciones.push(p.descripcion + ': $' + importe.toFixed(2));
+            }
+        }
+
+        if (percIva > 0) document.getElementById('percIva').value = percIva.toFixed(2);
+        if (percIibb > 0) document.getElementById('percIibb').value = percIibb.toFixed(2);
+        if (percGan > 0) document.getElementById('percGan').value = percGan.toFixed(2);
+
+        // Si hay "otras percepciones" sin identificar, las sumamos a "Otros"
+        if (otrasPerc > 0) {
+            document.getElementById('otros').value = otrasPerc.toFixed(2);
+            console.log('Otras percepciones sin clasificar:', otrasDescripciones);
+        }
+    } else {
+        console.log('🔖 OCR detectó Comprobante Interno (CI) — se saltan netos/IVAs/percepciones');
+    }
+
+    // === NÚMERO DE FACTURA EN OBSERVACIONES (para referencia) ===
+    const obsEl = document.getElementById('observaciones');
+    if (obsEl && !obsEl.value) {
+        const etiquetaOCR = esCI ? 'OCR-CI' : 'OCR';
+        let obs = `${etiquetaOCR}: ${data.proveedor_razon_social || ''} - N° ${data.numero_factura || ''}`;
+        if (data.cae) obs += ` - CAE: ${data.cae}`;
+        if (data.remito_nro) obs += ` - Remito: ${data.remito_nro}`;
+        obsEl.value = obs;
+    }
+
+    // === ÍTEMS — intentar vincular con productos existentes ===
+    const items = data.items || [];
+    const proveedorId = document.getElementById('proveedor').value;
+
+    for (const item of items) {
+        const codigo = item.codigo || '';
+        const nombre = item.descripcion || '';
+
+        // PRECIO Y DESCUENTO POR SEPARADO
+        // El OCR extrae:
+        //   - precio_unitario: precio de LISTA (como figura en la factura, sin descuento)
+        //   - porcentaje_bonificacion: el % de descuento de la línea
+        // Los guardamos por separado para que la grilla refleje exactamente
+        // lo que dice la factura del proveedor (precio de lista + columna desc).
+        // Los subtotales y costo final se calculan en dibujarTabla() aplicando el desc.
+        const precioBase = parseFloat(item.precio_unitario) || 0;
+        const bonif = parseFloat(item.porcentaje_bonificacion) || 0;
+        const cantidad = parseFloat(item.cantidad) || 0;
+
+        // Intentar buscar el producto primero por código del proveedor, luego por nombre
+        let producto = null;
+        try {
+            if (codigo) {
+                const resp = await fetch(`/compras/api/buscar_producto?q=${encodeURIComponent(codigo)}&proveedor_id=${proveedorId || ''}`);
+                const d = await resp.json();
+                // El endpoint devuelve un array directo de productos
+                if (Array.isArray(d) && d.length > 0) {
+                    // Preferimos match exacto por código_proveedor
+                    const exacto = d.find(p => p.codigo_proveedor && p.codigo_proveedor === codigo);
+                    producto = exacto || null;  // Solo auto-vincula si hay match de código de proveedor
+                }
+            }
+            // NO auto-vinculamos por nombre porque puede fallar (ej: MILAN GRANDE vs MILAN 214).
+            // Mejor dejar [SIN VINCULAR] y que el usuario vincule con el modal inteligente.
+        } catch (e) {
+            console.warn('Error buscando producto:', e);
+        }
+
+        if (producto) {
+            // Producto encontrado: agregar al carrito directo
+            itemsCarrito.push({
+                producto_id: producto.id,
+                codigo: producto.codigo,
+                nombre: producto.nombre,
+                cantidad: cantidad,
+                precio_unitario: +precioBase.toFixed(4),
+                descuento_porcentaje: +bonif.toFixed(2),
+                iva: parseFloat(item.alicuota_iva) || producto.iva || 21,
+                codigo_proveedor: item.codigo || ''
+            });
+        } else {
+            // No se encontró: agregar como "pendiente de vincular" con producto_id = null
+            itemsCarrito.push({
+                producto_id: null,
+                codigo: item.codigo || '?',
+                nombre: '[SIN VINCULAR] ' + nombre,
+                cantidad: cantidad,
+                precio_unitario: +precioBase.toFixed(4),
+                descuento_porcentaje: +bonif.toFixed(2),
+                iva: parseFloat(item.alicuota_iva) || 21,
+                codigo_proveedor: item.codigo || ''
+            });
+        }
+    }
+
+    dibujarTabla();
+    calcularTotal();
+}
+
+</script>
+{% endblock %}

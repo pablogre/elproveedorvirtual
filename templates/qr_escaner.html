@@ -1,0 +1,281 @@
+{% extends 'base.html' %}
+{% block title %}QR del Escáner Público{% endblock %}
+
+{% block content %}
+<style>
+  .qr-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  .qr-page h2 { font-size: 1.4rem; margin-bottom: 6px; }
+  .qr-page .lead { color: #6b7280; font-size: .95rem; margin-bottom: 24px; }
+
+  .qr-config {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .qr-config-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 24px;
+  }
+  .qr-config label {
+    display: block;
+    font-weight: 600;
+    color: #374151;
+    font-size: .9rem;
+    margin-bottom: 6px;
+  }
+  .qr-config input[type="text"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: .9rem;
+  }
+  .qr-config small {
+    color: #6b7280;
+    font-size: .78rem;
+    display: block;
+    margin-top: 4px;
+  }
+  .qr-config .btn-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+
+  .qr-previews {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .qr-preview-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .qr-preview-card h4 {
+    font-size: 1.05rem;
+    color: #1f2937;
+    margin-bottom: 4px;
+    text-align: center;
+  }
+  .qr-preview-card .formato-info {
+    color: #6b7280;
+    font-size: .82rem;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .qr-preview-img-wrap {
+    background: #f3f4f6;
+    padding: 16px;
+    border-radius: 8px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+    min-height: 320px;
+    align-items: center;
+  }
+  .qr-preview-img {
+    max-width: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  }
+  .qr-preview-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+  }
+
+  @media (max-width: 900px) {
+    .qr-config-grid, .qr-previews { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="qr-page">
+  <h2><i class="fas fa-qrcode"></i> QR del Escáner Público</h2>
+  <p class="lead">
+    Imprimí estos carteles y pegalos en las góndolas. Los clientes escanean el QR
+    con la cámara del celular y consultan precios al instante.
+  </p>
+
+  <div class="qr-config">
+    <div class="qr-config-grid">
+      <div>
+        <label><i class="fas fa-link"></i> URL del escáner (codificada en el QR)</label>
+        <input type="text" id="urlQr" value="{{ url_qr }}">
+        <small>Debe empezar con http:// o https://. Para que la cámara funcione en celulares necesita HTTPS.</small>
+        <div class="btn-row">
+          <button class="btn btn-sm btn-primary" onclick="guardarUrl()">
+            <i class="fas fa-save"></i> Guardar URL y actualizar vista previa
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <label><i class="fas fa-image"></i> Logo del negocio (opcional)</label>
+        <input type="file" id="inputLogo" accept="image/png,image/jpeg" class="form-control form-control-sm">
+        <small>PNG o JPG, máx 600px. Se incrusta al centro del QR y arriba del cartel.</small>
+        <div class="btn-row">
+          <button class="btn btn-sm btn-primary" onclick="subirLogo()">
+            <i class="fas fa-upload"></i> Subir logo
+          </button>
+          {% if tiene_logo %}
+          <button class="btn btn-sm btn-outline-danger" onclick="quitarLogo()">
+            <i class="fas fa-trash"></i> Quitar logo guardado
+          </button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="qr-previews">
+    <div class="qr-preview-card">
+      <h4><i class="fas fa-file"></i> Cartel A4 (hoja común)</h4>
+      <div class="formato-info">21 × 29,7 cm · Para imprimir en hoja común con impresora láser o inkjet</div>
+      <div class="qr-preview-img-wrap">
+        <img id="previewA4" class="qr-preview-img" src="{{ url_for('qr_escaner_generar', formato='a4') }}?v={{ range(1, 99999) | random }}" alt="Vista previa cartel A4">
+      </div>
+      <div class="qr-preview-actions">
+        <a id="downloadA4" class="btn btn-primary" href="{{ url_for('qr_escaner_generar', formato='a4') }}" download="qr_escaner_a4.png">
+          <i class="fas fa-download"></i> Descargar PNG (A4)
+        </a>
+      </div>
+    </div>
+
+    <div class="qr-preview-card">
+      <h4><i class="fas fa-receipt"></i> Cartel Térmica 80mm</h4>
+      <div class="formato-info">72 × 110 mm · Para imprimir en tu térmica POS (~11 cm de rollo)</div>
+      <div class="qr-preview-img-wrap">
+        <img id="previewTermica" class="qr-preview-img" src="{{ url_for('qr_escaner_generar', formato='termica') }}?v={{ range(1, 99999) | random }}" alt="Vista previa térmica">
+      </div>
+      <div class="qr-preview-actions">
+        <a id="downloadTermica" class="btn btn-outline-primary" href="{{ url_for('qr_escaner_generar', formato='termica') }}" download="qr_escaner_termica.png">
+          <i class="fas fa-download"></i> Descargar PNG
+        </a>
+        <button class="btn btn-primary" onclick="imprimirTermica()">
+          <i class="fas fa-print"></i> Imprimir en térmica
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function refrescarPreviews() {
+    const ts = Date.now();
+    const a4 = document.getElementById('previewA4');
+    const t = document.getElementById('previewTermica');
+    const dlA4 = document.getElementById('downloadA4');
+    const dlT = document.getElementById('downloadTermica');
+    a4.src = "{{ url_for('qr_escaner_generar', formato='a4') }}?v=" + ts;
+    t.src = "{{ url_for('qr_escaner_generar', formato='termica') }}?v=" + ts;
+    dlA4.href = "{{ url_for('qr_escaner_generar', formato='a4') }}?v=" + ts;
+    dlT.href = "{{ url_for('qr_escaner_generar', formato='termica') }}?v=" + ts;
+  }
+
+  async function guardarUrl() {
+    const url = document.getElementById('urlQr').value.trim();
+    if (!url) { Swal.fire('Error', 'La URL no puede estar vacía', 'error'); return; }
+    try {
+      const resp = await fetch("{{ url_for('qr_escaner_guardar_url') }}", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: url})
+      });
+      const data = await resp.json();
+      if (data.success) {
+        refrescarPreviews();
+        Swal.fire({icon:'success', title:'URL guardada', timer:1500, showConfirmButton:false});
+      } else {
+        Swal.fire('Error', data.error || 'No se pudo guardar', 'error');
+      }
+    } catch (e) {
+      Swal.fire('Error', e.message, 'error');
+    }
+  }
+
+  async function subirLogo() {
+    const input = document.getElementById('inputLogo');
+    if (!input.files || !input.files[0]) {
+      Swal.fire('Atención', 'Seleccioná un archivo primero', 'warning');
+      return;
+    }
+    const fd = new FormData();
+    fd.append('logo', input.files[0]);
+    try {
+      const resp = await fetch("{{ url_for('qr_escaner_subir_logo') }}", {
+        method: 'POST',
+        body: fd
+      });
+      const data = await resp.json();
+      if (data.success) {
+        Swal.fire({icon:'success', title:'Logo cargado', timer:1200, showConfirmButton:false})
+          .then(() => location.reload());
+      } else {
+        Swal.fire('Error', data.error || 'No se pudo subir', 'error');
+      }
+    } catch (e) {
+      Swal.fire('Error', e.message, 'error');
+    }
+  }
+
+  async function quitarLogo() {
+    const conf = await Swal.fire({
+      icon: 'warning',
+      title: '¿Quitar el logo?',
+      text: 'El QR vuelve a quedar sin logo en el centro.',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, quitar',
+      cancelButtonText: 'Cancelar'
+    });
+    if (!conf.isConfirmed) return;
+    try {
+      const resp = await fetch("{{ url_for('qr_escaner_quitar_logo') }}", { method: 'POST' });
+      const data = await resp.json();
+      if (data.success) {
+        Swal.fire({icon:'success', title:'Logo quitado', timer:1200, showConfirmButton:false})
+          .then(() => location.reload());
+      } else {
+        Swal.fire('Error', data.error || 'No se pudo quitar', 'error');
+      }
+    } catch (e) {
+      Swal.fire('Error', e.message, 'error');
+    }
+  }
+
+  async function imprimirTermica() {
+    const swal = Swal.fire({title:'Enviando a térmica...', allowOutsideClick:false, didOpen:()=>Swal.showLoading()});
+    try {
+      const resp = await fetch("{{ url_for('qr_escaner_imprimir_termica') }}", { method: 'POST' });
+      const data = await resp.json();
+      Swal.close();
+      if (data.success) {
+        Swal.fire({icon:'success', title:'QR impreso', text: data.mensaje || '', timer:2000, showConfirmButton:false});
+      } else {
+        Swal.fire('Error', data.error || 'No se pudo imprimir', 'error');
+      }
+    } catch (e) {
+      Swal.close();
+      Swal.fire('Error', e.message, 'error');
+    }
+  }
+</script>
+{% endblock %}
