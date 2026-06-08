@@ -395,6 +395,12 @@ def api_guardar():
     if not items:
         return jsonify({'error': 'Debe cargar al menos un artículo'}), 400
 
+    # Toggle "Los precios incluyen IVA" (típico de comprobantes internos):
+    # el precio_unitario ingresado viene CON IVA, así que le quitamos el IVA
+    # para que todo el cálculo interno (neto, subtotales, costo) quede igual
+    # que cuando se carga sin IVA. El costo final sigue siendo CON IVA.
+    precios_con_iva = bool(data.get('precios_con_iva', False))
+
     # --- Validar items y calcular prorrateo ---
     # Suma total con IVA de las líneas (para prorratear flete/descuento)
     # NOTA: el precio_unitario es el precio de lista del proveedor (sin IVA).
@@ -407,6 +413,8 @@ def api_guardar():
         precio_u = _r4(it.get('precio_unitario', 0))
         desc_p = _d(it.get('descuento_porcentaje', 0))
         iva_p = _d(it.get('iva', 21))
+        if precios_con_iva and iva_p > 0:
+            precio_u = _r4(precio_u / (Decimal('1') + iva_p / Decimal('100')))
         if not pid or cant <= 0 or precio_u <= 0:
             return jsonify({'error': 'Hay items con datos inválidos (cantidad o precio en cero)'}), 400
         if desc_p < 0 or desc_p >= 100:
@@ -465,6 +473,8 @@ def api_guardar():
             precio_u = _r4(it.get('precio_unitario', 0))  # precio de LISTA sin IVA (como figura en factura)
             desc_p = _d(it.get('descuento_porcentaje', 0))
             iva_p = _d(it.get('iva', 21))
+            if precios_con_iva and iva_p > 0:
+                precio_u = _r4(precio_u / (Decimal('1') + iva_p / Decimal('100')))
             # Precio NETO unitario = precio de lista − descuento por línea
             precio_neto_u = _r4(precio_u * (Decimal('1') - desc_p / Decimal('100')))
             subtotal_sin_iva = _r2(cant * precio_neto_u)
