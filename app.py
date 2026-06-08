@@ -2859,6 +2859,7 @@ def buscar_clientes():
             SELECT c.id, c.nombre, c.documento, c.tipo_documento, c.email, c.telefono,
                    c.direccion, c.condicion_iva, c.lista_precio, c.tipo_precio,
                    c.zona_id, z.nombre AS zona_nombre, z.color AS zona_color,
+                   c.dias_vencimiento_factura,
                    (
                      COALESCE((
                        SELECT SUM(m.saldo_pendiente) FROM cta_cte_movimiento m
@@ -2947,7 +2948,8 @@ def buscar_clientes():
             'saldo': float(r['saldo']) if r['saldo'] else 0.0,
             'zona_id': r['zona_id'],
             'zona_nombre': r['zona_nombre'],
-            'zona_color': r['zona_color']
+            'zona_color': r['zona_color'],
+            'dias_vencimiento_factura': r['dias_vencimiento_factura']
         } for r in rows]
 
         return jsonify({
