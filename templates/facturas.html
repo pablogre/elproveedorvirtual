@@ -1206,6 +1206,9 @@ function generarBotonesAccion(factura) {
             <button class="btn btn-danger" onclick="emitirNotaCredito(${factura.id})" title="Emitir Nota de Crédito (Anular)">
                 <i class="fas fa-file-invoice"></i> NC
             </button>
+            <button class="btn btn-outline-danger" onclick="notaCreditoParcial(${factura.id})" title="Nota de Crédito parcial (por producto, sin anular la factura)">
+                <i class="fas fa-file-invoice-dollar"></i> NC parcial
+            </button>
         `;
     }
     
@@ -1367,6 +1370,88 @@ function anularComprobanteInterno(facturaId, numero) {
     });
 }
 
+
+async function notaCreditoParcial(facturaId) {
+    // 1) Traer las lineas de la factura
+    let data;
+    try {
+        const r = await fetch(`/api/factura/${facturaId}/lineas_nc`);
+        data = await r.json();
+        if (!data.success) throw new Error(data.error || 'No se pudieron cargar las lineas');
+    } catch (e) {
+        alertSwal('❌ ' + e.message, 'error');
+        return;
+    }
+
+    const disponibles = data.lineas.filter(l => !l.ya_acreditada);
+    if (!disponibles.length) {
+        alertSwal('Todas las lineas de esta factura ya tienen nota de credito.', 'info');
+        return;
+    }
+
+    const fmt = n => '$ ' + Number(n).toLocaleString('es-AR', {minimumFractionDigits: 2});
+    const filas = data.lineas.map(l => {
+        const disabled = l.ya_acreditada ? 'disabled' : '';
+        const tag = l.ya_acreditada ? ' <span class="badge bg-secondary">ya tiene NC</span>' : '';
+        return `<tr>
+            <td style="text-align:center;"><input type="checkbox" class="nc-linea" value="${l.detalle_id}" ${disabled}></td>
+            <td style="text-align:left;">${l.nombre}${tag}</td>
+            <td style="text-align:right;">${l.cantidad}</td>
+            <td style="text-align:right;">${fmt(l.subtotal)}</td>
+        </tr>`;
+    }).join('');
+
+    const html = `
+        <p style="text-align:left; margin-bottom:8px;">Factura <b>${data.factura.numero}</b>. Marca las lineas a acreditar. <b>La factura NO se anula.</b></p>
+        <div style="max-height:260px; overflow:auto; border:1px solid #dee2e6; border-radius:6px;">
+          <table class="table table-sm mb-0" style="width:100%; font-size:.85rem;">
+            <thead><tr>
+              <th></th><th style="text-align:left;">Producto</th>
+              <th style="text-align:right;">Cant.</th><th style="text-align:right;">Subtotal s/IVA</th>
+            </tr></thead>
+            <tbody>${filas}</tbody>
+          </table>
+        </div>
+        <input id="ncMotivoParcial" class="form-control mt-2" placeholder="Motivo (ej: devolucion de producto)">
+    `;
+
+    const res = await Swal.fire({
+        title: 'Nota de Credito parcial',
+        html: html,
+        width: 640,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-file-invoice-dollar"></i> Emitir NC',
+        confirmButtonColor: '#dc3545',
+        cancelButtonText: 'Cancelar',
+        focusConfirm: false,
+        preConfirm: () => {
+            const ids = Array.from(document.querySelectorAll('.nc-linea:checked')).map(c => parseInt(c.value));
+            if (!ids.length) { Swal.showValidationMessage('Selecciona al menos una linea'); return false; }
+            const motivo = (document.getElementById('ncMotivoParcial').value || '').trim();
+            if (!motivo) { Swal.showValidationMessage('Ingresa el motivo'); return false; }
+            return { detalle_ids: ids, motivo: motivo };
+        }
+    });
+    if (!res.isConfirmed) return;
+
+    // 2) Emitir ante AFIP
+    Swal.fire({ title: 'Emitiendo NC ante AFIP...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+        const r = await fetch(`/api/emitir_nota_credito_parcial/${facturaId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(res.value)
+        });
+        const out = await r.json();
+        if (!out.success) throw new Error(out.error || 'Error al emitir la NC');
+        let txt = `✅ NC ${out.numero_nc}\nCAE: ${out.cae}\nTotal: ${fmt(out.total)}`;
+        if (out.warning) txt += `\n\n⚠️ ${out.warning}`;
+        alertSwal(txt);
+        aplicarFiltros();
+    } catch (e) {
+        alertSwal('❌ No se pudo emitir la NC\n\n' + e.message, 'error');
+    }
+}
 
 async function emitirNotaCredito(facturaId) {
     console.log(`📝 Emitiendo Nota de Crédito para factura ID: ${facturaId}`);

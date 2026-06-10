@@ -1476,8 +1476,10 @@ class ARCAClient:
         self.config = ARCA_CONFIG
         self.token = None
         self.sign = None
+        self.token_expira = None
         self.cuit = self.config.CUIT
         self.openssl_path = self._buscar_openssl()
+        self._cargar_token_cache()
         
         print(f"🔧 AFIP Client inicializado")
         print(f"   CUIT: {self.config.CUIT}")
@@ -1636,23 +1638,71 @@ class ARCAClient:
             return False
 
 
+    def _cargar_token_cache(self):
+        """Levanta el TA guardado en disco si sigue vigente y es del mismo ambiente."""
+        try:
+            path = self.config.TOKEN_CACHE_FILE
+            if not path or not os.path.exists(path):
+                return False
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if bool(data.get('homologacion')) != bool(self.config.USE_HOMOLOGACION):
+                return False
+            expira = datetime.fromisoformat(data['expira'])
+            if expira.tzinfo is not None:
+                expira = expira.replace(tzinfo=None)
+            self.token = data.get('token')
+            self.sign = data.get('sign')
+            self.token_expira = expira
+            print(f"🎫 TA levantado de cache (vence {expira})")
+            return True
+        except Exception as e:
+            print(f"⚠️ No se pudo leer el TA de cache: {e}")
+            return False
+
+    def _guardar_token_cache(self, exp_str):
+        """Persiste el TA (token+sign+expiración) en cache/token_arca.json."""
+        try:
+            expira = None
+            if exp_str:
+                try:
+                    expira = datetime.fromisoformat(exp_str.strip())
+                    if expira.tzinfo is not None:
+                        expira = expira.replace(tzinfo=None)
+                except Exception:
+                    expira = None
+            if expira is None:
+                expira = datetime.now() + timedelta(hours=11)
+            self.token_expira = expira
+            carpeta = os.path.dirname(self.config.TOKEN_CACHE_FILE) or '.'
+            os.makedirs(carpeta, exist_ok=True)
+            with open(self.config.TOKEN_CACHE_FILE, 'w', encoding='utf-8') as f:
+                json.dump({
+                    'token':        self.token,
+                    'sign':         self.sign,
+                    'expira':       expira.isoformat(),
+                    'homologacion': bool(self.config.USE_HOMOLOGACION),
+                }, f)
+            print(f"💾 TA guardado en {self.config.TOKEN_CACHE_FILE} (vence {expira})")
+        except Exception as e:
+            print(f"⚠️ No se pudo guardar el TA en cache: {e}")
+
     def get_ticket_access(self):
         """Obtener ticket de acceso de WSAA con cache inteligente"""
         try:
-            # *** NUEVO: Cache inteligente de tokens ***
-            if hasattr(self, 'token_timestamp') and self.token and self.sign:
-                # Verificar si el token aún es válido (duran 12 horas, usamos 10 horas para estar seguros)
-                tiempo_transcurrido = datetime.now() - self.token_timestamp
-                
-                if tiempo_transcurrido < timedelta(hours=10):
-                    print(f"🎫 Usando token existente (válido por {10 - tiempo_transcurrido.seconds//3600} horas más)")
+            # *** Cache de tokens: memoria o disco, validez por expiración REAL del TA ***
+            if not (self.token and self.sign and self.token_expira):
+                self._cargar_token_cache()
+
+            if self.token and self.sign and self.token_expira:
+                if datetime.now() < (self.token_expira - timedelta(minutes=10)):
+                    print(f"🎫 Usando TA vigente (vence {self.token_expira})")
                     return True
                 else:
-                    print("⏰ Token expirado, obteniendo uno nuevo...")
-                    # Limpiar tokens viejos
+                    print("⏰ TA vencido, obteniendo uno nuevo...")
                     self.token = None
                     self.sign = None
-                    delattr(self, 'token_timestamp')
+                    self.token_expira = None
             
             print("🎫 Obteniendo nuevo ticket de acceso...")
             
@@ -1689,8 +1739,10 @@ class ARCAClient:
                 self.token = token_elem.text
                 self.sign = sign_elem.text
                 
-                # *** NUEVO: Guardar timestamp del token ***
+                # *** Persistir el TA en disco ***
                 self.token_timestamp = datetime.now()
+                _exp = root.find('.//expirationTime')
+                self._guardar_token_cache(_exp.text if _exp is not None else None)
                 
                 print("✅ Ticket de acceso obtenido y guardado en cache")
                 return True
@@ -1702,13 +1754,15 @@ class ARCAClient:
             
             # *** NUEVO: Manejo específico del error de token duplicado ***
             if "El CEE ya posee un TA valido" in error_msg:
-                print("⚠️ AFIP indica que ya hay un token válido")
-                print("💡 Esperando 30 segundos y reintentando...")
-                
+                print("⚠️ AFIP indica que ya hay un TA válido para este CUIT")
+                if self._cargar_token_cache() and self.token and self.sign and \
+                   self.token_expira and datetime.now() < (self.token_expira - timedelta(minutes=10)):
+                    print("🎫 Reutilizando TA guardado en cache (válido)")
+                    return True
+                print("❌ Hay un TA válido en AFIP pero NO está guardado localmente.")
                 import time
-                time.sleep(30)  # Esperar 30 segundos
+                time.sleep(30)
                 
-                # Limpiar tokens y reintentar UNA SOLA VEZ
                 self.token = None
                 self.sign = None
                 if hasattr(self, 'token_timestamp'):
@@ -1735,6 +1789,8 @@ class ARCAClient:
                             self.token = token_elem.text
                             self.sign = sign_elem.text
                             self.token_timestamp = datetime.now()
+                            _exp2 = root.find('.//expirationTime')
+                            self._guardar_token_cache(_exp2.text if _exp2 is not None else None)
                             
                             print("✅ Token obtenido exitosamente en segundo intento")
                             return True
@@ -1744,6 +1800,55 @@ class ARCAClient:
             
             print(f"❌ Error obteniendo ticket: {e}")
             return False
+
+    def _cond_iva_codigo(self, valor):
+        """Mapea la condición de IVA guardada del cliente al código AFIP. None si no la reconoce."""
+        if not valor:
+            return None
+        v = str(valor).strip().upper().replace(' ', '_')
+        try:
+            cond = self.config.CONDICIONES_IVA
+            if v in cond:
+                return int(cond[v])
+        except Exception:
+            pass
+        mapa = {
+            'CF': 5, 'CONSUMIDOR_FINAL': 5, 'CONSUMIDORFINAL': 5,
+            'RI': 1, 'RESPONSABLE_INSCRIPTO': 1, 'IVA_RESPONSABLE_INSCRIPTO': 1,
+            'EXENTO': 4, 'SUJETO_EXENTO': 4, 'IVA_SUJETO_EXENTO': 4,
+            'MONOTRIBUTO': 6, 'RESPONSABLE_MONOTRIBUTO': 6, 'MONOTRIBUTISTA': 6,
+            'NO_CATEGORIZADO': 7, 'SUJETO_NO_CATEGORIZADO': 7,
+            'MONOTRIBUTISTA_SOCIAL': 13, 'NO_ALCANZADO': 15, 'IVA_NO_ALCANZADO': 15,
+        }
+        if v in mapa:
+            return mapa[v]
+        if 'EXENTO' in v:        return 4
+        if 'MONOTRIB' in v:      return 6
+        if 'INSCRIPTO' in v:     return 1
+        if 'CONSUMIDOR' in v:    return 5
+        if 'NO_CATEGORIZADO' in v: return 7
+        return None
+
+    def get_cond_iva_receptor(self, datos_comprobante, tipo_cbte):
+        """Condición frente al IVA del receptor (RG 5616)."""
+        cond = datos_comprobante.get('condicion_iva_receptor')
+        if cond:
+            try:
+                return int(cond)
+            except (TypeError, ValueError):
+                pass
+        cod = self._cond_iva_codigo(datos_comprobante.get('condicion_iva_str'))
+        if cod:
+            return cod
+        t = int(tipo_cbte)
+        doc_tipo = int(datos_comprobante.get('doc_tipo', 99) or 99)
+        if t in (1, 2, 3, 51, 52, 53):
+            return 1
+        if doc_tipo in (96, 99):
+            return 5
+        if doc_tipo == 80:
+            return 6
+        return 5
 
     def autorizar_comprobante(self, datos_comprobante):
         """
@@ -1758,8 +1863,8 @@ class ARCAClient:
             
             print("🌐 Conectando con WSFEv1...")
             
-            # IMPORTANTE: URL limpia y configuración correcta
-            wsfev1_url = 'https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL'
+            # URL de WSFEv1 según ambiente (homologación o producción) — NO hardcodear.
+            wsfev1_url = self.config.WSFEv1_URL
             
             # Crear cliente SOAP con configuración específica
             session = crear_session_afip()
@@ -1921,6 +2026,8 @@ class ARCAClient:
                 'ImpIVA': importe_iva_total,
                 'MonId': 'PES',
                 'MonCotiz': 1.00,
+                # RG 5616: condición frente al IVA del receptor (obligatorio)
+                'CondicionIVAReceptorId': self.get_cond_iva_receptor(datos_comprobante, tipo_cbte),
             }
             
             # *** NUEVO: AGREGAR COMPROBANTES ASOCIADOS (para Notas de Crédito) ***
@@ -4898,6 +5005,8 @@ def procesar_venta():
                         datos_comprobante['doc_tipo'] = 96
                         datos_comprobante['doc_nro'] = int(cliente.documento)
                 
+                if cliente:
+                    datos_comprobante['condicion_iva_str'] = cliente.condicion_iva
                 resultado_afip = arca_client.autorizar_comprobante(datos_comprobante)
                 
                 if resultado_afip['success']:
@@ -7258,6 +7367,8 @@ def reintentar_afip(factura_id):
                 datos_comprobante['doc_tipo'] = 96  # DNI
                 datos_comprobante['doc_nro'] = int(cliente.documento)
         
+        if cliente:
+            datos_comprobante['condicion_iva_str'] = cliente.condicion_iva
         # Intentar autorizar en AFIP
         resultado_afip = arca_client.autorizar_comprobante(datos_comprobante)
         
@@ -8019,6 +8130,7 @@ def emitir_nota_credito(factura_id):
             'punto_venta':              factura.punto_venta,
             'doc_tipo':                 doc_tipo,
             'doc_nro':                  doc_nro,
+            'condicion_iva_str':        (cliente.condicion_iva if cliente else None),
             'items_detalle':            items_detalle,
             'comprobantes_asociados':   [{
                 'Tipo':   int(factura.tipo_comprobante),
@@ -8218,6 +8330,276 @@ def emitir_nota_credito(factura_id):
                 'vto_cae': vto_cae_date.strftime('%d/%m/%Y') if vto_cae_date else '',
                 'total':   float(factura.total),
             },
+        }
+        if post_warning:
+            resp['warning'] = post_warning
+        return jsonify(resp)
+
+    except Exception as e:
+        db.session.rollback()
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/factura/<int:factura_id>/lineas_nc', methods=['GET'])
+def api_factura_lineas_nc(factura_id):
+    """Devuelve las líneas de una factura para el modal de NC parcial,
+    marcando las que ya fueron acreditadas por una NC autorizada previa."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        factura = Factura.query.get_or_404(factura_id)
+
+        # Producto_ids ya acreditados por NCs autorizadas de esta factura
+        acreditados = set()
+        filas = db.session.execute(text("""
+            SELECT DISTINCT dnc.producto_id
+              FROM detalle_nota_credito dnc
+              JOIN notas_credito nc ON nc.id = dnc.nota_credito_id
+             WHERE nc.factura_id = :fid AND nc.estado = 'autorizada'
+        """), {'fid': factura_id}).fetchall()
+        for f in filas:
+            acreditados.add(f[0])
+
+        detalles = DetalleFactura.query.filter_by(factura_id=factura_id).all()
+        lineas = []
+        for d in detalles:
+            iva_pct = float(d.porcentaje_iva) if d.porcentaje_iva is not None else (
+                float(d.producto.iva) if d.producto else 21.0)
+            lineas.append({
+                'detalle_id':      d.id,
+                'producto_id':     d.producto_id,
+                'nombre':          d.producto.nombre if d.producto else f'Producto {d.producto_id}',
+                'codigo':          d.producto.codigo if d.producto else '',
+                'cantidad':        float(d.cantidad),
+                'precio_unitario': float(d.precio_unitario),
+                'subtotal':        float(d.subtotal),
+                'porcentaje_iva':  iva_pct,
+                'ya_acreditada':   d.producto_id in acreditados,
+            })
+
+        return jsonify({
+            'success': True,
+            'factura': {
+                'id':               factura.id,
+                'numero':           factura.numero,
+                'tipo_comprobante': factura.tipo_comprobante,
+                'estado':           factura.estado,
+            },
+            'lineas': lineas,
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/emitir_nota_credito_parcial/<int:factura_id>', methods=['POST'])
+def emitir_nota_credito_parcial(factura_id):
+    """Emite una Nota de Crédito electrónica (AFIP) por LÍNEAS COMPLETAS
+    seleccionadas de la factura, SIN anular la factura. Devuelve stock de esas
+    líneas y descuenta de la cuenta corriente el monto de la NC."""
+    if 'user_id' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    try:
+        factura = Factura.query.get_or_404(factura_id)
+
+        if factura.estado == 'anulada':
+            return jsonify({'success': False, 'error': 'La factura está anulada; no se puede emitir NC parcial'}), 400
+        if factura.estado != 'autorizada':
+            return jsonify({'success': False, 'error': 'Solo se puede emitir NC parcial sobre facturas autorizadas'}), 400
+
+        data = request.json or {}
+        detalle_ids = data.get('detalle_ids') or []
+        motivo = (data.get('motivo') or 'Nota de crédito parcial').strip()
+        if not detalle_ids:
+            return jsonify({'success': False, 'error': 'No se seleccionó ninguna línea'}), 400
+
+        tipo_nc_map = {
+            '01': ('03', 'Nota de Crédito A'), '1': ('03', 'Nota de Crédito A'),
+            '06': ('08', 'Nota de Crédito B'), '6': ('08', 'Nota de Crédito B'),
+            '11': ('13', 'Nota de Crédito C'),
+            '51': ('53', 'Nota de Crédito M'),
+        }
+        tipo_nc_info = tipo_nc_map.get(str(factura.tipo_comprobante))
+        if not tipo_nc_info:
+            return jsonify({'success': False, 'error': f'Tipo de factura no soportado para NC: {factura.tipo_comprobante}'}), 400
+        tipo_nc, nombre_nc = tipo_nc_info
+
+        # Líneas seleccionadas (validadas contra la factura)
+        detalles_sel = DetalleFactura.query.filter(
+            DetalleFactura.id.in_(detalle_ids),
+            DetalleFactura.factura_id == factura.id
+        ).all()
+        if not detalles_sel:
+            return jsonify({'success': False, 'error': 'Las líneas seleccionadas no pertenecen a la factura'}), 400
+
+        # Bloquear líneas cuyo producto ya fue acreditado por una NC autorizada
+        acreditados = set()
+        for f in db.session.execute(text("""
+            SELECT DISTINCT dnc.producto_id FROM detalle_nota_credito dnc
+              JOIN notas_credito nc ON nc.id = dnc.nota_credito_id
+             WHERE nc.factura_id = :fid AND nc.estado = 'autorizada'
+        """), {'fid': factura.id}).fetchall():
+            acreditados.add(f[0])
+        ya = [d for d in detalles_sel if d.producto_id in acreditados]
+        if ya:
+            nombres = ', '.join((d.producto.nombre if d.producto else str(d.producto_id)) for d in ya)
+            return jsonify({'success': False, 'error': f'Estas líneas ya tienen NC: {nombres}'}), 400
+
+        # Totales e items para AFIP (solo líneas seleccionadas)
+        items_detalle = []
+        subtotal_nc = 0.0
+        iva_nc = 0.0
+        for d in detalles_sel:
+            iva_pct = float(d.porcentaje_iva) if d.porcentaje_iva is not None else (
+                float(d.producto.iva) if d.producto else 21.0)
+            items_detalle.append({'subtotal': float(d.subtotal), 'iva_porcentaje': iva_pct})
+            subtotal_nc += float(d.subtotal)
+            iva_nc += round(float(d.subtotal) * iva_pct / 100, 2)
+        subtotal_nc = round(subtotal_nc, 2)
+        iva_nc = round(iva_nc, 2)
+        total_nc = round(subtotal_nc + iva_nc, 2)
+
+        cliente = Cliente.query.get(factura.cliente_id)
+        # DocTipo/DocNro del receptor según su documento real.
+        doc_tipo = 99
+        doc_nro = 0
+        if cliente and cliente.documento:
+            doc_limpio = str(cliente.documento).replace('-', '').replace('.', '').strip()
+            if cliente.tipo_documento == 'CUIT' and len(doc_limpio) == 11:
+                doc_tipo, doc_nro = 80, int(doc_limpio)
+            elif cliente.tipo_documento == 'DNI' and len(doc_limpio) >= 7:
+                doc_tipo, doc_nro = 96, int(doc_limpio)
+            elif len(doc_limpio) == 11 and doc_limpio.isdigit():
+                doc_tipo, doc_nro = 80, int(doc_limpio)
+            elif doc_limpio.isdigit():
+                doc_tipo, doc_nro = 96, int(doc_limpio)
+        # Comprobantes clase A (01) y M (51) exigen CUIT del receptor (DocTipo 80)
+        if str(factura.tipo_comprobante) in ('1', '01', '51') and doc_nro:
+            doc_tipo = 80
+        numero_factura_int = int(factura.numero.split('-')[1])
+
+        datos_nc = {
+            'tipo_comprobante':       int(tipo_nc),
+            'punto_venta':            factura.punto_venta,
+            'doc_tipo':               doc_tipo,
+            'doc_nro':                doc_nro,
+            'condicion_iva_str':      (cliente.condicion_iva if cliente else None),
+            'items_detalle':          items_detalle,
+            'comprobantes_asociados': [{
+                'Tipo':   int(factura.tipo_comprobante),
+                'PtoVta': factura.punto_venta,
+                'Nro':    numero_factura_int,
+            }],
+        }
+
+        print(f"\n{'='*60}\n📝 EMITIENDO {nombre_nc} PARCIAL  Factura {factura.numero}  Total ${total_nc:.2f}\n{'='*60}")
+        resultado = arca_client.autorizar_comprobante(datos_nc)
+
+        if not resultado.get('success'):
+            error_msg = resultado.get('error', 'Error desconocido de AFIP')
+            nc = NotaCredito(
+                tipo_comprobante=tipo_nc, punto_venta=factura.punto_venta, fecha=datetime.now(),
+                factura_id=factura.id, factura_numero=factura.numero, cliente_id=factura.cliente_id,
+                usuario_id=session['user_id'], subtotal=Decimal(str(subtotal_nc)), iva=Decimal(str(iva_nc)),
+                total=Decimal(str(total_nc)), estado='error', error_afip=error_msg,
+                motivo=f'[PARCIAL] {motivo}', fecha_creacion=datetime.now(),
+            )
+            db.session.add(nc); db.session.commit()
+            return jsonify({'success': False, 'error': f'Error AFIP: {error_msg}'}), 400
+
+        cae = resultado.get('cae', '')
+        vto_cae_str = resultado.get('vto_cae', '')
+        numero_nc = resultado.get('numero_comprobante', '')
+        pv = factura.punto_venta
+        numero_nc_fmt = f"{pv:04d}-{numero_nc:08d}" if isinstance(numero_nc, int) else str(numero_nc)
+        vto_cae_date = None
+        if vto_cae_str:
+            try:
+                vto_cae_date = datetime.strptime(str(vto_cae_str), '%Y%m%d').date()
+            except Exception:
+                pass
+
+        nc = NotaCredito(
+            numero=numero_nc_fmt, tipo_comprobante=tipo_nc, punto_venta=pv, fecha=datetime.now(),
+            factura_id=factura.id, factura_numero=factura.numero, cliente_id=factura.cliente_id,
+            usuario_id=session['user_id'], subtotal=Decimal(str(subtotal_nc)), iva=Decimal(str(iva_nc)),
+            total=Decimal(str(total_nc)), estado='autorizada', cae=cae, vto_cae=vto_cae_date,
+            motivo=f'[PARCIAL] {motivo}', fecha_creacion=datetime.now(), fecha_autorizacion=datetime.now(),
+        )
+        db.session.add(nc)
+        db.session.flush()  # obtener nc.id
+
+        for d in detalles_sel:
+            iva_pct = float(d.porcentaje_iva) if d.porcentaje_iva is not None else (
+                float(d.producto.iva) if d.producto else 21.0)
+            det_nc = DetalleNotaCredito(
+                nota_credito_id=nc.id, producto_id=d.producto_id, cantidad=d.cantidad,
+                precio_unitario=d.precio_unitario, subtotal=d.subtotal,
+                porcentaje_iva=Decimal(str(iva_pct)),
+                importe_iva=Decimal(str(round(float(d.subtotal) * iva_pct / 100, 2))),
+            )
+            db.session.add(det_nc)
+
+        # COMMIT #1: la NC ya tiene CAE (irreversible). Se persiste antes de los pasos secundarios.
+        db.session.commit()
+        print(f"✅ NC PARCIAL {numero_nc_fmt} autorizada. CAE: {cae}")
+
+        post_warning = None
+        try:
+            # Reintegro de stock SOLO de las líneas acreditadas (la factura NO se anula)
+            es_consignacion = factura.interno_origen_id is not None
+            if not es_consignacion:
+                for d in detalles_sel:
+                    prod = Producto.query.get(d.producto_id)
+                    if prod:
+                        aumentar_stock_producto(
+                            producto=prod, cantidad=float(d.cantidad), tipo='nota_credito_parcial',
+                            referencia_tipo='nota_credito', referencia_id=None,
+                            motivo=f'Reintegro por NC parcial {numero_nc_fmt} - {motivo}',
+                        )
+
+            # Cta cte: descontar de la deuda el monto de la NC (solo si la factura
+            # tenía venta_fiada pendiente). La factura sigue como deuda; la NC se
+            # inserta como Haber que compensa vía la fórmula (tipo='nota_credito').
+            existe_venta_fiada = db.session.execute(text("""
+                SELECT COUNT(*) FROM cta_cte_movimiento
+                WHERE factura_id = :fid AND tipo = 'venta_fiada' AND estado = 'pendiente'
+            """), {'fid': factura.id}).scalar() or 0
+            if existe_venta_fiada > 0:
+                db.session.execute(text("""
+                    INSERT INTO cta_cte_movimiento
+                        (cliente_id, fecha, tipo, tipo_mov, estado, monto_total,
+                         saldo_pendiente, factura_id, usuario_id, numero_comprobante, observaciones)
+                    VALUES
+                        (:cliente_id, NOW(), 'nota_credito', 'pago', 'pagado', :monto,
+                         0.00, :factura_id, :usuario_id, :nc_numero, :obs)
+                """), {
+                    'cliente_id': factura.cliente_id, 'monto': total_nc, 'factura_id': factura.id,
+                    'usuario_id': session['user_id'], 'nc_numero': numero_nc_fmt,
+                    'obs': f'NC parcial {numero_nc_fmt} s/ factura {factura.numero} (CAE {cae})',
+                })
+            db.session.commit()
+            print(f"✅ NC parcial: stock reintegrado y cta cte actualizada.")
+        except Exception as e_post:
+            db.session.rollback()
+            import traceback; traceback.print_exc()
+            post_warning = (
+                f'La NC parcial {numero_nc_fmt} se autorizó CORRECTAMENTE ante AFIP (CAE {cae}), '
+                f'pero falló un paso posterior (stock / cta cte): {str(e_post)}. Revisar manualmente. '
+                f'La NC NO se perdió.'
+            )
+            print(f"⚠️ {post_warning}")
+
+        resp = {
+            'success':   True,
+            'message':   f'Nota de Crédito parcial {numero_nc_fmt} emitida y autorizada por AFIP',
+            'numero_nc': numero_nc_fmt,
+            'cae':       cae,
+            'vto_cae':   vto_cae_date.strftime('%d/%m/%Y') if vto_cae_date else '',
+            'nc_id':     nc.id,
+            'total':     total_nc,
+            'lineas_acreditadas': len(detalles_sel),
         }
         if post_warning:
             resp['warning'] = post_warning

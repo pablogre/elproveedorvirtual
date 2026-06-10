@@ -130,7 +130,7 @@ def api_buscar_notas_credito():
             query = query.filter(NotaCredito.fecha >= fecha_desde)
         
         if fecha_hasta:
-            query = query.filter(NotaCredito.fecha <= fecha_hasta)
+            query = query.filter(NotaCredito.fecha <= fecha_hasta + ' 23:59:59')
         
         # Ordenar por fecha descendente
         query = query.order_by(NotaCredito.fecha.desc())
@@ -243,7 +243,7 @@ def api_estadisticas_notas_credito():
             query = query.filter(NotaCredito.fecha >= fecha_desde)
         
         if fecha_hasta:
-            query = query.filter(NotaCredito.fecha <= fecha_hasta)
+            query = query.filter(NotaCredito.fecha <= fecha_hasta + ' 23:59:59')
         
         todas = query.all()
         
