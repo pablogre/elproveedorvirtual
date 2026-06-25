@@ -1,0 +1,224 @@
+<!-- templates/nc_interna.html -->
+{% extends "base.html" %}
+
+{% block title %}Devolución / NC Interna - POS Argentina{% endblock %}
+
+{% block content %}
+<style>
+  #nciLineas td { vertical-align: middle; }
+  .nci-input { width: 100px; text-align: right; }
+  .nci-devolvible { font-weight: 600; }
+  .nci-total-box { font-size: 1.4rem; font-weight: 700; }
+  .nci-linea-activa { background: #fff8f0; }
+</style>
+
+<div class="container-fluid py-3">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="fas fa-undo-alt text-warning"></i> Devolución / Nota de Crédito Interna</h4>
+    <a href="javascript:void(0)" onclick="if(history.length>1){history.back()}else{location.href='/'}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left"></i> Volver</a>
+  </div>
+
+  <p class="text-muted">
+    Devolución de mercadería de un <strong>comprobante interno</strong>. Reintegra el stock de lo
+    devuelto y, si el interno fue a cuenta corriente, baja la deuda del cliente por ese monto.
+  </p>
+
+  <!-- Buscar interno -->
+  <div class="card mb-3">
+    <div class="card-body">
+      <label class="form-label fw-bold">Número de comprobante interno</label>
+      <div class="d-flex gap-2" style="max-width:480px;">
+        <input type="text" id="nciNumero" class="form-control" placeholder="Ej: 0006-X0000040"
+               onkeydown="if(event.key==='Enter'){buscarInterno();}">
+        <button class="btn btn-primary" onclick="buscarInterno()"><i class="fas fa-search"></i> Buscar</button>
+      </div>
+      <div id="nciError" class="text-danger small mt-2"></div>
+    </div>
+  </div>
+
+  <!-- Detalle del interno -->
+  <div class="card mb-3" id="nciCard" style="display:none;">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center">
+      <div>
+        <strong id="nciCabNumero"></strong>
+        <span class="text-muted ms-2" id="nciCabFecha"></span>
+        <span class="badge bg-info text-dark ms-2" id="nciCabCliente"></span>
+        <span class="badge bg-secondary ms-1" id="nciCabCC"></span>
+      </div>
+      <div class="text-muted">Total original: <strong id="nciCabTotal"></strong></div>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th>Producto</th>
+              <th class="text-center">Vendido</th>
+              <th class="text-center">Ya devuelto</th>
+              <th class="text-center">Devolvible</th>
+              <th class="text-end">Precio</th>
+              <th class="text-center">A devolver</th>
+              <th class="text-end">Subtotal dev.</th>
+            </tr>
+          </thead>
+          <tbody id="nciLineas"></tbody>
+        </table>
+      </div>
+
+      <div class="row g-3 mt-1">
+        <div class="col-md-7">
+          <label class="form-label fw-bold">Motivo</label>
+          <input type="text" id="nciMotivo" class="form-control" value="Devolución de mercadería">
+        </div>
+        <div class="col-md-5 text-md-end">
+          <div class="text-muted">Total NC interna</div>
+          <div class="nci-total-box text-success">$<span id="nciTotal">0.00</span></div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end mt-3">
+        <button class="btn btn-warning btn-lg" id="nciBtnEmitir" onclick="emitirNcInterna()">
+          <i class="fas fa-undo-alt"></i> Emitir NC interna
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let nciInterno = null;
+let nciLineasData = [];
+
+function _nciToast(msg, tipo) {
+  if (typeof toast === 'function') return toast(msg, tipo || 'success');
+  if (typeof Swal !== 'undefined') return Swal.fire({ text: msg, icon: tipo === 'error' ? 'error' : 'success' });
+  alert(msg);
+}
+function _nciAlert(msg) {
+  if (typeof alertSwal === 'function') return alertSwal(msg, 'error');
+  if (typeof Swal !== 'undefined') return Swal.fire({ text: msg, icon: 'error' });
+  alert(msg);
+}
+
+function buscarInterno() {
+  const numero = document.getElementById('nciNumero').value.trim();
+  const errBox = document.getElementById('nciError');
+  errBox.textContent = '';
+  if (!numero) { errBox.textContent = 'Ingresá un número.'; return; }
+
+  fetch(`/api/nc_interna/buscar?numero=${encodeURIComponent(numero)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) { errBox.textContent = data.error || 'No se encontró.'; document.getElementById('nciCard').style.display = 'none'; return; }
+      nciInterno = data.interno;
+      nciLineasData = data.lineas;
+      renderInterno();
+    })
+    .catch(() => { errBox.textContent = 'Error de conexión.'; });
+}
+
+function renderInterno() {
+  document.getElementById('nciCabNumero').textContent = nciInterno.numero;
+  document.getElementById('nciCabFecha').textContent = nciInterno.fecha;
+  document.getElementById('nciCabCliente').textContent = nciInterno.cliente;
+  document.getElementById('nciCabTotal').textContent = '$' + nciInterno.total.toFixed(2);
+  const ccBadge = document.getElementById('nciCabCC');
+  ccBadge.textContent = nciInterno.en_cta_cte ? 'A cuenta corriente' : 'Contado';
+  ccBadge.className = 'badge ms-1 ' + (nciInterno.en_cta_cte ? 'bg-warning text-dark' : 'bg-success');
+
+  const tbody = document.getElementById('nciLineas');
+  tbody.innerHTML = nciLineasData.map((l, idx) => `
+    <tr data-idx="${idx}">
+      <td><strong>${l.codigo ? l.codigo + ' - ' : ''}</strong>${l.nombre}</td>
+      <td class="text-center">${l.cantidad}</td>
+      <td class="text-center">${l.ya_devuelto || 0}</td>
+      <td class="text-center nci-devolvible">${l.devolvible}</td>
+      <td class="text-end">$${l.precio_unitario.toFixed(2)}</td>
+      <td class="text-center">
+        <input type="number" class="form-control form-control-sm nci-input" min="0" step="1"
+               max="${l.devolvible}" value="0" data-idx="${idx}"
+               oninput="onCantidadDevolver(this)" ${l.devolvible <= 0 ? 'disabled' : ''}>
+      </td>
+      <td class="text-end" id="nciSub-${idx}">$0.00</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('nciTotal').textContent = '0.00';
+  document.getElementById('nciCard').style.display = 'block';
+}
+
+function onCantidadDevolver(input) {
+  const idx = parseInt(input.dataset.idx);
+  const l = nciLineasData[idx];
+  let cant = parseFloat(input.value) || 0;
+  if (cant < 0) { cant = 0; input.value = 0; }
+  if (cant > l.devolvible) { cant = l.devolvible; input.value = l.devolvible; }
+
+  const sub = cant * l.precio_unitario;            // subtotal sin IVA de lo devuelto
+  const iva = sub * (l.porcentaje_iva / 100);
+  const totLinea = sub + iva;
+  document.getElementById('nciSub-' + idx).textContent = '$' + totLinea.toFixed(2);
+
+  input.closest('tr').classList.toggle('nci-linea-activa', cant > 0);
+  recalcularTotalNci();
+}
+
+function recalcularTotalNci() {
+  let total = 0;
+  document.querySelectorAll('#nciLineas .nci-input').forEach(inp => {
+    const idx = parseInt(inp.dataset.idx);
+    const l = nciLineasData[idx];
+    const cant = parseFloat(inp.value) || 0;
+    const sub = cant * l.precio_unitario;
+    total += sub + sub * (l.porcentaje_iva / 100);
+  });
+  document.getElementById('nciTotal').textContent = total.toFixed(2);
+}
+
+function emitirNcInterna() {
+  if (!nciInterno) return;
+  const lineas = [];
+  document.querySelectorAll('#nciLineas .nci-input').forEach(inp => {
+    const idx = parseInt(inp.dataset.idx);
+    const cant = parseFloat(inp.value) || 0;
+    if (cant > 0) lineas.push({ detalle_id: nciLineasData[idx].detalle_id, cantidad: cant });
+  });
+  if (lineas.length === 0) { _nciAlert('No indicaste ninguna cantidad a devolver.'); return; }
+
+  const motivo = document.getElementById('nciMotivo').value.trim() || 'Devolución de mercadería';
+  const btn = document.getElementById('nciBtnEmitir');
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Emitiendo...';
+
+  fetch(`/api/nc_interna/emitir/${nciInterno.id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ motivo, lineas })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        _nciToast(data.message + ` — Total $${data.total.toFixed(2)}`, 'success');
+        // Recargar el interno para reflejar lo que queda devolvible
+        buscarInterno();
+      } else {
+        _nciAlert(data.error || 'No se pudo emitir.');
+      }
+    })
+    .catch(() => _nciAlert('Error de conexión al emitir.'))
+    .finally(() => { btn.disabled = false; btn.innerHTML = orig; });
+}
+
+// Autocargar el interno si la URL trae ?numero= (deep-link desde el listado de Facturas)
+document.addEventListener('DOMContentLoaded', function () {
+  const numero = new URLSearchParams(window.location.search).get('numero');
+  if (numero) {
+    document.getElementById('nciNumero').value = numero;
+    buscarInterno();
+  }
+});
+</script>
+{% endblock %}

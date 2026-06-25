@@ -17,7 +17,7 @@
             <i class="fas fa-barcode me-1"></i> Códigos por Proveedor
         </a>
         <a href="{{ url_for('compras.nueva') }}" class="btn btn-primary">
-            <i class="fas fa-plus me-1"></i> Nueva Factura
+            <i class="fas fa-plus me-1"></i> Nuevo Comprobante
         </a>
     </div>
 </div>
@@ -145,7 +145,7 @@
                                 <ul>
                                     <li><i class="fas fa-file-invoice-dollar"></i> <strong>Gastos y Servicios</strong>: te lleva al otro módulo, para cargar facturas que no son de mercadería.</li>
                                     <li><i class="fas fa-barcode"></i> <strong>Códigos por Proveedor</strong>: gestionás los códigos que cada proveedor usa para tus productos (útil para que el OCR vincule automáticamente).</li>
-                                    <li><i class="fas fa-plus"></i> <strong>Nueva Factura</strong>: abre el formulario para cargar una factura, ya sea manualmente o con OCR.</li>
+                                    <li><i class="fas fa-plus"></i> <strong>Nuevo Comprobante</strong>: abre el formulario para cargar un comprobante, ya sea manualmente o con OCR.</li>
                                 </ul>
 
                                 <h6 class="fw-bold mt-3">Filtros</h6>
@@ -182,7 +182,7 @@
                         </h2>
                         <div id="c_paso_a_paso" class="accordion-collapse collapse" aria-labelledby="hd_paso_a_paso" data-bs-parent="#accordionAyudaCompras">
                             <div class="accordion-body">
-                                <p>Click en <strong>Nueva Factura</strong>. Vas a ver dos partes: <em>cabecera</em> arriba y <em>detalle de artículos</em> abajo.</p>
+                                <p>Click en <strong>Nuevo Comprobante </strong>. Vas a ver dos partes: <em>cabecera</em> arriba y <em>detalle de artículos</em> abajo.</p>
 
                                 <h6 class="fw-bold mt-3"><span class="badge bg-secondary">PASO 1</span> Cabecera</h6>
                                 <ul>
@@ -242,7 +242,7 @@
 
                                 <h6 class="fw-bold">Cómo escanear</h6>
                                 <ol>
-                                    <li>En el formulario de Nueva Factura, click en <strong>"Escanear factura"</strong>.</li>
+                                    <li>En el formulario de Nuevo Comprobante, click en <strong>"Escanear Comprobante"</strong>.</li>
                                     <li>Subí una foto del celular (.jpg, .png) o un PDF.</li>
                                     <li>Esperá 5-15 segundos. El sistema lee y completa: proveedor, fecha, CAE, tipo, PV, número, items, IVA, percepciones.</li>
                                     <li>Revisá los datos. Si hay items con fondo amarillo <code>[SIN VINCULAR]</code>, hacé click en <i class="fas fa-link"></i> Vincular para asociarlos a un producto tuyo (o usá Alta Rápida si es nuevo).</li>

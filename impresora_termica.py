@@ -210,6 +210,16 @@ class ImpresoraTermica:
                 if hasattr(factura.cliente, 'documento') and factura.cliente.documento:
                     tipo_doc = getattr(factura.cliente, 'tipo_documento', 'DNI') or "DNI"
                     lineas.append(f"{tipo_doc}: {factura.cliente.documento}")
+
+                # Leyenda obligatoria (RG 5022/2021 - Ley 27.618):
+                # Factura A emitida a un Monotributista debe llevar esta leyenda.
+                # Se detecta igual que en app.py: condicion_iva del cliente que contenga 'MONOTRIB'.
+                _tipo_cbte = str(getattr(factura, 'tipo_comprobante', ''))
+                _cond_cli = str(getattr(factura.cliente, 'condicion_iva', '') or '').upper()
+                if _tipo_cbte in ['1', '01'] and 'MONOTRIB' in _cond_cli:
+                    lineas.append("")
+                    lineas.append(self.centrar_texto("Receptor del comprobante -"))
+                    lineas.append(self.centrar_texto("Responsable Monotributo"))
             else:
                 lineas.append("Cliente: Consumidor Final")
             
@@ -618,6 +628,209 @@ class ImpresoraTermica:
             print(f"❌ ERROR GENERAL: {e}")
             import traceback
             traceback.print_exc()
+            return False
+
+    # NOTAS DE CREDITO ELECTRONICAS
+    # ════════════════════════════════════════════════════════════
+    def formatear_nota_credito_termica(self, nota_credito):
+        """Formatear Nota de Credito para impresion termica de 80mm."""
+        lineas = []
+        try:
+            nc = nota_credito
+            tipo = str(getattr(nc, 'tipo_comprobante', '08'))
+
+            lineas.append("")
+            lineas.append("              \x1B\x45\x01\x1B\x21\x30" + TICKET_NOMBRE_COMERCIAL + "\x1B\x21\x00\x1B\x45\x00")
+            lineas.append("")
+            lineas.append(self.centrar_texto(f"CUIT: {TICKET_CUIT_FORMATO}"))
+            lineas.append(self.centrar_texto(f"IVA: {TICKET_CONDICION_IVA}"))
+            lineas.append(self.centrar_texto(f"Dir: {TICKET_DIRECCION}"))
+            lineas.append("")
+
+            tipo_cbte = self._obtener_tipo_comprobante(tipo)
+            lineas.append(self.centrar_texto(f"=== {tipo_cbte} ==="))
+            lineas.append(self.centrar_texto(f"Nro: {getattr(nc, 'numero', '')}"))
+            lineas.append("")
+
+            fecha = getattr(nc, 'fecha', None)
+            if fecha and hasattr(fecha, 'strftime'):
+                lineas.append(f"Fecha: {fecha.strftime('%d/%m/%Y %H:%M')}")
+
+            vendedor = "Sistema"
+            if hasattr(nc, 'usuario') and nc.usuario:
+                vendedor = getattr(nc.usuario, 'nombre', 'Sistema')
+            lineas.append(f"Vendedor: {self.truncar_texto(vendedor, 20)}")
+
+            fac_num = getattr(nc, 'factura_numero', None)
+            if not fac_num and hasattr(nc, 'factura') and nc.factura:
+                fac_num = getattr(nc.factura, 'numero', None)
+            if fac_num:
+                lineas.append(f"Asociada a Fact: {fac_num}")
+
+            lineas.append(self.linea_separadora())
+
+            if hasattr(nc, 'cliente') and nc.cliente:
+                lineas.append(f"Cliente: {self.truncar_texto(nc.cliente.nombre, self.ancho)}")
+                doc = getattr(nc.cliente, 'documento', None)
+                if doc:
+                    tipo_doc = getattr(nc.cliente, 'tipo_documento', 'DNI') or 'DNI'
+                    lineas.append(f"{tipo_doc}: {doc}")
+            else:
+                lineas.append("Cliente: Consumidor Final")
+
+            lineas.append(self.linea_separadora())
+
+            es_b_o_c = tipo in ['8', '08', '13']
+            detalles = getattr(nc, 'detalles', None) or []
+            if detalles:
+                for d in detalles:
+                    nombre = 'Producto'
+                    if hasattr(d, 'producto') and d.producto:
+                        nombre = getattr(d.producto, 'nombre', 'Producto')
+                    try:
+                        cantidad = float(d.cantidad)
+                        p_iva = float(getattr(d, 'porcentaje_iva', 21.0) or 0)
+                        precio_sin = float(d.precio_unitario)
+                        sub_sin = float(d.subtotal)
+                        imp_iva = float(getattr(d, 'importe_iva', 0) or 0)
+                        if imp_iva == 0 and p_iva > 0:
+                            imp_iva = sub_sin * p_iva / 100
+                        if es_b_o_c:
+                            pu = precio_sin * (1 + p_iva / 100)
+                            tot = sub_sin + imp_iva
+                        else:
+                            pu = precio_sin
+                            tot = sub_sin
+                    except (ValueError, AttributeError):
+                        cantidad, p_iva, pu, tot = 1.0, 21.0, 0.0, 0.0
+
+                    cant_str = f"{cantidad:.4f}".replace(".", ",")
+                    pu_str = f"{pu:.4f}".replace(".", ",")
+                    lineas.append(f"{cant_str} u. x {pu_str}"[:self.ancho])
+
+                    iva_tag = f"({int(p_iva)})"
+                    tot_str = f"{tot:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                    esp_total, esp_iva, esp_sep = 12, 4, 3
+                    esp_nombre = self.ancho - esp_total - esp_iva - esp_sep
+                    nombre_t = self.truncar_texto(nombre, esp_nombre).upper()
+                    lineas.append(f"{nombre_t:<{esp_nombre}} {iva_tag:<{esp_iva}}  {tot_str:>{esp_total}}"[:self.ancho])
+            else:
+                lineas.append("Sin productos")
+
+            lineas.append(self.linea_separadora())
+
+            iva_total = float(getattr(nc, 'iva', 0) or 0)
+            try:
+                subtotal = float(getattr(nc, 'subtotal', 0) or 0)
+                total = float(getattr(nc, 'total', 0) or 0)
+                es_a = tipo in ['3', '03']
+                if es_a:
+                    lineas.append(self.justificar_texto("SUBTOTAL:", f"${subtotal:,.2f}"))
+                    iva_por_alic = {}
+                    for d in detalles:
+                        try:
+                            p = float(getattr(d, 'porcentaje_iva', 21.0) or 0)
+                            ii = float(getattr(d, 'importe_iva', 0) or 0)
+                            if ii == 0 and p > 0:
+                                ii = round(float(d.subtotal) * p / 100, 2)
+                            iva_por_alic[p] = iva_por_alic.get(p, 0) + ii
+                        except Exception:
+                            pass
+                    if iva_por_alic:
+                        for p in sorted(iva_por_alic.keys()):
+                            if iva_por_alic[p] > 0:
+                                etq = "EXENTO:" if p == 0 else f"IVA {p:g}%:"
+                                lineas.append(self.justificar_texto(etq, f"${iva_por_alic[p]:,.2f}"))
+                    elif iva_total > 0:
+                        lineas.append(self.justificar_texto("IVA 21%:", f"${iva_total:,.2f}"))
+                lineas.append(self.linea_separadora())
+                lineas.append(self.justificar_texto_doble("TOTAL NC:", f"${total:,.2f}"))
+            except (ValueError, AttributeError):
+                lineas.append(self.justificar_texto_doble("TOTAL NC:", "$0.00"))
+
+            lineas.append(self.linea_separadora())
+
+            motivo = getattr(nc, 'motivo', None)
+            if motivo:
+                lineas.append("Motivo:")
+                m = str(motivo).strip()
+                while len(m) > self.ancho:
+                    lineas.append(m[:self.ancho])
+                    m = m[self.ancho:]
+                if m:
+                    lineas.append(m)
+                lineas.append(self.linea_separadora())
+
+            cae = getattr(nc, 'cae', None)
+            if cae:
+                lineas.append("")
+                if tipo not in ['3', '03']:
+                    lineas.append(self.centrar_texto(f"I.V.A Contenido ${iva_total:,.2f}"))
+                    lineas.append("")
+                lineas.append(self.centrar_texto("*** AUTORIZADO AFIP ***"))
+                lineas.append("")
+                cae_texto = f"CAE: {cae}"
+                if len(cae_texto) > self.ancho:
+                    lineas.append("CAE:")
+                    lineas.append(f"  {cae}")
+                else:
+                    lineas.append(cae_texto)
+                vto = getattr(nc, 'vto_cae', None)
+                if vto:
+                    try:
+                        vto_str = vto.strftime("%d/%m/%Y") if hasattr(vto, 'strftime') else str(vto)
+                        lineas.append(f"Vto CAE: {vto_str}")
+                    except Exception:
+                        pass
+                lineas.append("")
+                lineas.append(self.centrar_texto("Verificar en:"))
+                lineas.append(self.centrar_texto("www.arca.gob.ar"))
+            else:
+                lineas.append("")
+                lineas.append(self.centrar_texto("*** SIN CAE ***"))
+
+            lineas.append("")
+            lineas.append(self.centrar_texto("Nota de Credito"))
+            for _ in range(6):
+                lineas.append("")
+
+        except Exception as e:
+            print(f"❌ Error en formatear_nota_credito_termica: {e}")
+            import traceback; traceback.print_exc()
+            lineas = ["", self.centrar_texto("*** ERROR EN NC ***"), "",
+                      f"Error: {str(e)}", "", self.centrar_texto("Contactar soporte"), "", ""]
+
+        return "\n".join(lineas)
+
+    def imprimir_nota_credito(self, nota_credito):
+        """Imprimir Nota de Credito en la termica (metodo RAW, igual que factura)."""
+        try:
+            if not self.nombre_impresora:
+                raise Exception("No se encontro impresora termica")
+
+            print(f"🖨️ INICIANDO IMPRESION - NC: {getattr(nota_credito, 'numero', 'SIN_NUMERO')}")
+            contenido = self.formatear_nota_credito_termica(nota_credito)
+
+            hPrinter = win32print.OpenPrinter(self.nombre_impresora)
+            try:
+                hJob = win32print.StartDocPrinter(hPrinter, 1, (f"NC_{getattr(nota_credito, 'numero', 'XXX')}", None, "RAW"))
+                try:
+                    win32print.StartPagePrinter(hPrinter)
+                    init_cmd = b'\x1B\x40'
+                    datos_bytes = init_cmd + contenido.encode('cp850', errors='replace')
+                    datos_bytes += b'\n\n\x1B\x69'
+                    win32print.WritePrinter(hPrinter, datos_bytes)
+                    win32print.EndPagePrinter(hPrinter)
+                    print("✅ *** NC IMPRESA ***")
+                    return True
+                finally:
+                    win32print.EndDocPrinter(hPrinter)
+            finally:
+                win32print.ClosePrinter(hPrinter)
+
+        except Exception as e:
+            print(f"❌ ERROR imprimir_nota_credito: {e}")
+            import traceback; traceback.print_exc()
             return False
 
     # ═══════════════════════════════════════════════════════════════════
@@ -1661,6 +1874,83 @@ def imprimir_factura_termica(datos_factura):
             'success': False,
             'error': str(e)
         }
+
+def imprimir_nota_credito_termica(datos_nc):
+    """Funcion para endpoint Flask - imprime una Nota de Credito a partir de un dict."""
+    try:
+        class _ProdSim:
+            def __init__(self, nombre):
+                self.nombre = nombre
+                self.codigo = ''
+
+        class _DetSim:
+            def __init__(self, it):
+                self.producto        = _ProdSim(it.get('nombre', 'Producto'))
+                self.cantidad        = it.get('cantidad', 1)
+                self.precio_unitario = it.get('precio_unitario', 0)
+                self.subtotal        = it.get('subtotal', 0)
+                self.porcentaje_iva  = it.get('porcentaje_iva', 21)
+                self.importe_iva     = it.get('importe_iva', 0)
+
+        class _CliSim:
+            def __init__(self, c):
+                if c:
+                    self.nombre         = c.get('nombre', 'Consumidor Final')
+                    self.documento      = c.get('documento')
+                    self.tipo_documento = c.get('tipo_documento', 'DNI')
+                else:
+                    self.nombre         = 'Consumidor Final'
+                    self.documento      = None
+                    self.tipo_documento = None
+
+        class _NCSim:
+            def __init__(self, d):
+                self.numero           = d.get('numero', '')
+                self.tipo_comprobante = d.get('tipo_comprobante', '08')
+                self.fecha            = datetime.now()
+                self.subtotal         = d.get('subtotal', 0)
+                self.iva              = d.get('iva', 0)
+                self.total            = d.get('total', 0)
+                self.cae              = d.get('cae')
+                self.usuario          = None
+                vto = d.get('vto_cae')
+                if vto and isinstance(vto, str):
+                    try:
+                        self.vto_cae = datetime.strptime(vto, '%Y-%m-%d').date()
+                    except Exception:
+                        self.vto_cae = vto
+                else:
+                    self.vto_cae = vto
+                obs = d.get('observaciones', '') or ''
+                self.factura_numero = None
+                self.motivo = None
+                m = re.search(r'Factura\s+(\S+)', obs)
+                if m:
+                    self.factura_numero = m.group(1)
+                if 'Motivo:' in obs:
+                    self.motivo = obs.split('Motivo:', 1)[1].strip()
+                self.cliente  = _CliSim(d.get('cliente'))
+                self.detalles = [_DetSim(it) for it in d.get('items', [])]
+
+        nc_sim = _NCSim(datos_nc)
+        resultado = impresora_termica.imprimir_nota_credito(nc_sim)
+
+        if resultado:
+            return {
+                'success': True,
+                'mensaje': f'Nota de Credito impresa correctamente en {impresora_termica.nombre_impresora}'
+            }
+        return {
+            'success': False,
+            'error': 'Error al imprimir la Nota de Credito'
+        }
+
+    except Exception as e:
+        try:
+            logger.error(f"Error en imprimir_nota_credito_termica: {e}")
+        except Exception:
+            print(f"Error en imprimir_nota_credito_termica: {e}")
+        return {'success': False, 'error': str(e)}
 
 def imprimir_remito_termico(datos_remito):
     """Función para endpoint Flask - imprime remito a partir de dict.

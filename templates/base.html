@@ -339,6 +339,7 @@
             <a href="{{ url_for('facturas') }}"><i class="fas fa-file-invoice"></i> Facturas</a>
             <a href="{{ url_for('presupuestos.listado') }}"><i class="fas fa-file-alt"></i> Presupuestos</a>
             <a href="/notas_credito"><i class="fas fa-file-invoice"></i> Notas de Crédito</a>
+            <a href="/nc_interna"><i class="fas fa-undo-alt"></i> Devolución / NC Interna</a>
             {% if session.get('rol') == 'admin' or session.get('puede_liquidar') %}
             <a href="/liquidaciones" style="color:#c5b3ff;"><i class="fas fa-handshake"></i> Liquidaciones</a>
             {% endif %}
@@ -435,6 +436,7 @@
             {% if session.get('rol') == 'admin' %}
             <a href="/iva_ventas"><i class="fas fa-file-invoice-dollar"></i> IVA Ventas</a>
             <a href="/reporte_ventas"><i class="fas fa-chart-bar"></i> Ventas por Producto</a>
+            <a href="/reporte_vendedores"><i class="fas fa-user-tag"></i> Ventas por Vendedor</a>
             <a href="/reportes#medios-pago" onclick="setTimeout(()=>document.getElementById('medios-pago-tab')?.click(),300)"><i class="fas fa-credit-card"></i> Medios de Pago</a>
             <a href="/margen_productos"><i class="fas fa-chart-line"></i> Margen por Producto</a>
             <a href="{{ url_for('estadisticas') }}"><i class="fas fa-chart-bar"></i> Estadísticas de Ventas</a>

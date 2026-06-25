@@ -1219,7 +1219,7 @@ def api_iva_compras():
             'desde': datetime.strptime(desde, '%Y-%m-%d').date(),
             'hasta': datetime.strptime(hasta, '%Y-%m-%d').date(),
         }
-        sql_where = "WHERE fc.fecha BETWEEN :desde AND :hasta AND fc.clase_comprobante != 'interno'"
+        sql_where = "WHERE fc.fecha BETWEEN :desde AND :hasta AND fc.clase_comprobante != 'interno' AND fc.tipo_comprobante != 'NC'"
         if prov_id:
             sql_where += " AND fc.proveedor_id = :prov"
             params['prov'] = prov_id
@@ -1398,7 +1398,7 @@ def exportar_excel_iva_compras():
             'desde': datetime.strptime(desde, '%Y-%m-%d').date(),
             'hasta': datetime.strptime(hasta, '%Y-%m-%d').date(),
         }
-        sql_where = "WHERE fc.fecha BETWEEN :desde AND :hasta AND fc.clase_comprobante != 'interno'"
+        sql_where = "WHERE fc.fecha BETWEEN :desde AND :hasta AND fc.clase_comprobante != 'interno' AND fc.tipo_comprobante != 'NC'"
         if prov_id:
             sql_where += " AND fc.proveedor_id = :prov"
             params['prov'] = prov_id
@@ -1629,6 +1629,8 @@ def exportar_pdf_iva_compras():
         query = FacturaCompra.query.filter(
             FacturaCompra.fecha >= datetime.strptime(desde, '%Y-%m-%d').date(),
             FacturaCompra.fecha <= datetime.strptime(hasta, '%Y-%m-%d').date(),
+            FacturaCompra.clase_comprobante != 'interno',
+            FacturaCompra.tipo_comprobante != 'NC',
         )
         if prov_id:
             query = query.filter_by(proveedor_id=prov_id)
@@ -3323,6 +3325,8 @@ def api_libro_iva_exportar_compras_zip():
               JOIN proveedor p ON p.id = fc.proveedor_id
              WHERE fc.fecha BETWEEN :desde AND :hasta
                AND (fc.estado IS NULL OR fc.estado != 'anulada')
+               AND (fc.clase_comprobante IS NULL OR fc.clase_comprobante != 'interno')
+               AND (fc.tipo_comprobante IS NULL OR fc.tipo_comprobante != 'NC')
              ORDER BY fc.fecha ASC, fc.id ASC
         """
         rows = db.session.execute(text(sql), {

@@ -488,6 +488,20 @@
                         </div>
                     </div>
 
+                    <!-- Campo Descuento fijo -->
+                    <div class="mb-3">
+                        <label for="descuentoFijoCliente" class="form-label">
+                            <i class="fas fa-percent"></i> Descuento fijo
+                        </label>
+                        <div class="input-group" style="max-width:220px;">
+                            <input type="number" class="form-control" id="descuentoFijoCliente" min="0" max="100" step="0.1" placeholder="0">
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <div class="form-text">
+                            <small class="text-muted">Opcional. Este % se carga automáticamente en el campo Descuento al hacerle una venta a este cliente.</small>
+                        </div>
+                    </div>
+
                     <!-- Es Intermediario / Consignatario -->
                     <div class="mb-3 p-3 border rounded" style="background-color:#f3eeff;border-color:#d4c5ff !important;">
                         <div class="form-check">
@@ -655,6 +669,7 @@ function limpiarFormCliente() {
     });
 
     document.getElementById('diasVencimientoCliente').value = '';
+    document.getElementById('descuentoFijoCliente').value = '';
 }
 
 // Cache de vendedores para no pegarle a la API en cada apertura del modal
@@ -747,6 +762,7 @@ function cargarClienteEnFormulario(cliente) {
     
     const dvc = cliente.dias_vencimiento_factura;
     document.getElementById('diasVencimientoCliente').value = (dvc === null || dvc === undefined) ? '' : dvc;
+    document.getElementById('descuentoFijoCliente').value = (cliente.descuento_fijo === null || cliente.descuento_fijo === undefined) ? '' : cliente.descuento_fijo;
 
     document.getElementById('tituloModalCliente').innerHTML = '<i class="fas fa-edit"></i> Editar Cliente';
     clienteActual = cliente;
@@ -801,7 +817,8 @@ function guardarCliente() {
         zona_id: parseInt(document.getElementById('zonaCliente').value) || null,
         vendedor_id: parseInt(document.getElementById('vendedorCliente').value) || null,
         dias_vencimiento_factura: document.getElementById('diasVencimientoCliente').value === '' ? null : parseInt(document.getElementById('diasVencimientoCliente').value),
-        es_intermediario: document.getElementById('esIntermediario')?.checked || false
+        es_intermediario: document.getElementById('esIntermediario')?.checked || false,
+        descuento_fijo: parseFloat(document.getElementById('descuentoFijoCliente').value) || 0
     };
     
     // Validaciones adicionales

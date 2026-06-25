@@ -158,12 +158,13 @@
                 <div class="mb-3">
                     <label for="cliente_select" class="form-label">Seleccionar Cliente</label>
                     <select class="form-select" id="cliente_select" onchange="actualizarTipoComprobante()">
-                        <option value="1" data-condicion="CONSUMIDOR_FINAL" data-lista-precio="1">Consumidor Final</option>
+                        <option value="1" data-condicion="CONSUMIDOR_FINAL" data-lista-precio="1" data-descuento="0">Consumidor Final</option>
                         {% for cliente in clientes %}
                         <option value="{{ cliente.id }}" 
                                 data-condicion="{{ cliente.condicion_iva }}" 
                                 data-documento="{{ cliente.documento or '' }}"
-                                data-lista-precio="{{ cliente.lista_precio or 1 }}">
+                                data-lista-precio="{{ cliente.lista_precio or 1 }}"
+                                data-descuento="{{ cliente.descuento_fijo or 0 }}">
                             {{ cliente.nombre }}
                             {% if cliente.documento %} - {{ cliente.documento }}{% endif %}
                             {% if cliente.lista_precio and cliente.lista_precio > 1 %} 📋L{{ cliente.lista_precio }}{% endif %}
@@ -189,9 +190,9 @@
                 <div class="mb-3">
                     <label for="tipo_comprobante" class="form-label">Tipo de Comprobante</label>
                     <select class="form-select" id="tipo_comprobante" onchange="tipoComprobanteCambiadoManualmente=true; actualizarBotonProcesar();">
-                        <option value="06">Factura B - Consumidor Final / Monotributista</option>
+                        <option value="06">Factura B - Consumidor Final</option>
                         <option value="11">Factura C - Consumidor Final</option>
-                        <option value="01">Factura A - Responsable Inscripto</option>
+                        <option value="01">Factura A - Resp. Inscripto / Monotributista</option>
                         <option value="99" selected>Comprobante Interno (NO va a ARCA)</option>
                     </select>
                     <small class="form-text text-muted">Se selecciona automáticamente según el cliente</small>
@@ -2634,10 +2635,13 @@ function actualizarTipoComprobante() {
         // 'CONSUMIDORFINAL', 'EXENTO', etc.
 
         if (cond === 'RI' ||
-            cond.includes('RESPONSABLEINSCRIPTO')) {
+            cond.includes('RESPONSABLEINSCRIPTO') ||
+            cond.includes('MONOTRIBUT')) {
+            // RI -> Factura A. Monotributista -> TAMBIEN Factura A.
+            // (RG 5022/2021 - Ley 27.618: el responsable inscripto le emite Factura A
+            //  al monotributista, con leyenda "Receptor del comprobante - Responsable
+            //  Monotributo". La condicion IVA del receptor que se manda a ARCA es 6 = Monotributo.)
             tipoComprobante.value = '01';  // Factura A
-        } else if (cond.includes('MONOTRIBUT')) {
-            tipoComprobante.value = '06';  // Factura B
         } else if (cond.includes('CONSUMIDORFINAL') || cond === '' || cond === 'CF') {
             tipoComprobante.value = '99';  // Comprobante Interno (no va a ARCA)
         } else {
@@ -2646,6 +2650,14 @@ function actualizarTipoComprobante() {
         }
     }
     actualizarBotonProcesar();
+
+    // ═══ Autocompletar el descuento con el descuento fijo del cliente ═══
+    const descCliente = parseFloat(selectedOption.getAttribute('data-descuento')) || 0;
+    const inputDesc = document.getElementById('descuento_porcentaje');
+    if (inputDesc) {
+        inputDesc.value = descCliente > 0 ? descCliente : '';
+        if (typeof aplicarDescuentoPorcentaje === 'function') aplicarDescuentoPorcentaje();
+    }
     
     // ═══ NUEVO: Cargar saldo del cliente ═══
     cargarSaldoCliente(clienteSelect.value);

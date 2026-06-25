@@ -1,0 +1,202 @@
+<!-- templates/reporte_vendedores.html -->
+{% extends "base.html" %}
+
+{% block title %}Ventas por Vendedor - POS Argentina{% endblock %}
+
+{% block content %}
+<style>
+  .rv-total-box { font-size: 1.5rem; font-weight: 700; }
+  #rvResumen td, #rvResumen th { vertical-align: middle; }
+  .rv-card-num { font-size: 1.3rem; font-weight: 700; }
+  @media print {
+    .rv-noprint { display: none !important; }
+    .card { border: none !important; box-shadow: none !important; }
+    a[href], button { display: none !important; }
+  }
+</style>
+
+<div class="container-fluid py-3">
+
+  <div class="d-flex justify-content-between align-items-center mb-3 rv-noprint">
+    <h4 class="mb-0"><i class="fas fa-user-tag text-primary"></i> Ventas por Vendedor</h4>
+    <a href="javascript:void(0)" onclick="if(history.length>1){history.back()}else{location.href='/'}" class="btn btn-outline-secondary btn-sm">
+      <i class="fas fa-arrow-left"></i> Volver
+    </a>
+  </div>
+
+  <!-- Filtros -->
+  <div class="card mb-3 rv-noprint">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label fw-bold">Desde</label>
+          <input type="date" id="rvDesde" class="form-control">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-bold">Hasta</label>
+          <input type="date" id="rvHasta" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Vendedor</label>
+          <select id="rvVendedor" class="form-select">
+            <option value="todos">Todos los vendedores</option>
+            {% for v in vendedores %}
+            <option value="{{ v.id }}">{{ v.nombre }}</option>
+            {% endfor %}
+            <option value="sin">— Sin vendedor asignado —</option>
+          </select>
+        </div>
+        <div class="col-md-2 d-grid">
+          <button class="btn btn-primary" onclick="generarReporte()"><i class="fas fa-search"></i> Generar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="rvError" class="alert alert-danger rv-noprint" style="display:none;"></div>
+
+  <!-- Resultado -->
+  <div id="rvResultado" style="display:none;">
+
+    <!-- Encabezado del informe -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h5 class="mb-0" id="rvTitulo"></h5>
+      <button class="btn btn-outline-dark btn-sm rv-noprint" onclick="window.print()">
+        <i class="fas fa-print"></i> Imprimir / PDF
+      </button>
+    </div>
+
+    <!-- Totales -->
+    <div class="row g-3 mb-3">
+      <div class="col-md-4">
+        <div class="card bg-light"><div class="card-body text-center">
+          <div class="text-muted">Total facturado</div>
+          <div class="rv-card-num text-success">$<span id="rvTotalGeneral">0.00</span></div>
+        </div></div>
+      </div>
+      <div class="col-md-4">
+        <div class="card bg-light"><div class="card-body text-center">
+          <div class="text-muted">Neto (sin IVA)</div>
+          <div class="rv-card-num text-secondary">$<span id="rvNetoGeneral">0.00</span></div>
+        </div></div>
+      </div>
+      <div class="col-md-4">
+        <div class="card bg-light"><div class="card-body text-center">
+          <div class="text-muted">Comprobantes</div>
+          <div class="rv-card-num text-dark"><span id="rvCantGeneral">0</span></div>
+        </div></div>
+      </div>
+    </div>
+
+    <!-- Resumen por vendedor -->
+    <div class="card mb-3">
+      <div class="card-header"><strong>Resumen por vendedor</strong></div>
+      <div class="table-responsive">
+        <table class="table table-striped table-hover mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>Vendedor</th>
+              <th class="text-center">Comprobantes</th>
+              <th class="text-end">Neto</th>
+              <th class="text-end">Total facturado</th>
+              <th class="text-end">% del total</th>
+            </tr>
+          </thead>
+          <tbody id="rvResumen"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Detalle -->
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Detalle de comprobantes</strong>
+        <span class="text-muted small" id="rvDetCount"></span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>Fecha</th>
+              <th>Comprobante</th>
+              <th>Tipo</th>
+              <th>Cliente</th>
+              <th>Vendedor</th>
+              <th class="text-end">Total</th>
+            </tr>
+          </thead>
+          <tbody id="rvDetalle"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function _fmt(n) { return (Number(n) || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+
+document.addEventListener('DOMContentLoaded', function () {
+  // Default: del 1ro del mes a hoy
+  const hoy = new Date();
+  const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  document.getElementById('rvHasta').value = hoy.toISOString().slice(0, 10);
+  document.getElementById('rvDesde').value = primero.toISOString().slice(0, 10);
+});
+
+function generarReporte() {
+  const desde = document.getElementById('rvDesde').value;
+  const hasta = document.getElementById('rvHasta').value;
+  const vendedor = document.getElementById('rvVendedor').value;
+  const errBox = document.getElementById('rvError');
+  errBox.style.display = 'none';
+
+  if (!desde || !hasta) { errBox.textContent = 'Elegí las dos fechas.'; errBox.style.display = 'block'; return; }
+  if (desde > hasta) { errBox.textContent = 'La fecha "Desde" no puede ser mayor que "Hasta".'; errBox.style.display = 'block'; return; }
+
+  const params = new URLSearchParams({ desde, hasta, vendedor_id: vendedor });
+  fetch(`/api/reporte_vendedores?${params.toString()}`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) { errBox.textContent = data.error || 'Error al generar.'; errBox.style.display = 'block'; return; }
+      renderReporte(data);
+    })
+    .catch(() => { errBox.textContent = 'Error de conexión.'; errBox.style.display = 'block'; });
+}
+
+function renderReporte(data) {
+  const selTxt = document.getElementById('rvVendedor').selectedOptions[0].textContent;
+  document.getElementById('rvTitulo').textContent =
+    `Ventas por vendedor — ${selTxt} — ${data.desde.split('-').reverse().join('/')} a ${data.hasta.split('-').reverse().join('/')}`;
+
+  document.getElementById('rvTotalGeneral').textContent = _fmt(data.total_general);
+  document.getElementById('rvNetoGeneral').textContent = _fmt(data.neto_general);
+  document.getElementById('rvCantGeneral').textContent = data.cantidad_general;
+
+  const tg = data.total_general || 0;
+  document.getElementById('rvResumen').innerHTML = data.resumen.length ? data.resumen.map(r => `
+    <tr>
+      <td><strong>${r.vendedor}</strong></td>
+      <td class="text-center">${r.cantidad}</td>
+      <td class="text-end">$${_fmt(r.neto)}</td>
+      <td class="text-end"><strong>$${_fmt(r.total)}</strong></td>
+      <td class="text-end">${tg > 0 ? ((r.total / tg) * 100).toFixed(1) : '0.0'}%</td>
+    </tr>
+  `).join('') : '<tr><td colspan="5" class="text-center text-muted">Sin ventas en el período</td></tr>';
+
+  document.getElementById('rvDetCount').textContent = `${data.detalle.length} comprobante(s)`;
+  document.getElementById('rvDetalle').innerHTML = data.detalle.length ? data.detalle.map(d => `
+    <tr>
+      <td>${d.fecha}</td>
+      <td><code>${d.numero}</code></td>
+      <td>${d.tipo}</td>
+      <td>${d.cliente}</td>
+      <td>${d.vendedor}</td>
+      <td class="text-end">$${_fmt(d.total)}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="6" class="text-center text-muted">Sin comprobantes</td></tr>';
+
+  document.getElementById('rvResultado').style.display = 'block';
+}
+</script>
+{% endblock %}

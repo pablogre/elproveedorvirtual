@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Nueva Factura de Compra con Detalle{% endblock %}
+{% block title %}Nuevo Comprobante de Compra con Detalle{% endblock %}
 
 {% block content %}
 {# Variable JS con el oc_id recibido por querystring (None si no viene) #}
@@ -29,7 +29,7 @@
 
 <div class="d-flex justify-content-between align-items-center mt-3 mb-3">
     <h2>
-        <i class="fas fa-boxes me-2"></i>Nueva Factura de Compra con Detalle
+        <i class="fas fa-boxes me-2"></i>Nuevo Comprobante de Compra con Detalle
         <button class="btn btn-sm btn-outline-info ms-2" data-bs-toggle="modal" data-bs-target="#modalAyuda" title="Ver ayuda">
             <i class="fas fa-question-circle me-1"></i> Ayuda
         </button>
@@ -56,7 +56,7 @@
                     <li><strong>Click en "Agregar"</strong> para sumarlo al carrito. Repetí para cada artículo.</li>
                     <li><strong>Totales de IVA</strong>: cargalos manualmente para que coincidan <strong>exactamente</strong> con la factura del proveedor. También podés usar el botón <strong>"Calcular IVA desde items"</strong> para que los sugiera a partir del detalle.</li>
                     <li><strong>Ajustes</strong>: si hay descuentos, flete o percepciones, cargalos en sus campos.</li>
-                    <li><strong>Click en "Guardar Factura"</strong>.</li>
+                    <li><strong>Click en "Guardar Comprobante"</strong>.</li>
                 </ol>
 
                 <hr>
@@ -119,7 +119,7 @@
                     <li>Cargá los ítems normalmente con cantidad y precio unitario sin IVA.</li>
                     <li>El bloque de "Totales IVA" y las "Percepciones" se ocultan automáticamente (no aplican porque no es factura).</li>
                     <li>El <strong>Descuento y Flete sí siguen aplicando</strong> y prorratean al costo de cada producto.</li>
-                    <li>Click en <strong>"Guardar Factura"</strong> y listo.</li>
+                    <li>Click en <strong>"Guardar Comprobante"</strong> y listo.</li>
                 </ol>
 
                 <p class="fw-bold mb-1">¿Y cuándo llegue la factura oficial del proveedor?</p>
@@ -140,7 +140,7 @@
                 <p class="small text-muted mb-2">Si la factura real del proveedor trae diferencias (cambio de lista, ajustes, redondeo), podés:</p>
                 <ul class="small text-muted mb-2">
                     <li>Corregir precios o cantidades en el carrito manualmente.</li>
-                    <li>Usar el botón <strong>"Escanear factura"</strong> (OCR) para que el sistema relea los totales y percepciones desde la imagen/PDF.</li>
+                    <li>Usar el botón <strong>"Escanear Comprobante"</strong> (OCR) para que el sistema relea los totales y percepciones desde la imagen/PDF.</li>
                 </ul>
                 <p class="small text-muted mb-0">Al guardar, la OC pasa a estado <strong>"facturada"</strong> y queda vinculada a esta factura.</p>
 
@@ -181,7 +181,7 @@
                 <h6 class="text-primary fw-bold"><i class="fas fa-list-ol me-1"></i> Paso a paso</h6>
                 <ol>
                     <li class="mb-2">
-                        <strong>Click en "Escanear factura"</strong>.<br>
+                        <strong>Click en "Escanear Comprobante"</strong>.<br>
                         En celular abre la cámara, en PC abre el explorador de archivos.
                     </li>
                     <li class="mb-2">
@@ -201,7 +201,7 @@
                         con tus productos (ver sección "Vincular ítems" más abajo).
                     </li>
                     <li class="mb-2">
-                        <strong>Guardar Factura</strong>. El sistema procesa stock, costo y precios normalmente.
+                        <strong>Guardar Comprobante</strong>. El sistema procesa stock, costo y precios normalmente.
                     </li>
                 </ol>
 
@@ -268,7 +268,7 @@
                 <hr>
 
                 <h6 class="text-primary fw-bold"><i class="fas fa-eye me-1"></i> ¿Qué SIEMPRE hay que revisar?</h6>
-                <p class="small">La IA es muy precisa pero no es perfecta. Antes de darle "Guardar Factura", verificá <strong>rápido</strong>:</p>
+                <p class="small">La IA es muy precisa pero no es perfecta. Antes de darle "Guardar Comprobante", verificá <strong>rápido</strong>:</p>
                 <ul class="small">
                     <li><strong>Número de factura</strong> y <strong>fecha</strong> (que coincidan con el papel)</li>
                     <li><strong>TOTAL FACTURA</strong> abajo a la derecha (debe coincidir <strong>al centavo</strong> con la factura real)</li>
@@ -338,7 +338,7 @@
                 <button type="button"
                         class="btn btn-primary btn-lg"
                         onclick="document.getElementById('inputFacturaOCR').click()">
-                    <i class="fas fa-camera me-2"></i> Escanear factura
+                    <i class="fas fa-camera me-2"></i> Escanear Comprobante
                 </button>
             </div>
         </div>
@@ -358,6 +358,22 @@
             <strong>NO va al Libro IVA Compras.</strong>
             Sí actualiza <strong>stock, costo, precios de venta y cuenta corriente del proveedor</strong>.
             Numeración libre — tipeá el número tal cual viene en el papel.
+        </div>
+    </div>
+</div>
+
+<!-- Banner Nota de Crédito de compra (se muestra cuando tipo=NC) -->
+<div id="bannerNC" class="alert alert-danger d-flex align-items-center mt-3 mb-3" role="alert" style="display:none;">
+    <i class="fas fa-rotate-left fa-2x me-3 text-danger"></i>
+    <div class="flex-grow-1">
+        <div class="fw-bold">
+            <i class="fas fa-exclamation-triangle me-1"></i>
+            Nota de Crédito de compra (devolución al proveedor)
+        </div>
+        <div class="small">
+            <strong>DESCUENTA stock</strong> por las cantidades cargadas (es una devolución).
+            <strong>No</strong> modifica costo ni precios de venta, y <strong>baja el saldo</strong> del proveedor.
+            No va al Libro IVA Compras. Numeración libre — tipeá el número tal cual viene en la NC.
         </div>
     </div>
 </div>
@@ -396,6 +412,7 @@
                     <option value="B">B</option>
                     <option value="C">C</option>
                     <option value="CI">CI</option>
+                    <option value="NC">NC</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -583,7 +600,7 @@
 <div class="text-end mb-5">
     <a href="{{ url_for('compras.listado') }}" class="btn btn-outline-secondary me-2">Cancelar</a>
     <button class="btn btn-success btn-lg" onclick="guardar()">
-        <i class="fas fa-save me-1"></i> Guardar Factura
+        <i class="fas fa-save me-1"></i> Guardar Comprobante
     </button>
 </div>
 
@@ -701,34 +718,51 @@ function esModoCI() {
     return t && t.value === 'CI';
 }
 
+function esModoNC() {
+    const t = document.getElementById('tipo');
+    return t && t.value === 'NC';
+}
+
+// Modo "libre": numeración libre y sin bloque de IVA (aplica a CI y a NC).
+function esModoLibre() {
+    return esModoCI() || esModoNC();
+}
+
 function aplicarModoCI() {
     const ci = esModoCI();
+    const nc = esModoNC();
+    const libre = ci || nc;
 
-    // Banner amarillo arriba
+    // Banners: amarillo para CI, rojo para NC
     const banner = document.getElementById('bannerCI');
     if (banner) banner.style.display = ci ? '' : 'none';
+    const bannerNc = document.getElementById('bannerNC');
+    if (bannerNc) bannerNc.style.display = nc ? '' : 'none';
 
-    // Card de Totales IVA: oculto en CI
+    // Card de Totales IVA: oculto en CI y NC (no van al Libro IVA)
     const wrapIva = document.getElementById('wrapTotalesIVA');
-    if (wrapIva) wrapIva.style.display = ci ? 'none' : '';
+    if (wrapIva) wrapIva.style.display = libre ? 'none' : '';
 
-    // Ajustes y Percepciones: en CI ocultamos solo las percepciones (3 cols)
-    // y dejamos Descuento + Flete (siguen prorrateando al costo).
+    // Percepciones ocultas en modo libre; Descuento + Flete quedan
     document.querySelectorAll('.col-perc').forEach(el => {
-        el.style.display = ci ? 'none' : '';
+        el.style.display = libre ? 'none' : '';
     });
 
-    // Cambiar título del card y label del total
+    // Título del card y label del total
     const hdr = document.getElementById('lblAjustesHeader');
-    if (hdr) hdr.textContent = ci ? 'Ajustes (Descuento / Flete)' : 'Ajustes y Percepciones';
+    if (hdr) hdr.textContent = libre ? 'Ajustes (Descuento / Flete)' : 'Ajustes y Percepciones';
     const lblTotalLabel = document.getElementById('lblTotalLabel');
-    if (lblTotalLabel) lblTotalLabel.textContent = ci ? 'COMPROBANTE' : 'FACTURA';
+    if (lblTotalLabel) lblTotalLabel.textContent = nc ? 'NOTA DE CRÉDITO' : (ci ? 'COMPROBANTE' : 'FACTURA');
+    const lblTotalAyuda = document.getElementById('lblTotalAyuda');
+    if (lblTotalAyuda) lblTotalAyuda.textContent = libre
+        ? 'El total se calcula sumando los subtotales (c/IVA) de la grilla + flete − descuento.'
+        : 'El total lo calcula sumando netos + IVAs + no gravado + otros + percepciones + flete − descuento.';
 
-    // El ancho del card de ajustes pasa a ocupar la fila completa cuando CI
+    // Ancho del card de ajustes ocupa la fila completa en modo libre
     const wrapAjustes = document.getElementById('wrapAjustes');
     if (wrapAjustes) {
-        wrapAjustes.classList.toggle('col-md-12', ci);
-        wrapAjustes.classList.toggle('col-md-5', !ci);
+        wrapAjustes.classList.toggle('col-md-12', libre);
+        wrapAjustes.classList.toggle('col-md-5', !libre);
     }
 
     // Labels y placeholders del PV y Número
@@ -736,9 +770,10 @@ function aplicarModoCI() {
     const lblNumero = document.getElementById('lblNumero');
     const pv = document.getElementById('pv');
     const numero = document.getElementById('numero');
-    if (ci) {
+    if (libre) {
+        const etiqueta = nc ? 'N° de NC (libre) *' : 'N° comprobante (libre) *';
         if (lblPV) lblPV.innerHTML = 'Pto. Venta (libre)';
-        if (lblNumero) lblNumero.innerHTML = 'N° comprobante (libre) *';
+        if (lblNumero) lblNumero.innerHTML = etiqueta;
         if (pv) { pv.placeholder = 'libre'; pv.removeAttribute('maxlength'); }
         if (numero) { numero.placeholder = 'tal cual viene'; numero.setAttribute('maxlength', '20'); }
         // Limpiar netos/IVA/percepciones (no aplican)
@@ -863,14 +898,32 @@ function preciosConIva() {
 }
 
 function togglePreciosConIva() {
+    const con = preciosConIva();
+
     const lbl = document.getElementById('lblPrecioUnit');
     if (lbl) {
-        lbl.innerHTML = preciosConIva()
+        lbl.innerHTML = con
             ? 'Precio Unit. <span class="text-danger">(con IVA)</span>'
             : 'Precio Unit. (sin IVA)';
     }
     const inp = document.getElementById('inpPrecio');
-    if (inp) inp.classList.toggle('border-danger', preciosConIva());
+    if (inp) inp.classList.toggle('border-danger', con);
+
+    // Recalcular la grilla YA cargada al tocar el toggle (reversible).
+    //   ON  -> precios pasan a interpretarse CON IVA: se les saca el IVA (/ (1+iva))
+    //   OFF -> se deshace (* (1+iva))
+    if (Array.isArray(itemsCarrito) && itemsCarrito.length) {
+        itemsCarrito.forEach(i => {
+            const iva = parseFloat(i.iva) || 0;
+            const p = parseFloat(i.precio_unitario) || 0;
+            if (iva > 0 && p > 0) {
+                const f = 1 + iva / 100;
+                i.precio_unitario = con ? (p / f) : (p * f);
+            }
+        });
+        dibujarTabla();
+        calcularTotal();
+    }
 }
 
 function agregarItem() {
@@ -906,7 +959,8 @@ function agregarItem() {
             precio_unitario: precioSinIva,
             descuento_porcentaje: desc,
             iva: prodElegido.iva,
-            codigo_proveedor: codigoProv
+            codigo_proveedor: codigoProv,
+            costo_sistema: (prodElegido.costo !== undefined && prodElegido.costo !== null) ? prodElegido.costo : null
         });
     }
     resetBuscador();
@@ -1040,10 +1094,14 @@ function dibujarTabla() {
         const btnVincular = sinVincular
             ? `<button class="btn btn-sm btn-warning me-1" onclick="abrirVincular(${idx})" title="Vincular este item a un producto existente"><i class="fas fa-link"></i> Vincular</button>`
             : '';
+        const tieneCostoSist = (i.costo_sistema !== undefined && i.costo_sistema !== null);
+        const badgeVinc = (!sinVincular && i.producto_id)
+            ? `<br><span class="badge bg-success mt-1"><i class="fas fa-link me-1"></i>Art\u00edculo vinculado${tieneCostoSist ? ' \u00b7 Costo sist.: ' + fmt(i.costo_sistema) : ''}</span>`
+            : '';
         return `
             <tr class="${filaClass}">
                 <td><code>${i.codigo}</code></td>
-                <td>${i.nombre}</td>
+                <td>${i.nombre}${badgeVinc}</td>
                 <td class="text-end p-1">
                     <input type="number" class="form-control form-control-sm text-end"
                            style="width:90px; display:inline-block;"
@@ -1094,8 +1152,8 @@ function calcularTotal() {
     const flete = d(document.getElementById('flete').value);
 
     let total;
-    if (esModoCI()) {
-        // En CI no hay netos/IVAs/percepciones manuales — el total sale de los ítems.
+    if (esModoLibre()) {
+        // En CI y NC no hay netos/IVAs/percepciones manuales — el total sale de los ítems.
         // Para cada item: subtotal_con_iva = cant * precio_unitario * (1 - desc/100) * (1 + iva/100)
         let sumaItems = 0;
         itemsCarrito.forEach(i => {
@@ -1188,7 +1246,8 @@ function confirmarAltaRapida() {
                     precio_unitario: item.precio_unitario,
                     descuento_porcentaje: item.descuento_porcentaje || 0,
                     iva: item.iva,
-                    codigo_proveedor: item.codigo_proveedor || ''
+                    codigo_proveedor: item.codigo_proveedor || '',
+                    costo_sistema: (p.costo !== undefined && p.costo !== null) ? p.costo : 0
                 };
                 dibujarTabla();
                 calcularTotal();
@@ -1312,7 +1371,8 @@ async function guardar() {
 
     if (!proveedor_id) { Swal.fire({icon: 'warning', title: 'Seleccioná un proveedor'}); return; }
     if (!fecha) { Swal.fire({icon: 'warning', title: 'Fecha obligatoria'}); return; }
-    if (!pv || !numero) { Swal.fire({icon: 'warning', title: 'Punto de venta y número son obligatorios'}); return; }
+    if (!numero) { Swal.fire({icon: 'warning', title: 'El número de comprobante es obligatorio'}); return; }
+    if (!esModoLibre() && !pv) { Swal.fire({icon: 'warning', title: 'El punto de venta es obligatorio'}); return; }
     if (!itemsCarrito.length) { Swal.fire({icon: 'warning', title: 'Agregá al menos un artículo'}); return; }
 
     // Validar que no haya items sin vincular (producto_id null)
@@ -1331,8 +1391,8 @@ async function guardar() {
     }
 
     // Validar que los totales IVA estén cargados (sino no entra bien al libro IVA)
-    // EXCEPCIÓN: en modo CI (Comprobante Interno) NO se exige IVA — no va al libro IVA.
-    if (!esModoCI()) {
+    // EXCEPCIÓN: en modo CI (interno) y NC (nota de crédito) NO se exige IVA — no van al libro IVA.
+    if (!esModoLibre()) {
         const n21 = d(document.getElementById('neto21').value);
         const i21 = d(document.getElementById('iva21').value);
         const n105 = d(document.getElementById('neto105').value);
@@ -1355,7 +1415,7 @@ async function guardar() {
         if (totalNumCI <= 0) {
             Swal.fire({
                 icon: 'warning',
-                title: 'El total del comprobante interno está en cero',
+                title: 'El total del comprobante está en cero',
                 text: 'Cargá al menos un ítem con cantidad y precio para que el comprobante tenga un total > 0.'
             });
             return;
@@ -1363,9 +1423,14 @@ async function guardar() {
     }
 
     const totalTexto = document.getElementById('lblTotal').textContent;
-    const mensajeStock = window.OC_ID
-        ? 'El stock <strong>NO</strong> se volverá a sumar (OC ya recibida). Se actualizan costo y precios.'
-        : 'Se actualizará stock, costo y precios de venta según los márgenes guardados.';
+    let mensajeStock;
+    if (esModoNC()) {
+        mensajeStock = 'Se <strong>DESCONTARÁ</strong> stock por las cantidades cargadas (devolución al proveedor). Baja el saldo del proveedor. No modifica costo ni precios.';
+    } else if (window.OC_ID) {
+        mensajeStock = 'El stock <strong>NO</strong> se volverá a sumar (OC ya recibida). Se actualizan costo y precios.';
+    } else {
+        mensajeStock = 'Se actualizará stock, costo y precios de venta según los márgenes guardados.';
+    }
     const confResult = await Swal.fire({
         icon: 'question',
         title: '¿Confirmar guardado?',
@@ -1564,7 +1629,7 @@ async function precargarDesdeOC(ocId) {
             html: `Se cargaron <strong>${(data.items || []).length}</strong> ítems recibidos de ` +
                   `<strong>${data.oc.numero_completo}</strong>.<br><br>` +
                   `<span class="text-muted small">Revisá precios, cantidades y totales de IVA. ` +
-                  `Si la factura del proveedor trae diferencias, podés escanearla con "Escanear factura" ` +
+                  `Si la factura del proveedor trae diferencias, podés escanearla con "Escanear Comprobante" ` +
                   `(los ítems del carrito se mantendrán).</span>`,
             timer: 3500,
             timerProgressBar: true,
@@ -1730,7 +1795,7 @@ function vincMostrarResultados(prods, qOriginal, rankeados) {
                         ${matchInfo}
                     </div>
                     <small class="text-muted text-end" style="white-space:nowrap;">
-                        Stock: ${p.stock}<br>IVA: ${p.iva}%
+                        Stock: ${p.stock}<br>Costo sist.: ${fmt(p.costo)}<br>IVA: ${p.iva}%
                     </small>
                 </div>
             </a>
@@ -1768,7 +1833,8 @@ async function confirmarVinculacion() {
         precio_unitario: item.precio_unitario,
         descuento_porcentaje: item.descuento_porcentaje || 0,  // conservamos el descuento del OCR
         iva: item.iva,  // conservamos el IVA del OCR (viene de la factura)
-        codigo_proveedor: codigoProv
+        codigo_proveedor: codigoProv,
+        costo_sistema: (vincProdElegido.costo !== undefined && vincProdElegido.costo !== null) ? vincProdElegido.costo : null
     };
 
     // Opcionalmente guardar el código de proveedor en la DB
@@ -2110,8 +2176,21 @@ async function autoCompletarDesdeOCR(data) {
         // lo que dice la factura del proveedor (precio de lista + columna desc).
         // Los subtotales y costo final se calculan en dibujarTabla() aplicando el desc.
         const precioBase = parseFloat(item.precio_unitario) || 0;
-        const bonif = parseFloat(item.porcentaje_bonificacion) || 0;
+        let bonif = parseFloat(item.porcentaje_bonificacion) || 0;
         const cantidad = parseFloat(item.cantidad) || 0;
+
+        // DESCUENTO EFECTIVO desde el importe final de la linea (item.subtotal),
+        // que refleja el descuento REAL aplicado (a veces el papel dice 13% pero aplica 12,70%).
+        // Si no hay subtotal valido, se mantiene el porcentaje_bonificacion del OCR.
+        const subtotalLinea = parseFloat(item.subtotal) || 0;
+        if (precioBase > 0 && cantidad > 0 && subtotalLinea > 0) {
+            const precioFinalUnit = subtotalLinea / cantidad;
+            let descEfectivo = (1 - precioFinalUnit / precioBase) * 100;
+            if (descEfectivo > -0.5 && descEfectivo < 100) {
+                if (descEfectivo < 0) descEfectivo = 0;
+                bonif = +descEfectivo.toFixed(2);
+            }
+        }
 
         // Intentar buscar el producto primero por código del proveedor, luego por nombre
         let producto = null;
@@ -2142,7 +2221,8 @@ async function autoCompletarDesdeOCR(data) {
                 precio_unitario: +precioBase.toFixed(4),
                 descuento_porcentaje: +bonif.toFixed(2),
                 iva: parseFloat(item.alicuota_iva) || producto.iva || 21,
-                codigo_proveedor: item.codigo || ''
+                codigo_proveedor: item.codigo || '',
+                costo_sistema: (producto.costo !== undefined && producto.costo !== null) ? producto.costo : null
             });
         } else {
             // No se encontró: agregar como "pendiente de vincular" con producto_id = null

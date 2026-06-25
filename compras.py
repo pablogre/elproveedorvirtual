@@ -295,7 +295,7 @@ def api_guardar():
     # CI (Comprobante Interno) = recibo/remito/orden del proveedor que NO es factura oficial.
     # Numeración LIBRE (la tipea el usuario tal cual viene en el papel). NO se hace zfill.
     # No va al Libro IVA Compras, pero SÍ actualiza stock, costos, precios y cta cte.
-    if tipo == 'CI':
+    if tipo in ('CI', 'NC'):
         pv = (data.get('punto_venta') or '').strip()
         numero = (data.get('numero') or '').strip()
     else:
@@ -363,6 +363,13 @@ def api_guardar():
                 f'ya está cargado (#{dup["id"]}, fecha {fecha_str}, '
                 f'total ${float(dup["total"]):,.2f}) en el módulo "{modulo}". '
                 f'No se puede cargar dos veces el mismo comprobante.'
+            )
+        elif tipo == 'NC':
+            msg = (
+                f'⚠️ La nota de crédito {comprobante_str} de {dup["razon_social"]} '
+                f'ya está cargada (#{dup["id"]}, fecha {fecha_str}, '
+                f'total ${float(dup["total"]):,.2f}) en el módulo "{modulo}". '
+                f'No se puede cargar dos veces la misma nota de crédito.'
             )
         else:
             msg = (
@@ -437,7 +444,27 @@ def api_guardar():
     # del Libro IVA Compras. El resto del sistema (cta cte proveedor, stock, costos,
     # exportar Excel/PDF/Libro IVA Digital) ya filtra clase_comprobante='interno'.
     # Para tipos fiscales (A/B/C/M) queda como 'factura' (es el default histórico).
-    clase = 'interno' if tipo == 'CI' else 'factura'
+    if tipo == 'CI':
+        clase = 'interno'
+    elif tipo == 'NC':
+        # NC de compra = devolución al proveedor. Va con clase 'nota_credito' para
+        # que la cta cte del proveedor la tome como HABER (crédito) y RESTE el saldo.
+        # Del Libro IVA se la excluye aparte por tipo_comprobante='NC' (es no fiscal).
+        clase = 'nota_credito'
+    else:
+        clase = 'factura'
+
+    # NC (Nota de Crédito de compra): es una devolución al proveedor.
+    #   - DESCUENTA stock (no lo suma), no toca costo ni precios de venta.
+    #   - clase_comprobante='nota_credito' → estado 'registrada', saldo_pendiente 0
+    #     y baja el saldo del proveedor (igual que el alta de NC del Módulo 4).
+    es_nc = (tipo == 'NC')
+    if es_nc:
+        estado_inicial = 'registrada'
+        saldo_pend = Decimal('0')
+    else:
+        estado_inicial = 'pendiente'
+        saldo_pend = total
 
     try:
         # --- 1) Insertar cabecera ---
@@ -455,14 +482,15 @@ def api_guardar():
                  :nng, :otros, :total, :obs,
                  :uid, 1,
                  :desc, :flete, :piva, :piibb, :pgan,
-                 :total, 'pendiente')
+                 :saldo_pend, :estado)
         """), {
             'prov': proveedor_id, 'fecha': fecha, 'tipo': tipo, 'clase': clase, 'pv': pv, 'numero': numero,
             'n21': neto_21, 'i21': iva_21, 'n105': neto_105, 'i105': iva_105,
             'nng': neto_no_grav, 'otros': otros, 'total': total, 'obs': observaciones,
             'uid': usuario_id,
             'desc': descuento, 'flete': flete,
-            'piva': perc_iva, 'piibb': perc_iibb, 'pgan': perc_gan
+            'piva': perc_iva, 'piibb': perc_iibb, 'pgan': perc_gan,
+            'saldo_pend': saldo_pend, 'estado': estado_inicial
         })
         factura_id = db.session.execute(text("SELECT LAST_INSERT_ID() AS id")).scalar()
 
@@ -491,6 +519,53 @@ def api_guardar():
                 raise Exception(f'Producto id={pid} no encontrado')
             if prod['es_combo']:
                 raise Exception(f'El producto id={pid} es un combo, no se puede comprar')
+
+            # ═══ NOTA DE CRÉDITO de compra (devolución al proveedor) ═══
+            # Descuenta stock. NO toca costo ni precios de venta, NO hace snapshot
+            # histórico (no es una compra). Igual guarda el detalle para trazabilidad.
+            if es_nc:
+                stock_anterior_audit = float(prod['stock'])
+                stock_nuevo_audit = stock_anterior_audit - float(cant)
+                db.session.execute(text("""
+                    UPDATE producto SET stock = stock - :cant WHERE id = :pid
+                """), {'cant': cant, 'pid': pid})
+
+                registrar_movimiento_stock(
+                    db=db,
+                    producto_id=pid,
+                    tipo='nota_credito_compra',
+                    cantidad=float(cant),
+                    signo='-',
+                    stock_anterior=stock_anterior_audit,
+                    stock_nuevo=stock_nuevo_audit,
+                    referencia_tipo='factura_compra',
+                    referencia_id=factura_id,
+                    motivo=f'Nota de crédito de compra (devolución a proveedor, NC #{factura_id})',
+                    usuario_id=usuario_id,
+                    usuario_nombre=session.get('nombre', 'Sistema'),
+                    codigo_producto=prod.get('codigo'),
+                    nombre_producto=prod.get('nombre'),
+                )
+
+                # Detalle (costo_final_unitario = costo vigente, sin modificarlo)
+                db.session.execute(text("""
+                    INSERT INTO factura_compra_detalle
+                        (factura_compra_id, producto_id, cantidad, precio_unitario, descuento_porcentaje,
+                         iva, subtotal, costo_final_unitario)
+                    VALUES
+                        (:fid, :pid, :cant, :pu, :desc, :iva, :sub, :cfu)
+                """), {
+                    'fid': factura_id, 'pid': pid, 'cant': cant, 'pu': precio_u, 'desc': desc_p,
+                    'iva': iva_p, 'sub': subtotal_sin_iva, 'cfu': prod['costo']
+                })
+
+                if codigo_proveedor_it:
+                    db.session.execute(text("""
+                        INSERT INTO producto_proveedor (producto_id, proveedor_id, codigo_proveedor)
+                        VALUES (:pid, :prov, :cp)
+                        ON DUPLICATE KEY UPDATE codigo_proveedor = :cp
+                    """), {'pid': pid, 'prov': proveedor_id, 'cp': codigo_proveedor_it})
+                continue
 
             # Costo base con IVA + prorrateo (sobre el precio NETO con descuento aplicado)
             costo_base = precio_neto_u * (Decimal('1') + iva_p / Decimal('100'))
@@ -619,9 +694,10 @@ def api_guardar():
                 """), {'pid': pid, 'prov': proveedor_id, 'cp': codigo_proveedor_it})
 
         # --- 3) Actualizar saldo del proveedor ---
+        #   compra/CI: + total (le debo más) ; NC: - total (le debo menos)
         db.session.execute(text("""
-            UPDATE proveedor SET saldo = saldo + :total WHERE id = :pid
-        """), {'total': total, 'pid': proveedor_id})
+            UPDATE proveedor SET saldo = saldo + :delta WHERE id = :pid
+        """), {'delta': (-total if es_nc else total), 'pid': proveedor_id})
 
         # --- 4) Si viene de una OC, vincular factura y cambiar estado a 'facturada' ---
         if oc_id:
@@ -841,6 +917,9 @@ def api_eliminar(factura_id):
     if not cab:
         return jsonify({'error': 'Factura no encontrada o no tiene detalle'}), 404
 
+    # Si es una NC de compra, la reversa es INVERSA: devuelve stock (+) y sube saldo (+).
+    es_nc_elim = (cab.get('tipo_comprobante') == 'NC')
+
     try:
         # Traer el histórico de esta factura (con los valores anteriores)
         historicos = db.session.execute(text("""
@@ -862,25 +941,30 @@ def api_eliminar(factura_id):
                 SELECT codigo, nombre, stock FROM producto WHERE id = :pid
             """), {'pid': d['producto_id']}).mappings().first()
 
-            db.session.execute(text("""
-                UPDATE producto SET stock = stock - :cant WHERE id = :pid
-            """), {'cant': d['cantidad'], 'pid': d['producto_id']})
+            if es_nc_elim:
+                db.session.execute(text("""
+                    UPDATE producto SET stock = stock + :cant WHERE id = :pid
+                """), {'cant': d['cantidad'], 'pid': d['producto_id']})
+            else:
+                db.session.execute(text("""
+                    UPDATE producto SET stock = stock - :cant WHERE id = :pid
+                """), {'cant': d['cantidad'], 'pid': d['producto_id']})
 
             # ═══ AUDITORÍA: registrar la anulación ═══
             if prod_audit:
                 stock_anterior_audit = float(prod_audit['stock'])
-                stock_nuevo_audit = stock_anterior_audit - float(d['cantidad'])
+                stock_nuevo_audit = stock_anterior_audit + (float(d['cantidad']) if es_nc_elim else -float(d['cantidad']))
                 registrar_movimiento_stock(
                     db=db,
                     producto_id=d['producto_id'],
-                    tipo='compra_anulada',
+                    tipo=('nota_credito_compra_anulada' if es_nc_elim else 'compra_anulada'),
                     cantidad=float(d['cantidad']),
-                    signo='-',
+                    signo=('+' if es_nc_elim else '-'),
                     stock_anterior=stock_anterior_audit,
                     stock_nuevo=stock_nuevo_audit,
                     referencia_tipo='factura_compra',
                     referencia_id=factura_id,
-                    motivo=f'Anulación factura compra #{factura_id}',
+                    motivo=(f'Anulación NC de compra #{factura_id} (devuelve stock)' if es_nc_elim else f'Anulación factura compra #{factura_id}'),
                     usuario_id=session.get('user_id'),
                     usuario_nombre=session.get('nombre', 'Sistema'),
                     codigo_producto=prod_audit.get('codigo'),
@@ -938,9 +1022,10 @@ def api_eliminar(factura_id):
             })
 
         # Revertir saldo del proveedor
+        #   compra/CI sumaban → al borrar se resta ; NC restaba → al borrar se suma
         db.session.execute(text("""
-            UPDATE proveedor SET saldo = saldo - :total WHERE id = :pid
-        """), {'total': cab['total'], 'pid': cab['proveedor_id']})
+            UPDATE proveedor SET saldo = saldo + :delta WHERE id = :pid
+        """), {'delta': (float(cab['total']) if es_nc_elim else -float(cab['total'])), 'pid': cab['proveedor_id']})
 
         # Borrar detalle (ON DELETE CASCADE lo haría, pero explícito para claridad)
         db.session.execute(text("""

@@ -37,6 +37,8 @@ import pymysql
 pymysql.install_as_MySQLdb()
 import MySQLdb.cursors
 from estadisticas import init_estadisticas
+from nc_interna import init_nc_interna
+from reporte_vendedores import init_reporte_vendedores
 from caja import init_caja_system, CajaAperturaModel
 from notas_credito import notas_credito_bp
 from cta_cte import init_cta_cte
@@ -50,6 +52,7 @@ from cta_cte import (
     registrar_comprobante_en_cta_cte
 )
 from reporte_ctacte_pdf import generar_pdf_cuentas_corrientes
+from reporte_facturas_pdf import generar_pdf_listado_facturas
 
 # ================ SISTEMA DE VERIFICACIÓN DE LICENCIAS (WEB) ================
 from verificador_licencias_web import verificar_licencia
@@ -586,6 +589,7 @@ class Cliente(db.Model):
     es_intermediario = db.Column(db.Boolean, default=False, nullable=False)  # consignatario / intermediario
     vendedor_id = db.Column(db.Integer, nullable=True)  # vendedor asignado (FK a vendedor.id a nivel BD)
     dias_vencimiento_factura = db.Column(db.Integer, nullable=True)  # la factura vence a N días desde la emisión
+    descuento_fijo = db.Column(db.Numeric(5, 2), default=0.00)  # % de descuento que se autocarga en la venta
 
 class Producto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1921,7 +1925,9 @@ class ARCAClient:
                 )
                 
                 # Verificar errores en la respuesta
+                hubo_errores_afip = False
                 if hasattr(ultimo_cbte_response, 'Errors') and ultimo_cbte_response.Errors:
+                    hubo_errores_afip = True
                     print(f"⚠️ Advertencias al obtener último comprobante:")
                     if hasattr(ultimo_cbte_response.Errors, 'Err'):
                         errors = ultimo_cbte_response.Errors.Err
@@ -1932,6 +1938,19 @@ class ARCAClient:
                             print(f"   [{errors.Code}] {errors.Msg}")
                 
                 ultimo_nro = getattr(ultimo_cbte_response, 'CbteNro', 0)
+                # CbteNro puede venir None si AFIP no respondio bien
+                if ultimo_nro is None:
+                    ultimo_nro = 0
+                
+                # ⛔ FIX NUMERACION: CbteNro=0 SIN errores es legitimo (punto de
+                # venta nuevo, primer comprobante real -> Nº1 correcto). Pero si
+                # AFIP devolvio errores Y no informo un numero valido, NO podemos
+                # asumir que es el primer comprobante: abortamos para no pisar el
+                # Nº1 ni romper la secuencia. La venta queda en error_afip con su
+                # numero temporal.
+                if hubo_errores_afip and ultimo_nro == 0:
+                    raise Exception("AFIP devolvio errores y no informo el ultimo comprobante autorizado (no se asume Nro1)")
+                
                 proximo_nro = ultimo_nro + 1
                 
                 print(f"📊 Último comprobante AFIP: {ultimo_nro}")
@@ -1942,9 +1961,13 @@ class ARCAClient:
                 if any(keyword in error_str for keyword in ['invalid xml', 'mismatch', 'html']):
                     raise Exception("FECompUltimoAutorizado devolviendo HTML")
                 else:
+                    # ⛔ FIX NUMERACION: NO asumir proximo_nro=1. Si no pudimos
+                    # leer el ultimo comprobante de AFIP, NO sabemos el numero
+                    # real y arrancar de 1 corrompe la secuencia / intenta pisar
+                    # el Nº1. Abortamos: la factura queda en error_afip con su
+                    # numero temporal y se reintenta cuando AFIP vuelva.
                     print(f"⚠️ Error obteniendo último comprobante: {e}")
-                    print("🔄 Usando número secuencial local...")
-                    proximo_nro = 1
+                    raise Exception(f"No se pudo obtener el ultimo comprobante autorizado de AFIP: {e}")
             
             # Preparar datos del comprobante
             fecha_hoy = datetime.now().strftime('%Y%m%d')
@@ -2303,6 +2326,13 @@ afip_monitor = AFIPStatusMonitor(ARCA_CONFIG)
 # DESPUÉS DE DEFINIR LOS MODELOS Y ANTES DE LAS RUTAS:
 # Inicializar y registrar el blueprint de estadísticas
 estadisticas_bp = init_estadisticas(db, Factura, DetalleFactura, Producto, Cliente)
+
+# NC interna (devoluciones parciales de comprobantes internos)
+init_nc_interna(app, db, Factura, DetalleFactura, NotaCredito,
+                DetalleNotaCredito, Producto, registrar_movimiento_stock)
+
+# Reporte de ventas por vendedor
+init_reporte_vendedores(app, db)
 app.config['MEDIO_PAGO_MODEL'] = MedioPago
 app.register_blueprint(estadisticas_bp)
 
@@ -2795,7 +2825,8 @@ def api_clientes():
                 'nombre': cliente.nombre,
                 'razon_social': cliente.nombre,  # Alias para compatibilidad
                 'documento': cliente.documento,
-                'tipo_documento': cliente.tipo_documento
+                'tipo_documento': cliente.tipo_documento,
+                'descuento_fijo': float(cliente.descuento_fijo) if cliente.descuento_fijo else 0.0
             })
         
         return jsonify({
@@ -2838,6 +2869,7 @@ def obtener_cliente(cliente_id):
             'zona_id': cliente.zona_id,
             'vendedor_id': cliente.vendedor_id,
             'dias_vencimiento_factura': cliente.dias_vencimiento_factura,
+            'descuento_fijo': float(cliente.descuento_fijo) if cliente.descuento_fijo else 0.0,
             'es_intermediario': bool(getattr(cliente, 'es_intermediario', False))
         })
     except Exception as e:
@@ -2885,6 +2917,8 @@ def guardar_cliente():
         cliente.vendedor_id = data.get('vendedor_id') or None
         cliente.dias_vencimiento_factura = data.get('dias_vencimiento_factura')
         cliente.es_intermediario = bool(data.get('es_intermediario', False))
+        _df = data.get('descuento_fijo', 0)
+        cliente.descuento_fijo = Decimal(str(round(float(_df) if _df not in (None, '') else 0, 2)))
         saldo_raw = data.get('saldo', 0)
         cliente.saldo = Decimal(str(round(float(saldo_raw) if saldo_raw is not None else 0, 2)))
         
@@ -3671,6 +3705,7 @@ def buscar_productos_admin():
                 ),
                 'iva': float(producto.iva),
                 'activo': producto.activo,
+                'fecha_actualizacion_precio': producto.fecha_actualizacion_precio.strftime('%d/%m/%y') if producto.fecha_actualizacion_precio else None,
                 'es_combo': producto.es_combo,
                 'acceso_rapido': producto.acceso_rapido if hasattr(producto, 'acceso_rapido') else False,
                 'orden_acceso_rapido': producto.orden_acceso_rapido if hasattr(producto, 'orden_acceso_rapido') else 0
@@ -7170,6 +7205,7 @@ def buscar_facturas():
         estado = request.args.get('estado', '').strip()
         fecha_desde = request.args.get('fecha_desde', '').strip()
         fecha_hasta = request.args.get('fecha_hasta', '').strip()
+        vendedor = request.args.get('vendedor', '').strip()
         limite = int(request.args.get('limite', 100))  # Limitar resultados
         
         print(f"🔍 Búsqueda de facturas:")
@@ -7195,6 +7231,13 @@ def buscar_facturas():
         if estado:
             query = query.filter(Factura.estado == estado)
             print(f"   Filtro aplicado: Estado = '{estado}'")
+
+        if vendedor:
+            try:
+                query = query.filter(Cliente.vendedor_id == int(vendedor))
+                print(f"   Filtro aplicado: Vendedor ID = '{vendedor}'")
+            except (TypeError, ValueError):
+                pass
         
         # Filtros de fecha
         if fecha_desde:
@@ -7294,6 +7337,130 @@ def buscar_facturas():
             'success': False,
             'error': f'Error en la búsqueda: {str(e)}'
         }), 500
+
+
+@app.route('/facturas/pdf')
+def facturas_listado_pdf():
+    """Genera el PDF del listado de facturas con los MISMOS filtros que la pantalla
+    (numero, cliente, estado, vendedor, fecha_desde, fecha_hasta).
+    Reporte por vendedor / período. Se abre inline para imprimir."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    try:
+        numero      = request.args.get('numero', '').strip()
+        cliente     = request.args.get('cliente', '').strip()
+        estado      = request.args.get('estado', '').strip()
+        vendedor    = request.args.get('vendedor', '').strip()
+        fecha_desde = request.args.get('fecha_desde', '').strip()
+        fecha_hasta = request.args.get('fecha_hasta', '').strip()
+
+        query = db.session.query(Factura).join(Cliente, Factura.cliente_id == Cliente.id)
+
+        if numero:
+            query = query.filter(Factura.numero.ilike(f'%{numero}%'))
+        if cliente:
+            query = query.filter(Cliente.nombre.ilike(f'%{cliente}%'))
+        if estado:
+            query = query.filter(Factura.estado == estado)
+        if vendedor:
+            try:
+                query = query.filter(Cliente.vendedor_id == int(vendedor))
+            except (TypeError, ValueError):
+                pass
+        if fecha_desde:
+            try:
+                fd = datetime.strptime(fecha_desde, '%Y-%m-%d')
+                query = query.filter(Factura.fecha >= fd)
+            except ValueError:
+                return jsonify({'error': 'Formato de fecha desde invalido. Use YYYY-MM-DD'}), 400
+        if fecha_hasta:
+            try:
+                fh_dt = datetime.strptime(fecha_hasta, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+                query = query.filter(Factura.fecha <= fh_dt)
+            except ValueError:
+                return jsonify({'error': 'Formato de fecha hasta invalido. Use YYYY-MM-DD'}), 400
+
+        facturas = query.order_by(Factura.fecha.desc()).all()
+
+        # Mapa de vendedores (id -> nombre) para evitar N+1
+        vend_map = {v.id: v.nombre for v in Vendedor.query.all()}
+
+        filas = []
+        resumen = {
+            'autorizadas': {'cantidad': 0, 'total': 0.0},
+            'con_error':   {'cantidad': 0, 'total': 0.0},
+            'pendientes':  {'cantidad': 0, 'total': 0.0},
+            'anuladas':    {'cantidad': 0, 'total': 0.0},
+            'internos':    {'cantidad': 0, 'total': 0.0},
+        }
+        _key = {
+            'autorizada': 'autorizadas',
+            'error_afip': 'con_error',
+            'pendiente':  'pendientes',
+            'anulada':    'anuladas',
+            'interno':    'internos',
+        }
+        total_general = 0.0
+        for f in facturas:
+            cli = f.cliente
+            vend_nombre = ''
+            if cli is not None and getattr(cli, 'vendedor_id', None):
+                vend_nombre = vend_map.get(cli.vendedor_id, '')
+            total_f = float(f.total or 0)
+            filas.append({
+                'numero':         f.numero,
+                'fecha':          f.fecha.strftime('%d/%m/%Y %H:%M') if f.fecha else '',
+                'cliente_nombre': cli.nombre if cli else '',
+                'cliente_doc':    (cli.documento if cli else '') or '',
+                'vendedor':       vend_nombre,
+                'tipo_nombre':    obtener_nombre_comprobante(f.tipo_comprobante),
+                'estado':         f.estado,
+                'cae':            f.cae or '',
+                'total':          total_f,
+            })
+            total_general += total_f
+            k = _key.get(f.estado)
+            if k:
+                resumen[k]['cantidad'] += 1
+                resumen[k]['total'] += total_f
+        resumen['total_general'] = total_general
+        resumen['cantidad_total'] = len(filas)
+
+        # Nombre del vendedor para el encabezado
+        vendedor_nombre = ''
+        if vendedor:
+            try:
+                vendedor_nombre = vend_map.get(int(vendedor), '')
+            except (TypeError, ValueError):
+                vendedor_nombre = ''
+
+        emisor = (getattr(ARCA_CONFIG, 'RAZON_SOCIAL', None)
+                  or app.config.get('RAZON_SOCIAL')
+                  or app.config.get('NOMBRE_COMERCIAL')
+                  or 'Reporte de Facturas')
+
+        parametros = {
+            'vendedor':    vendedor_nombre,
+            'cliente':     cliente,
+            'numero':      numero,
+            'estado':      estado,
+            'fecha_desde': fecha_desde,
+            'fecha_hasta': fecha_hasta,
+            'emisor':      emisor,
+        }
+
+        pdf_bytes = generar_pdf_listado_facturas(filas, resumen, parametros)
+        nombre = 'Listado_Facturas_' + datetime.now().strftime('%Y%m%d_%H%M%S') + '.pdf'
+        return send_file(
+            BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=False,
+            download_name=nombre,
+        )
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Error generando PDF: {str(e)}'}), 500
+
 
 
 def obtener_nombre_comprobante(tipo):
@@ -7456,6 +7623,41 @@ def anular_factura(factura_id):
                     'error': f'Este Comprobante Interno está vinculado a la factura {factura_derivada.numero}. Anulá primero esa factura.'
                 }), 400
         
+        # ═══ VALIDACIÓN CTA.CTE: no anular si la factura ya tiene cobros imputados ═══
+        # Si esta factura generó una venta a cuenta (movimiento venta_fiada/venta) y
+        # ese movimiento YA recibió cobros, NO se puede anular sin antes revertir el
+        # recibo: el dinero cobrado quedaría sin imputar. Mismo criterio que la
+        # validación de consignación. La reversión efectiva (más abajo) corre solo
+        # si pasa esta validación.
+        from sqlalchemy import text as _cc_text
+        _movs_cc1 = db.session.execute(_cc_text("""
+            SELECT id, monto_total, saldo_pendiente
+            FROM cta_cte_movimiento
+            WHERE factura_id = :fid AND tipo = 'venta_fiada' AND tipo_mov = 'venta'
+        """), {'fid': factura.id}).fetchall()
+
+        _cc_tiene_cobros = any(
+            float(m.saldo_pendiente or 0) < float(m.monto_total or 0) - 0.01
+            for m in _movs_cc1
+        )
+        _cc_recibos = []
+        if _movs_cc1:
+            _ids_in = '(' + ','.join(str(int(m.id)) for m in _movs_cc1) + ')'
+            _cc_recibos = [r.numero for r in db.session.execute(_cc_text(f"""
+                SELECT DISTINCT rc.numero
+                FROM recibo_cobro_detalle d
+                JOIN recibo_cobro rc ON rc.id = d.recibo_id
+                WHERE d.movimiento_id IN {_ids_in} AND rc.estado <> 'anulada'
+            """)).fetchall()]
+
+        if _cc_tiene_cobros or _cc_recibos:
+            _det = f' (recibo/s {", ".join(_cc_recibos)})' if _cc_recibos else ''
+            return jsonify({
+                'success': False,
+                'error': f'Esta factura tiene pagos imputados en cuenta corriente{_det}. '
+                         f'Anulá primero el/los recibo/s de cobro y después la factura.'
+            }), 400
+
         # ═══ VALIDACIÓN CONSIGNACIÓN: si es factura derivada, NO reintegrar stock ═══
         es_factura_consignacion = factura.interno_origen_id is not None
         if es_factura_consignacion:
@@ -7538,6 +7740,29 @@ def anular_factura(factura_id):
         
         # Marcar como anulada
         factura.estado = 'anulada'
+
+        # ═══ REVERTIR CUENTA CORRIENTE (ya validamos que no hay cobros imputados) ═══
+        from sqlalchemy import text as _cc_text2
+        # CASO 1 — la factura GENERÓ una venta a cuenta: neutralizar el movimiento
+        # (saldo 0 + estado 'anulado') para que salga del saldo del cliente y quede
+        # trazable. El saldo = SUM(saldo_pendiente WHERE tipo='venta_fiada').
+        _rc1 = db.session.execute(_cc_text2("""
+            UPDATE cta_cte_movimiento
+               SET saldo_pendiente = 0, estado = 'anulado'
+             WHERE factura_id = :fid AND tipo = 'venta_fiada' AND tipo_mov = 'venta'
+        """), {'fid': factura.id})
+        # CASO 2 — la factura COBRABA productos fiados (marcar_productos_como_pagados
+        # marcó el movimiento viejo como 'pagado' y le estampó este factura_id, sin
+        # tipo_mov='venta'). Al anular, esa deuda vuelve a 'pendiente' y se desvincula.
+        _rc2 = db.session.execute(_cc_text2("""
+            UPDATE cta_cte_movimiento
+               SET estado = 'pendiente', factura_id = NULL
+             WHERE factura_id = :fid AND tipo = 'venta_fiada'
+               AND (tipo_mov IS NULL OR tipo_mov <> 'venta')
+        """), {'fid': factura.id})
+        print(f"🔄 CTA.CTE anulación {factura.numero}: "
+              f"{_rc1.rowcount} venta(s) a cuenta neutralizada(s), "
+              f"{_rc2.rowcount} cobro(s) de fiado revertido(s)")
         
         # OPCIONAL: Si querés guardar el motivo y fecha
         # (necesitarías agregar estos campos al modelo Factura)
@@ -11296,6 +11521,7 @@ def api_totales_facturas_periodo():
         cliente     = request.args.get('cliente', '').strip()
         fecha_desde = request.args.get('fecha_desde', '').strip()
         fecha_hasta = request.args.get('fecha_hasta', '').strip()
+        vendedor    = request.args.get('vendedor', '').strip()
 
         query = db.session.query(Factura).join(Cliente, Factura.cliente_id == Cliente.id)
 
@@ -11303,6 +11529,11 @@ def api_totales_facturas_periodo():
             query = query.filter(Factura.numero.ilike(f'%{numero}%'))
         if cliente:
             query = query.filter(Cliente.nombre.ilike(f'%{cliente}%'))
+        if vendedor:
+            try:
+                query = query.filter(Cliente.vendedor_id == int(vendedor))
+            except (TypeError, ValueError):
+                pass
 
         if fecha_desde:
             try:

@@ -270,6 +270,16 @@ def generar_pdf_factura(factura, emisor=None, qr_base64=None):
     ]))
     story += [cliente_tbl, Spacer(1, 8)]
 
+    # Leyenda obligatoria (RG 5022/2021 - Ley 27.618):
+    # Factura A emitida a un Monotributista debe llevar esta leyenda.
+    # Se detecta igual que en el resto del sistema: condicion_iva con 'MONOTRIB'.
+    if letra == 'A' and 'MONOTRIB' in str(cli_cond or '').upper():
+        st_leyenda_mono = ParagraphStyle('leyenda_mono', parent=ss['Normal'],
+                                         fontName='Helvetica-Bold', fontSize=8, leading=11)
+        story += [Paragraph('Receptor del comprobante - Responsable Monotributo',
+                            st_leyenda_mono),
+                  Spacer(1, 8)]
+
     # ── DETALLE DE ÍTEMS ─────────────────────────────────────────────────────
     # En Factura A/M se agrega la columna "% IVA" (alícuota por ítem).
     if discrimina:

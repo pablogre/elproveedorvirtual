@@ -41,7 +41,7 @@
     font-size: 0.92rem;
   }
   /* Columnas: 1=Código 2=Nombre 3=Categoría 4=Costo 5=Margen% 6=PrecioVenta
-     7=Stock 8=IVA% 9=Estado 10=AccesoRapido 11=Acciones */
+     7=Stock 8=IVA% 9=Estado 10=AccesoRapido 11=Acciones 12=UltActPrecio */
 
   /* Código - chiquito arriba */
   #tablaProductos td:nth-child(1) {
@@ -126,12 +126,54 @@
     font-size: 0.85rem;
     flex-shrink: 0;
   }
+  /* Últ. actualización de precio - línea chica con label */
+  #tablaProductos td:nth-child(12) {
+    display: inline-block;
+    font-size: 0.78rem;
+    color: #6b7280;
+    margin-left: 0.6rem;
+  }
+  #tablaProductos td:nth-child(12)::before {
+    content: 'Precio act.: ';
+    font-size: 0.72rem;
+    color: #9ca3af;
+    font-weight: 500;
+  }
 
   .pagination .page-link {
     padding: 0.4rem 0.7rem;
     font-size: 0.85rem;
   }
 }
+
+/* ===== Edición inline de Costo / Precio en el listado ===== */
+.inline-input {
+    width: 92px;
+    padding: 2px 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-align: right;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+}
+.inline-input:focus {
+    outline: none;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 2px rgba(13,110,253,.2);
+}
+.inline-input.cambiado {
+    border-color: #fd7e14;
+    background: #fff8f0;
+}
+.btn-guardar-inline {
+    display: none;
+    margin-left: 4px;
+    padding: 2px 7px;
+    line-height: 1;
+}
+.celda-precio.fila-cambiada .btn-guardar-inline,
+.celda-costo.fila-cambiada .btn-guardar-inline { display: inline-block; }
+.margen-inline { cursor: default; }
 </style>
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2"><i class="fas fa-box"></i> Gestión de Productos</h1>
@@ -212,6 +254,7 @@
                         <th>Estado</th>
                         <th><i class="fas fa-bolt" title="Acceso Rápido"></i></th> <!-- Nueva columna -->
                         <th>Acciones</th>
+                        <th>Últ. precio</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -234,13 +277,13 @@
                                 {{ producto.categoria or 'Sin categoría' }}
                             </span>
                         </td>
-                        <td class="text-end">
+                        <td class="text-end celda-costo" data-prod-id="{{ producto.id }}" data-combo="{{ '1' if producto.es_combo else '0' }}" data-costo="{{ producto.costo or 0 }}">
                             <small class="text-muted">$</small><strong>{{ "%.2f"|format(producto.costo or 0) }}</strong>
                         </td>
-                        <td class="text-center">
+                        <td class="text-center celda-margen" data-prod-id="{{ producto.id }}" data-margen="{{ producto.margen or 0 }}">
                             <span class="badge bg-warning text-dark">{{ "%.1f"|format(producto.margen or 0) }}%</span>
                         </td>
-                        <td class="text-end">
+                        <td class="text-end celda-precio" data-prod-id="{{ producto.id }}" data-combo="{{ '1' if producto.es_combo else '0' }}" data-precio="{{ producto.precio or 0 }}">
                             <strong>${{ "%.2f"|format(producto.precio) }}</strong>
                             {% if producto.es_combo and producto.producto_base %}
                                 {% set precio_normal = producto.producto_base.precio * producto.cantidad_combo %}
@@ -302,6 +345,9 @@
                                     <i class="fas fa-power-off"></i>
                                 </button>
                             </div>
+                        </td>
+                        <td class="celda-fecha-precio text-center">
+                            <small class="text-muted">{{ producto.fecha_actualizacion_precio.strftime('%d/%m/%y') if producto.fecha_actualizacion_precio else '—' }}</small>
                         </td>
                     </tr>
                     {% endfor %}
@@ -1498,7 +1544,7 @@ function actualizarTablaProductos(productos) {
     if (productos.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="11" class="text-center text-muted">
+                <td colspan="12" class="text-center text-muted">
                     <i class="fas fa-search"></i> No se encontraron productos
                 </td>
             </tr>
@@ -1557,13 +1603,13 @@ function actualizarTablaProductos(productos) {
                 <td>
                     <span class="badge" style="background-color: ${producto.categoria_color || '#6c757d'}; color: #fff;">${producto.categoria || 'Sin categoría'}</span>
                 </td>
-                <td class="text-end">
+                <td class="text-end celda-costo" data-prod-id="${producto.id}" data-combo="${producto.es_combo ? '1' : '0'}" data-costo="${costo}">
                     <small class="text-muted">$</small><strong>${costo.toFixed(2)}</strong>
                 </td>
-                <td class="text-center">
+                <td class="text-center celda-margen" data-prod-id="${producto.id}" data-margen="${margen}">
                     <span class="badge bg-warning text-dark">${margen.toFixed(2)}%</span>
                 </td>
-                <td class="text-end">
+                <td class="text-end celda-precio" data-prod-id="${producto.id}" data-combo="${producto.es_combo ? '1' : '0'}" data-precio="${precio}">
                     <strong>$${precio.toFixed(2)}</strong>
                     ${producto.es_combo && producto.producto_base ? 
                         (() => {
@@ -1590,9 +1636,15 @@ function actualizarTablaProductos(productos) {
                         </button>
                     </div>
                 </td>
+                <td class="celda-fecha-precio text-center">
+                    <small class="text-muted">${producto.fecha_actualizacion_precio || '—'}</small>
+                </td>
             </tr>
         `;
     }).join('');
+
+    // Re-habilitar la edición inline de precios sobre las filas recién renderizadas
+    habilitarEdicionInlinePrecios();
 }
 
 
@@ -1605,6 +1657,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Cargar categorías al inicio
     cargarCategorias();
+
+    // Habilitar edición inline de Costo / Precio en el listado
+    habilitarEdicionInlinePrecios();
     
     
     // Event listener para costo - recalcula todas las listas
@@ -1745,6 +1800,224 @@ document.addEventListener('DOMContentLoaded', function() {
 cargarProductosAccesoRapido();
     
 console.log('✅ Gestión de acceso rápido inicializada');
+
+
+// ============================================================================
+// EDICIÓN INLINE DE COSTO / PRECIO EN EL LISTADO
+// Reusa /api/producto_detalle/{id} (traer) y /guardar_producto (guardar).
+// NO toca el backend. Los combos quedan excluidos (su precio es derivado).
+// ============================================================================
+
+// Modo de redondeo del PRECIO de venta cuando cambia el COSTO:
+//   'entero'        -> sin decimales            (134,55 -> 135)   [pedido actual]
+//   'decena'        -> a la decena más cercana  (134,55 -> 130)
+//   'decena_arriba' -> a la decena para arriba  (134,55 -> 140)
+//   'cinco'         -> de a $5                   (134,55 -> 135)
+const REDONDEO_PRECIO = 'entero';
+
+function redondearPrecio(p) {
+    p = Number(p) || 0;
+    switch (REDONDEO_PRECIO) {
+        case 'decena':        return Math.round(p / 10) * 10;
+        case 'decena_arriba': return Math.ceil(p / 10) * 10;
+        case 'cinco':         return Math.round(p / 5) * 5;
+        case 'entero':
+        default:              return Math.round(p);
+    }
+}
+
+// Convierte las celdas Costo/Precio del listado en inputs editables (solo no-combos).
+function habilitarEdicionInlinePrecios() {
+    document.querySelectorAll('#tablaProductos td.celda-costo[data-prod-id]').forEach(function (tdCosto) {
+        if (tdCosto.dataset.enhanced === '1') return;   // no duplicar
+        if (tdCosto.dataset.combo === '1')   return;    // combos: precio derivado, no editable
+
+        const id = tdCosto.dataset.prodId;
+        const fila = tdCosto.closest('tr');
+        const tdMargen = fila.querySelector('td.celda-margen');
+        const tdPrecio = fila.querySelector('td.celda-precio');
+        if (!tdMargen || !tdPrecio) return;
+
+        const costo  = parseFloat(tdCosto.dataset.costo)  || 0;
+        const margen = parseFloat(tdMargen.dataset.margen) || 0;
+        const precio = parseFloat(tdPrecio.dataset.precio) || 0;
+
+        tdCosto.innerHTML =
+            '<div class="d-flex align-items-center justify-content-end">' +
+              '<small class="text-muted me-1">$</small>' +
+              '<input type="number" step="0.01" min="0.01" class="inline-input inline-costo" value="' + costo + '">' +
+            '</div>';
+
+        tdMargen.innerHTML =
+            '<span class="badge bg-warning text-dark margen-inline">' + margen.toFixed(1) + '%</span>';
+
+        tdPrecio.innerHTML =
+            '<div class="d-flex align-items-center justify-content-end">' +
+              '<small class="text-muted me-1">$</small>' +
+              '<input type="number" step="1" min="0" class="inline-input inline-precio" value="' + precio + '">' +
+              '<button type="button" class="btn btn-success btn-sm btn-guardar-inline" title="Guardar (Enter)">' +
+                '<i class="fas fa-check"></i></button>' +
+            '</div>';
+
+        tdCosto.dataset.enhanced = '1';
+
+        const inCosto  = tdCosto.querySelector('.inline-costo');
+        const inPrecio = tdPrecio.querySelector('.inline-precio');
+        const badge    = tdMargen.querySelector('.margen-inline');
+        const btn      = tdPrecio.querySelector('.btn-guardar-inline');
+
+        function marcarCambiado() {
+            inCosto.classList.add('cambiado');
+            inPrecio.classList.add('cambiado');
+            tdCosto.classList.add('fila-cambiada');
+            tdPrecio.classList.add('fila-cambiada');
+        }
+
+        // Cambió el COSTO -> precio = redondeo(costo × (1+margen/100)); ajustar margen para que cierre exacto
+        inCosto.addEventListener('input', function () {
+            const c = parseFloat(inCosto.value) || 0;
+            const m = parseFloat(tdMargen.dataset.margen) || 0;
+            if (c > 0) {
+                const pRed = redondearPrecio(c * (1 + m / 100));
+                inPrecio.value = pRed;
+                const mNuevo = ((pRed / c) - 1) * 100;   // margen que da EXACTO ese precio redondo
+                tdMargen.dataset.margen = mNuevo;
+                badge.textContent = mNuevo.toFixed(1) + '%';
+            }
+            marcarCambiado();
+        });
+
+        // Cambió el PRECIO -> recalcular el margen
+        inPrecio.addEventListener('input', function () {
+            const c = parseFloat(inCosto.value) || 0;
+            const p = parseFloat(inPrecio.value) || 0;
+            if (c > 0 && p > 0) {
+                const mNuevo = ((p / c) - 1) * 100;
+                tdMargen.dataset.margen = mNuevo;
+                badge.textContent = mNuevo.toFixed(1) + '%';
+            }
+            marcarCambiado();
+        });
+
+        [inCosto, inPrecio].forEach(function (inp) {
+            inp.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter')  { e.preventDefault(); guardarPrecioInline(id, fila); }
+                if (e.key === 'Escape') { e.preventDefault(); revertirFilaInline(fila); }
+            });
+        });
+
+        btn.addEventListener('click', function () { guardarPrecioInline(id, fila); });
+    });
+}
+
+// Revertir una fila a los valores guardados (Escape)
+function revertirFilaInline(fila) {
+    const tdCosto  = fila.querySelector('td.celda-costo');
+    const tdMargen = fila.querySelector('td.celda-margen');
+    const tdPrecio = fila.querySelector('td.celda-precio');
+    const inCosto  = tdCosto.querySelector('.inline-costo');
+    const inPrecio = tdPrecio.querySelector('.inline-precio');
+    const badge    = tdMargen.querySelector('.margen-inline');
+    const c = parseFloat(tdCosto.dataset.costo)  || 0;
+    const p = parseFloat(tdPrecio.dataset.precio) || 0;
+    inCosto.value  = c;
+    inPrecio.value = p;
+    const m = (c > 0 && p > 0) ? ((p / c) - 1) * 100 : 0;
+    tdMargen.dataset.margen = m;
+    badge.textContent = m.toFixed(1) + '%';
+    [inCosto, inPrecio].forEach(i => i.classList.remove('cambiado'));
+    tdCosto.classList.remove('fila-cambiada');
+    tdPrecio.classList.remove('fila-cambiada');
+}
+
+// Guardar: trae el producto completo, le pisa costo/margen/precio y reenvía a /guardar_producto
+function guardarPrecioInline(id, fila) {
+    const tdCosto  = fila.querySelector('td.celda-costo');
+    const tdMargen = fila.querySelector('td.celda-margen');
+    const tdPrecio = fila.querySelector('td.celda-precio');
+    const inCosto  = tdCosto.querySelector('.inline-costo');
+    const inPrecio = tdPrecio.querySelector('.inline-precio');
+    const btn      = tdPrecio.querySelector('.btn-guardar-inline');
+
+    const costo  = parseFloat(inCosto.value)  || 0;
+    const precio = parseFloat(inPrecio.value) || 0;
+    const margen = parseFloat(tdMargen.dataset.margen) || 0;
+
+    if (costo <= 0)  { toast('El costo debe ser mayor a 0', 'error');  inCosto.focus();  return; }
+    if (precio <= 0) { toast('El precio debe ser mayor a 0', 'error'); inPrecio.focus(); return; }
+
+    const iconoOrig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    fetch(`/api/producto_detalle/${id}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+            const payload = {
+                id: data.id,
+                codigo: (data.codigo || '').trim().toUpperCase(),
+                codigo_barras: data.codigo_barras || null,
+                nombre: data.nombre,
+                descripcion: data.descripcion || '',
+                imagen_url: data.imagen_url || null,
+                costo: costo,
+                margen: margen,
+                precio: precio,
+                categoria: data.categoria || '',
+                iva: parseFloat(data.iva),
+                activo: data.activo,
+                es_pesable: data.es_pesable || false,
+                stock_minimo: parseFloat(data.stock_minimo) || 0
+            };
+            // Mantener márgenes de listas 2-5 (el backend recalcula sus precios con el costo nuevo)
+            for (let i = 2; i <= 5; i++) {
+                const mk = `margen${i}`;
+                if (data[mk] !== null && data[mk] !== undefined && data[mk] !== '') {
+                    const v = parseFloat(data[mk]);
+                    if (!isNaN(v) && v >= 0) payload[mk] = v;
+                }
+            }
+            return fetch('/guardar_producto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                tdCosto.dataset.costo   = costo;
+                tdPrecio.dataset.precio = precio;
+                tdMargen.dataset.margen = margen;
+                inCosto.value  = costo;
+                inPrecio.value = precio;
+                [inCosto, inPrecio].forEach(i => i.classList.remove('cambiado'));
+                tdCosto.classList.remove('fila-cambiada');
+                tdPrecio.classList.remove('fila-cambiada');
+                // Refrescar la fecha de última actualización de precio a hoy
+                const tdFechaPrecio = fila.querySelector('.celda-fecha-precio');
+                if (tdFechaPrecio) {
+                    const h = new Date();
+                    const dd = String(h.getDate()).padStart(2,'0');
+                    const mm = String(h.getMonth()+1).padStart(2,'0');
+                    const yy = String(h.getFullYear()).slice(-2);
+                    tdFechaPrecio.innerHTML = '<small class="text-muted">'+dd+'/'+mm+'/'+yy+'</small>';
+                }
+                toast('Precio actualizado', 'success');
+            } else {
+                toast('Error: ' + (res.error || 'no se pudo guardar'), 'error');
+            }
+        })
+        .catch(err => {
+            console.error('Error guardando precio inline:', err);
+            toast('Error al guardar: ' + (err.message || 'conexión'), 'error');
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = iconoOrig;
+        });
+}
 
 </script>
 {% endblock %}

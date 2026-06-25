@@ -388,7 +388,13 @@ function abrirAyudaNC() {
                 <label class="form-label">Cliente</label>
                 <input type="text" class="form-control" id="filtroCliente" placeholder="Nombre del cliente">
             </div>
-            <div class="col-md-2">
+            <div class="col-md-3">
+                <label class="form-label">Vendedor</label>
+                <select class="form-select" id="filtroVendedor">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="col-md-3">
                 <label class="form-label">Estado</label>
                 <select class="form-select" id="filtroEstado">
                     <option value="">Todos</option>
@@ -399,17 +405,20 @@ function abrirAyudaNC() {
                     <option value="interno">Comprobante Interno</option>
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-md-3 mt-3">
                 <label class="form-label">Fecha desde</label>
                 <input type="date" class="form-control" id="fechaDesde">
             </div>
-            <div class="col-md-2">
+            <div class="col-md-3 mt-3">
                 <label class="form-label">Fecha hasta</label>
                 <input type="date" class="form-control" id="fechaHasta">
             </div>
         </div>
         <div class="row mt-3">
             <div class="col-md-12 text-end">
+                <button class="btn btn-danger" onclick="imprimirListadoPDF()" title="Descargar / imprimir el listado filtrado en PDF">
+                    <i class="fas fa-file-pdf"></i> Imprimir PDF
+                </button>
                 <button class="btn btn-secondary" onclick="limpiarFiltrosFacturas()">
                     <i class="fas fa-eraser"></i> Limpiar
                 </button>
@@ -591,6 +600,9 @@ function abrirAyudaNC() {
                                 </button>
                                 {% endif %}
                                 {% if factura.estado == 'interno' %}
+                                <a href="/nc_interna?numero={{ factura.numero | urlencode }}" class="btn btn-outline-danger" title="Nota de Crédito interna / Devolución de mercadería">
+                                    <i class="fas fa-undo-alt"></i> Devol.
+                                </a>
                                 <button class="btn btn-danger" onclick="anularComprobanteInterno({{ factura.id }}, '{{ factura.numero }}')" title="Anular Comprobante Interno">
                                     <i class="fas fa-ban"></i> Anular
                                 </button>
@@ -876,6 +888,7 @@ function aplicarFiltros() {
     const estado = document.getElementById('filtroEstado').value;
     const fechaDesde = document.getElementById('fechaDesde').value;
     const fechaHasta = document.getElementById('fechaHasta').value;
+    const vendedor = document.getElementById('filtroVendedor') ? document.getElementById('filtroVendedor').value : '';
     
     console.log('🔍 Aplicando filtros de facturas:');
     console.log('   Número:', numero);
@@ -891,6 +904,7 @@ function aplicarFiltros() {
     if (estado) params.append('estado', estado);
     if (fechaDesde) params.append('fecha_desde', fechaDesde);
     if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+    if (vendedor) params.append('vendedor', vendedor);
     params.append('limite', '200'); // Límite de resultados
     
     console.log('📤 URL de búsqueda:', `/api/buscar_facturas?${params.toString()}`);
@@ -938,6 +952,7 @@ function limpiarFiltrosFacturas() {
     document.getElementById('filtroNumero').value = '';
     document.getElementById('filtroCliente').value = '';
     document.getElementById('filtroEstado').value = '';
+    if (document.getElementById('filtroVendedor')) document.getElementById('filtroVendedor').value = '';
     document.getElementById('fechaDesde').value = '';
     document.getElementById('fechaHasta').value = '';
     
@@ -1015,10 +1030,12 @@ function actualizarCardsResumen() {
     const cliente = document.getElementById('filtroCliente').value.trim();
     const fechaDesde = document.getElementById('fechaDesde').value;
     const fechaHasta = document.getElementById('fechaHasta').value;
+    const vendedor   = document.getElementById('filtroVendedor') ? document.getElementById('filtroVendedor').value : '';
 
     const params = new URLSearchParams();
     if (numero)     params.append('numero', numero);
     if (cliente)    params.append('cliente', cliente);
+    if (vendedor)   params.append('vendedor', vendedor);
     if (fechaDesde) params.append('fecha_desde', fechaDesde);
     if (fechaHasta) params.append('fecha_hasta', fechaHasta);
 
@@ -1215,6 +1232,9 @@ function generarBotonesAccion(factura) {
     // Botón Anular para Comprobantes Internos (no van a AFIP, anulación directa)
     if (factura.estado === 'interno') {
         botones += `
+            <a href="/nc_interna?numero=${encodeURIComponent(factura.numero)}" class="btn btn-outline-danger" title="Nota de Crédito interna / Devolución de mercadería">
+                <i class="fas fa-undo-alt"></i> Devol.
+            </a>
             <button class="btn btn-danger" onclick="anularComprobanteInterno(${factura.id}, '${factura.numero}')" title="Anular Comprobante Interno">
                 <i class="fas fa-ban"></i> Anular
             </button>
@@ -1230,6 +1250,45 @@ function generarBotonesAccion(factura) {
 function imprimirFactura(facturaId) {
     console.log(`🖨️ Imprimiendo factura ID: ${facturaId}`);
     window.open(`/factura/${facturaId}`, '_blank');
+}
+
+function imprimirListadoPDF() {
+    const numero     = document.getElementById('filtroNumero').value.trim();
+    const cliente    = document.getElementById('filtroCliente').value.trim();
+    const vendedor   = document.getElementById('filtroVendedor') ? document.getElementById('filtroVendedor').value : '';
+    const estado     = document.getElementById('filtroEstado').value;
+    const fechaDesde = document.getElementById('fechaDesde').value;
+    const fechaHasta = document.getElementById('fechaHasta').value;
+
+    const params = new URLSearchParams();
+    if (numero)     params.append('numero', numero);
+    if (cliente)    params.append('cliente', cliente);
+    if (vendedor)   params.append('vendedor', vendedor);
+    if (estado)     params.append('estado', estado);
+    if (fechaDesde) params.append('fecha_desde', fechaDesde);
+    if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+
+    window.open(`/facturas/pdf?${params.toString()}`, '_blank');
+}
+
+function cargarVendedores() {
+    const select = document.getElementById('filtroVendedor');
+    if (!select) return;
+    fetch('/api/vendedores')
+        .then(r => r.json())
+        .then(data => {
+            if (!data || !data.success || !Array.isArray(data.vendedores)) return;
+            const actual = select.value;
+            select.innerHTML = '<option value="">Todos</option>';
+            data.vendedores.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v.id;
+                opt.textContent = v.nombre;
+                select.appendChild(opt);
+            });
+            if (actual) select.value = actual;
+        })
+        .catch(err => console.error('Error cargando vendedores:', err));
 }
 
 function reimprimirTermica(facturaId) {
@@ -1444,6 +1503,23 @@ async function notaCreditoParcial(facturaId) {
         });
         const out = await r.json();
         if (!out.success) throw new Error(out.error || 'Error al emitir la NC');
+
+        // Auto-imprimir la NC parcial en la impresora termica (no bloqueante:
+        // la NC ya fue autorizada por AFIP, un fallo de impresion no la invalida)
+        if (out.nc_id) {
+            try {
+                const rp = await fetch(`/api/nota_credito/${out.nc_id}/imprimir_termica`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const pout = await rp.json();
+                if (!pout.success) {
+                    console.warn('NC emitida pero no se pudo imprimir:', pout.error);
+                }
+            } catch (ep) {
+                console.warn('NC emitida pero fallo la impresion termica:', ep.message);
+            }
+        }
         let txt = `✅ NC ${out.numero_nc}\nCAE: ${out.cae}\nTotal: ${fmt(out.total)}`;
         if (out.warning) txt += `\n\n⚠️ ${out.warning}`;
         alertSwal(txt);
@@ -1558,6 +1634,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('filtroNumero').value = numeroParam;
     }
 
+    cargarVendedores();
     aplicarFiltros();
     
     const inputNumero = document.getElementById('filtroNumero');
@@ -1575,6 +1652,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     document.getElementById('filtroEstado').addEventListener('change', aplicarFiltros);
+    if (document.getElementById('filtroVendedor')) document.getElementById('filtroVendedor').addEventListener('change', aplicarFiltros);
     document.getElementById('fechaDesde').addEventListener('change', aplicarFiltros);
     document.getElementById('fechaHasta').addEventListener('change', aplicarFiltros);
     
