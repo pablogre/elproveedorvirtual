@@ -344,7 +344,7 @@ class ImpresoraTermica:
                     from app import DescuentoFactura
                     desc_row = DescuentoFactura.query.filter_by(factura_id=factura.id).first()
                     if desc_row:
-                        descuento_porcentaje = float(desc_row.porcentaje_descuento or 0)
+                        descuento_porcentaje = round(float(desc_row.porcentaje_descuento or 0), 2)
                         descuento_monto = float(desc_row.monto_descuento or 0)
                 except Exception as e:
                     # Si por alguna razon no se puede leer, caemos al calculo por diferencia
@@ -360,7 +360,7 @@ class ImpresoraTermica:
                         if total < subtotal_mas_iva - 0.01:
                             descuento_monto = subtotal_mas_iva - total
                             if subtotal_mas_iva > 0:
-                                descuento_porcentaje = (descuento_monto / subtotal_mas_iva) * 100
+                                descuento_porcentaje = round((descuento_monto / subtotal_mas_iva) * 100, 2)
 
                     # Si hay descuento, mostramos: Subtotal original / Descuento / Total
                     if descuento_monto > 0:

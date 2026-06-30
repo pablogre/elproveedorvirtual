@@ -1975,6 +1975,10 @@ function calcularTotales() {
     
     // 🔍 DEBUG
     console.log('💰 Totales calculados:', { subtotal, iva, total });
+
+    // FIX descuento: sincronizar el total global y recalcular el descuento en cada cambio de items
+    totalVenta = total;
+    aplicarDescuentoPorcentaje();
 }
 
 // *** NUEVA FUNCIÓN: Actualizar etiqueta de IVA ***
@@ -2053,6 +2057,9 @@ function procesarVenta() {
     const iva = calcularIVAAFIP();
     totalVenta = subtotal + iva;
     
+    // FIX descuento: recalcular el descuento sobre el total real antes de abrir el modal
+    aplicarDescuentoPorcentaje();
+
     // Limpiar medios de pago anteriores
     mediosPagoIngresados = [];
     contadorMediosPago = 0;
@@ -2595,10 +2602,14 @@ function actualizarTipoComprobante() {
     const nombreLista = nombresListas[listaPrecioActiva] || 'Minorista';
     const colorBadge = coloresListas[listaPrecioActiva] || 'primary';
     
+    // Descuento fijo del cliente (para mostrarlo en el cuadro)
+    const descClientePct = parseFloat(selectedOption.getAttribute('data-descuento')) || 0;
+
     // Actualizar información del cliente
     infoCliente.innerHTML = nombreCliente + 
         '<br><small class="text-muted">Condición: ' + condicionIva.replace(/_/g, ' ') + '</small>' +
-        '<br><span class="badge bg-' + colorBadge + ' mt-1">📋 Lista ' + listaPrecioActiva + ' - ' + nombreLista + '</span>';
+        '<br><span class="badge bg-' + colorBadge + ' mt-1">📋 Lista ' + listaPrecioActiva + ' - ' + nombreLista + '</span>' +
+        (descClientePct > 0 ? '<br><span class="badge bg-success mt-1">🏷️ Descuento cliente: ' + descClientePct + '%</span>' : '');
     
     // Si hay productos y cambió la lista, preguntar si recalcular
     if (itemsVenta.length > 0 && listaAnterior !== listaPrecioActiva) {
@@ -3696,7 +3707,7 @@ let descuentoPorcentaje = 0;
 let montoDescuento = 0;
 
 function aplicarDescuentoPorcentaje() {
-    const porcentaje = parseFloat(document.getElementById('descuento_porcentaje').value) || 0;
+    let porcentaje = parseFloat(document.getElementById('descuento_porcentaje').value) || 0;
     
     if (porcentaje < 0 || porcentaje > 100) {
         document.getElementById('descuento_porcentaje').value = 0;

@@ -371,7 +371,7 @@ def generar_pdf_factura(factura, emisor=None, qr_base64=None):
     if desc_obj:
         try:
             descuento_monto = float(getattr(desc_obj, 'monto_descuento', 0) or 0)
-            descuento_pct = float(getattr(desc_obj, 'porcentaje_descuento', 0) or 0)
+            descuento_pct = round(float(getattr(desc_obj, 'porcentaje_descuento', 0) or 0), 2)
             _to = getattr(desc_obj, 'total_original', None)
             if _to:
                 total_pre_desc = float(_to)
