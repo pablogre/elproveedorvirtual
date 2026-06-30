@@ -1163,6 +1163,10 @@
             </div>
             <textarea class="cart-notes" id="cartNotas" rows="2" 
                       placeholder="Notas adicionales (Dir. de Envío)"></textarea>
+            <div class="cart-total">
+                <span>Total estimado</span>
+                <span id="cartTotalEstimado">$0,00</span>
+            </div>
             <button class="btn-checkout" id="btnCheckout" onclick="confirmarPedido()" disabled>
                 <i class="bi bi-check2-circle me-2"></i>
                 Enviar Pedido
@@ -1601,7 +1605,7 @@
                         <div class="cart-item">
                             <div class="cart-item-info">
                                 <div class="cart-item-name">${item.nombre}</div>
-                                <div class="cart-item-price text-muted">${item.codigo} - Cant: <strong>${item.cantidad}</strong></div>
+                                <div class="cart-item-price text-muted">${item.codigo} &middot; ${item.cantidad} &times; $${formatNumber(item.precio)} = <strong>$${formatNumber(item.precio * item.cantidad)}</strong></div>
                             </div>
                             <div class="d-flex flex-column align-items-end gap-2">
                                 <div class="qty-selector">
@@ -1628,6 +1632,11 @@
                 document.getElementById('btnCheckout').disabled = false;
             }
             
+            // *** TOTAL ESTIMADO DEL CARRITO ***
+            const totalEstimado = carrito.reduce((s, item) => s + (Number(item.precio) || 0) * (Number(item.cantidad) || 0), 0);
+            const elTotEst = document.getElementById('cartTotalEstimado');
+            if (elTotEst) elTotEst.textContent = '$' + formatNumber(totalEstimado);
+
             guardarCarritoLocal();
             renderizarProductos();
         }

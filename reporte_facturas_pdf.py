@@ -95,6 +95,7 @@ def generar_pdf_listado_facturas(facturas, resumen, parametros):
     st_cell_r = ParagraphStyle('cellr', parent=st_cell, alignment=TA_RIGHT)
     st_th = ParagraphStyle('th', parent=styles['Normal'], fontSize=8.5,
                            textColor=colors.white, leading=10)
+    st_th_r = ParagraphStyle('thr', parent=st_th, alignment=TA_RIGHT)
 
     elementos = []
 
@@ -183,9 +184,9 @@ def generar_pdf_listado_facturas(facturas, resumen, parametros):
         ]
 
     res_data = [[
-        Paragraph('<b>Resumen por estado</b>', st_cell),
-        Paragraph('<b>Cant.</b>', st_cell_r),
-        Paragraph('<b>Monto</b>', st_cell_r),
+        Paragraph('<b>Resumen por estado</b>', st_th),
+        Paragraph('<b>Cant.</b>', st_th_r),
+        Paragraph('<b>Monto</b>', st_th_r),
     ]]
     res_data.append(_blk('autorizadas', 'Autorizadas', _VERDE))
     res_data.append(_blk('con_error',   'Error AFIP',  _AMBAR))
@@ -193,12 +194,14 @@ def generar_pdf_listado_facturas(facturas, resumen, parametros):
     res_data.append(_blk('anuladas',    'Anuladas',    _ROJO))
     res_data.append(_blk('internos',    'Internos',    _MORADO))
 
-    cant_total = int(resumen.get('cantidad_total') or len(facturas))
-    total_general = float(resumen.get('total_general') or 0)
+    # TOTAL excluye ANULADAS (no son ventas reales; el stock se reintegra).
+    _keys_total = ['autorizadas', 'con_error', 'pendientes', 'internos']
+    cant_total = sum(int((resumen.get(k) or {}).get('cantidad') or 0) for k in _keys_total)
+    total_general = sum(float((resumen.get(k) or {}).get('total') or 0) for k in _keys_total)
     res_data.append([
-        Paragraph('<b>TOTAL</b>', st_cell),
-        Paragraph(f'<b>{cant_total}</b>', st_cell_r),
-        Paragraph(f'<b>{_fmt_money(total_general)}</b>', st_cell_r),
+        Paragraph('<b>TOTAL (sin anuladas)</b>', st_th),
+        Paragraph(f'<b>{cant_total}</b>', st_th_r),
+        Paragraph(f'<b>{_fmt_money(total_general)}</b>', st_th_r),
     ])
 
     tabla_res = Table(res_data, colWidths=[55*mm, 30*mm, 40*mm], hAlign='RIGHT')

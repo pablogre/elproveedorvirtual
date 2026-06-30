@@ -97,7 +97,7 @@
             <div class="col-md-3">
                 <div class="text-center">
                     <h4 class="text-warning mb-0" id="totalVentas">$0.00</h4>
-                    <small class="text-muted">Total Vendido</small>
+                    <small class="text-muted">Total Vendido (c/IVA)</small>
                 </div>
             </div>
             <div class="col-md-3">
@@ -426,6 +426,11 @@ function mostrarReporte(data) {
     if (data.resumen.correccion_combos) {
         mostrarInfoCorreccionCombos();
     }
+
+    // *** MOSTRAR CONCILIACIÓN CON REPORTE DE FACTURAS ***
+    if (data.resumen.conciliacion) {
+        mostrarConciliacion(data.resumen.conciliacion);
+    }
     
     // Mostrar tabla
     const tbody = document.getElementById('tablaReporteBody');
@@ -543,6 +548,45 @@ function mostrarInfoCorreccionCombos() {
     cardResumen.querySelector('.card-body').appendChild(infoDiv);
     
     console.log('✅ Info de corrección de combos agregada al reporte');
+}
+
+// *** CAJA DE CONCILIACIÓN: explica el puente contra el Reporte de Facturas ***
+function mostrarConciliacion(conc) {
+    const cardResumen = document.getElementById('cardResumen');
+    const anterior = cardResumen.querySelector('.info-conciliacion');
+    if (anterior) anterior.remove();
+
+    const fmt = (n) => '$' + Number(n || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'info-conciliacion mt-3 p-3 bg-light rounded';
+    infoDiv.innerHTML = `
+        <h6><i class="fas fa-balance-scale text-primary"></i> Conciliación con Reporte de Facturas</h6>
+        <table class="table table-sm mb-1" style="max-width:520px;">
+            <tbody>
+                <tr>
+                    <td>Total facturas del período <small class="text-muted">(todos los estados, c/IVA)</small></td>
+                    <td class="text-end fw-bold">${fmt(conc.total_facturas_periodo)}</td>
+                </tr>
+                <tr class="text-danger">
+                    <td>− Anuladas excluidas</td>
+                    <td class="text-end">−${fmt(conc.anuladas_excluidas)}</td>
+                </tr>
+                <tr class="text-danger">
+                    <td>− Consignación excluida <small class="text-muted">(internos a intermediario)</small></td>
+                    <td class="text-end">−${fmt(conc.consignacion_excluida)}</td>
+                </tr>
+                <tr class="border-top">
+                    <td class="fw-bold">= Total Vendido del reporte <small class="text-muted">(c/IVA)</small></td>
+                    <td class="text-end fw-bold text-success">${fmt(conc.total_ventas_con_iva)}</td>
+                </tr>
+            </tbody>
+        </table>
+        <small class="text-muted"><i class="fas fa-info-circle"></i> Diferencias menores de centavos pueden deberse a redondeo o descuentos aplicados a nivel factura.</small>
+    `;
+    cardResumen.querySelector('.card-body').appendChild(infoDiv);
+
+    console.log('✅ Caja de conciliación agregada al reporte');
 }
 
 // Función para mostrar información sobre estados de facturas

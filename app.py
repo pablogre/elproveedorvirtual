@@ -5854,8 +5854,8 @@ def api_reporte_ventas_productos():
                 )
             ).label('cantidad_real_vendida'),
             func.sum(DetalleFactura.cantidad).label('unidades_combos_vendidas'),  # Para mostrar también combos vendidos
-            func.sum(DetalleFactura.subtotal).label('total_vendido'),
-            func.avg(DetalleFactura.precio_unitario).label('precio_promedio'),
+            func.sum(DetalleFactura.subtotal + DetalleFactura.importe_iva).label('total_vendido'),
+            func.avg(DetalleFactura.precio_unitario * (1 + DetalleFactura.porcentaje_iva / 100)).label('precio_promedio'),
             func.max(Factura.fecha).label('ultima_venta'),
             func.count(DetalleFactura.id).label('num_transacciones')
         ).join(
@@ -5995,6 +5995,24 @@ def api_reporte_ventas_productos():
             total_unidades_reales += cantidad_real
             total_ventas += total_producto
         
+        # =========================================================================
+        # CONCILIACION: montos excluidos (con IVA) para explicar el puente en pantalla
+        # contra el TOTAL del Reporte de Facturas del mismo periodo.
+        # =========================================================================
+        anuladas_excluidas = float(estados_info.get('anulada', {}).get('total', 0.0) or 0.0)
+        consignacion_excluida = float(
+            db.session.query(func.coalesce(func.sum(Factura.total), 0))
+              .join(Cliente, Factura.cliente_id == Cliente.id)
+              .filter(
+                  Factura.fecha >= fecha_desde_dt,
+                  Factura.fecha <= fecha_hasta_dt,
+                  Factura.tipo_comprobante == '99',
+                  Cliente.es_intermediario == True,
+                  Factura.estado != 'anulada'
+              ).scalar() or 0.0
+        )
+        total_facturas_periodo = sum(float(info['total'] or 0.0) for info in estados_info.values())
+
         # *** RESUMEN CORREGIDO ***
         resumen = {
             'total_productos': len(productos),
@@ -6006,7 +6024,13 @@ def api_reporte_ventas_productos():
             'categoria_filtro': categoria or 'Todas',
             'incluye_todas_facturas': True,
             'estados_facturas': estados_info,
-            'correccion_combos': True  # *** FLAG PARA INDICAR CORRECCIÓN ***
+            'correccion_combos': True,  # *** FLAG PARA INDICAR CORRECCIÓN ***
+            'conciliacion': {
+                'total_facturas_periodo': total_facturas_periodo,
+                'anuladas_excluidas': anuladas_excluidas,
+                'consignacion_excluida': consignacion_excluida,
+                'total_ventas_con_iva': total_ventas
+            }
         }
         
         print(f"✅ Reporte generado exitosamente (CON CORRECCIÓN DE COMBOS):")
@@ -6077,8 +6101,8 @@ def exportar_reporte_ventas():
                 )
             ).label('cantidad_real_vendida'),
             func.sum(DetalleFactura.cantidad).label('unidades_combos_vendidas'),
-            func.sum(DetalleFactura.subtotal).label('total_vendido'),
-            func.avg(DetalleFactura.precio_unitario).label('precio_promedio'),
+            func.sum(DetalleFactura.subtotal + DetalleFactura.importe_iva).label('total_vendido'),
+            func.avg(DetalleFactura.precio_unitario * (1 + DetalleFactura.porcentaje_iva / 100)).label('precio_promedio'),
             func.max(Factura.fecha).label('ultima_venta'),
             func.count(DetalleFactura.id).label('num_transacciones')
         ).join(

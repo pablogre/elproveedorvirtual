@@ -524,31 +524,6 @@ function abrirAyudaNC() {
     </div>
 </div>
 
-<!-- Total General del Período -->
-<div class="row g-2 mb-3">
-    <div class="col-12">
-        <div class="card text-white" style="background:linear-gradient(135deg,#1565c0,#0d47a1);border:none;">
-            <div class="card-body py-2 px-3">
-                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <div class="fw-bold text-uppercase" style="letter-spacing:0.5px;">
-                        <i class="fas fa-calculator"></i> Total General del Período
-                    </div>
-                    <div class="d-flex align-items-center gap-4">
-                        <div class="text-center">
-                            <div style="font-size:0.7rem;opacity:0.85;">COMPROBANTES</div>
-                            <div class="fs-5 fw-bold" id="resumenTotalCantidad">0</div>
-                        </div>
-                        <div class="text-end">
-                            <div style="font-size:0.7rem;opacity:0.85;">MONTO TOTAL</div>
-                            <div class="fs-4 fw-bold" id="resumenTotalMonto">$0,00</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Lista de facturas -->
 <div class="card">
     <div class="card-header">
@@ -1069,7 +1044,7 @@ function actualizarCardsResumen() {
     });
 
     // Mostrar "..." mientras carga
-    ['Autorizadas','ErrorAfip','Pendientes','Anuladas','Internos','Total'].forEach(s => {
+    ['Autorizadas','ErrorAfip','Pendientes','Anuladas','Internos'].forEach(s => {
         const elC = document.getElementById('resumen' + s + 'Cantidad');
         const elM = document.getElementById('resumen' + s + 'Monto');
         if (elC) elC.textContent = '...';
@@ -1101,14 +1076,6 @@ function actualizarCardsResumen() {
             const elIntM = document.getElementById('resumenInternosMonto');
             if (elIntC) elIntC.textContent = itn.cantidad;
             if (elIntM) elIntM.textContent = fmt(itn.total);
-
-            // *** TOTAL GENERAL = suma de los 5 estados ***
-            const totCant = Number(aut.cantidad||0) + Number(err.cantidad||0) + Number(pen.cantidad||0) + Number(anu.cantidad||0) + Number(itn.cantidad||0);
-            const totMonto = Number(aut.total||0) + Number(err.total||0) + Number(pen.total||0) + Number(anu.total||0) + Number(itn.total||0);
-            const elTotC = document.getElementById('resumenTotalCantidad');
-            const elTotM = document.getElementById('resumenTotalMonto');
-            if (elTotC) elTotC.textContent = totCant;
-            if (elTotM) elTotM.textContent = fmt(totMonto);
         })
         .catch(e => {
             console.error('Error cargando totales del periodo:', e);

@@ -660,7 +660,10 @@ def api_factura_compra_nueva():
         # - nota_credito: arranca en 'registrada' con saldo_pendiente = 0 (no se paga, solo reduce saldo)
         if clase == 'nota_credito':
             estado_inicial = 'registrada'
-            saldo_pend     = Decimal('0')
+            # La NC nace con su credito completo disponible para imputar a
+            # facturas (saldo_pendiente = total). El imputador la pasa a
+            # 'aplicada' cuando se agota. (Antes nacia en 0 y nunca se podia imputar.)
+            saldo_pend     = total
         else:
             estado_inicial = 'pendiente'
             saldo_pend     = total
